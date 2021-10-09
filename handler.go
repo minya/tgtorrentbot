@@ -1,12 +1,11 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
-	"io/ioutil"
-	"path"
+	"log"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/minya/telegram"
 	"github.com/odwrtw/transmission"
 )
@@ -101,15 +100,13 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 		return err
 	}
 
-	filePath := path.Join(handler.downloadPath, uuid.NewString()+".torrent")
-	if err = ioutil.WriteFile(filePath, content, 0); err != nil {
-		return err
-	}
+	torrentBase64 := base64.StdEncoding.EncodeToString(content)
 
 	torrent, err := handler.transmissionClient.AddTorrent(transmission.AddTorrentArg{
-		Filename: filePath,
+		Metainfo: torrentBase64,
 	})
 	if err != nil {
+		log.Printf("[ERROR] Error from transmission rpc. %v\n", err)
 		return err
 	}
 
