@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/minya/telegram"
@@ -29,12 +30,49 @@ func main() {
 		log.Fatal(err)
 		panic(err)
 	}
+	var globalTorrentState *transmission.TorrentMap
+	checkCompleted := func() {
+		for {
+			torrents, err := transmissionClient.GetTorrentMap()
+			if err != nil && globalTorrentState != nil {
+				for k, v := range *globalTorrentState {
+					if torrents[k].PercentDone == 1 && v.PercentDone < 1 {
+						chatID, err := getTorrentChatID(torrents[k])
+						if err != nil {
+							continue
+						}
+						api.SendMessage(telegram.ReplyMessage{
+							ChatId: chatID,
+							Text:   fmt.Sprintf("Завершено: %v", torrents[k].Name),
+						})
+					}
+				}
+			}
+			globalTorrentState = &torrents
+			time.Sleep(1 * time.Minute)
+		}
+	}
 	handler := UpdatesHandler{
 		transmissionClient: transmissionClient,
 		tgApi:              &api,
 		downloadPath:       settings.DownloadPath,
 	}
+
+	go checkCompleted()
+
 	log.Fatal(telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1))
+}
+
+func getTorrentChatID(torrent *transmission.Torrent) (int, error) {
+	if len(torrent.Labels) == 0 {
+		return 0, fmt.Errorf("no chatID in torrent's labels")
+	}
+
+	chatID, err := strconv.Atoi(torrent.Labels[0])
+	if err != nil {
+		return 0, err
+	}
+	return chatID, nil
 }
 
 func readSettings() (Settings, error) {

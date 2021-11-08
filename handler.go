@@ -110,6 +110,10 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 		return err
 	}
 
+	err = torrent.Set(transmission.SetTorrentArg{
+		Labels: []string{fmt.Sprintf("%v", chatID)}},
+	)
+
 	api.SendMessage(telegram.ReplyMessage{
 		ChatId: chatID,
 		Text:   fmt.Sprintf("Добавлено: %v", torrent.ID),
