@@ -1,0 +1,6 @@
+github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623 h1:o3OTK+6u5VCRaY04CaGknrOlvabfMZGBUJCj4k1GBm8=
+github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623/go.mod h1:pv9bqgVMpS0PRT9sVvFIF+tHhk8+RjSzalfFE3eQwwc=
+github.com/minya/telegram v0.0.0-20211027173518-f0fb53fc1f84 h1:+bT+yunEPKAItgit8xh1VZH+p4rvsJIBUQaN2CwRfzE=
+github.com/minya/telegram v0.0.0-20211027173518-f0fb53fc1f84/go.mod h1:05eS06aw8jArT5wHdZHcpkGtkYjHyF0F6tJhUynNKc8=
+github.com/odwrtw/transmission v0.0.0-20211003115842-e3a58d4370e9 h1:NSa4mJd4CoTH+gqZOP+6WDxO1qroP/36EyedaTXYq6A=
+github.com/odwrtw/transmission v0.0.0-20211003115842-e3a58d4370e9/go.mod h1:o+HdjqpVQPFqVTG4jncidwE0/cQoAfCJ4JMFaB481xc=
