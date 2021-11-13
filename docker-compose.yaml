@@ -1,0 +1,44 @@
+version: "2.1"
+services:
+  tgtorrentbot:
+    image: tgtorrentbot_img
+    container_name: tgtorrentbot
+    environment:
+      - TGT_BOTTOKEN=${TOKEN}
+      - TGT_DOWNLOADPATH=/downloads
+      - TGT_RPC_ADDR=http://transmission:9091/transmission/rpc
+      - TGT_RPC_USER=tgtorrentbot
+      - TGT_RPC_PASSWORD=${PASSWD}
+    volumes:
+      - /var/transmission/downloads:/downloads
+    restart: unless-stopped
+
+  transmission:
+    image: lscr.io/linuxserver/transmission
+    container_name: transmission
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Yekaterinburg
+      - USER=tgtorrentbot
+      - PASS=${PASSWD}
+    volumes:
+      - /var/transmission/config:/config
+      - /var/transmission/downloads:/downloads
+      - /var/transmission/watch:/watch
+    # ports:
+      # - 9091:9091
+      # - 51413:51413
+      # - 51413:51413/udp
+    restart: unless-stopped
+
+  minidlna:
+    image: vladgh/minidlna
+    container_name: minidlna
+    network_mode: "host"
+    environment:
+      - MINIDLNA_MEDIA_DIR=/media
+      - MINIDLNA_FRIENDLY_NAME=Raspberry
+    volumes:
+      - /var/transmission/downloads:/media
+    restart: unless-stopped
