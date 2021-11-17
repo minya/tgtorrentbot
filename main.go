@@ -33,22 +33,32 @@ func main() {
 	var globalTorrentState *transmission.TorrentMap
 	checkCompleted := func() {
 		for {
+			log.Printf("[UpdatesChecker] Start check\n")
 			torrents, err := transmissionClient.GetTorrentMap()
-			if err != nil && globalTorrentState != nil {
-				for k, v := range *globalTorrentState {
-					if torrents[k].PercentDone == 1 && v.PercentDone < 1 {
-						chatID, err := getTorrentChatID(torrents[k])
-						if err != nil {
-							continue
+			if err == nil {
+				if globalTorrentState != nil {
+					for hash, torrent := range torrents {
+						log.Printf("[UpdatesChecker] Check %v\n", torrent.Name)
+						previous, ok := (*globalTorrentState)[hash]
+						if torrent.PercentDone == 1 && (!ok || previous.PercentDone < 1) {
+							chatID, err := getTorrentChatID(torrent)
+							if err != nil {
+								log.Printf("[UpdatesChecker] %v Error %v\n", torrent.Name, err)
+								continue
+							}
+							log.Printf("[UpdatesChecker] Found completed torent %v\n", torrent.Name)
+							api.SendMessage(telegram.ReplyMessage{
+								ChatId: chatID,
+								Text:   fmt.Sprintf("Завершено: %v", torrent.Name),
+							})
 						}
-						api.SendMessage(telegram.ReplyMessage{
-							ChatId: chatID,
-							Text:   fmt.Sprintf("Завершено: %v", torrents[k].Name),
-						})
 					}
 				}
+				globalTorrentState = &torrents
+			} else {
+				log.Printf("[UpdatesChecker] error %v\n", err)
 			}
-			globalTorrentState = &torrents
+			log.Printf("[UpdatesChecker] Completed\n")
 			time.Sleep(1 * time.Minute)
 		}
 	}
