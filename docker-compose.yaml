@@ -40,7 +40,7 @@ services:
       - MINIDLNA_MEDIA_DIR=/media
       - MINIDLNA_FRIENDLY_NAME=Raspberry
     volumes:
-      - /var/transmission/downloads:/media
+      - /var/transmission/downloads/complete:/media
     restart: unless-stopped
   samba:
     image: dperson/samba
@@ -60,18 +60,5 @@ services:
     volumes:
       - /var/transmission/downloads/complete:/downloads:z
     command: '-s "downloads;/downloads;yes;no;no;${SAMBA_USER}" -u "${SAMBA_USER};${SAMBA_PASSWD}" -p'
-  plex:
-    image: lscr.io/linuxserver/plex
-    container_name: plex
-    network_mode: "host"
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - VERSION=docker
-      # - PLEX_CLAIM= #optional
-    volumes:
-      - /var/transmission/downloads/complete:/tv
-      - /var/transmission/downloads/complete:/movies
-    restart: unless-stopped
 networks:
   default:
