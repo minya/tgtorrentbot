@@ -109,10 +109,10 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 		log.Printf("[ERROR] Error from transmission rpc. %v\n", err)
 		return err
 	}
-
-	err = torrent.Set(transmission.SetTorrentArg{
-		Labels: []string{fmt.Sprintf("%v", chatID)}},
-	)
+	if err != nil {
+		log.Printf("[ERROR] Error from transmission rpc. %v\n", err)
+		return err
+	}
 
 	api.SendMessage(telegram.ReplyMessage{
 		ChatId: chatID,
