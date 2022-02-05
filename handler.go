@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/minya/telegram"
 	"github.com/odwrtw/transmission"
@@ -47,14 +46,25 @@ func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 	if err != nil {
 		return err
 	}
-	var b strings.Builder
+
 	for _, torrent := range torrents {
-		fmt.Fprintf(&b, "%v %v %v\n", torrent.ID, torrent.Name, torrent.PercentDone*100)
+		msg := fmt.Sprintf("%v. %v %v\n", torrent.ID, torrent.Name, torrent.PercentDone*100)
+		handler.tgApi.SendMessage(telegram.ReplyMessage{
+			Text:   msg,
+			ChatId: replyChatID,
+			ReplyMarkup: telegram.InlineKeyboardMarkup{
+				InlineKeyboard: [][]telegram.InlineKeyboardButton{
+					{
+						telegram.InlineKeyboardButton{
+							Text:         "🚀",
+							Url:          "/remove",
+							CallbackData: fmt.Sprintf("/remove %v", torrent.ID),
+						},
+					},
+				},
+			},
+		})
 	}
-	handler.tgApi.SendMessage(telegram.ReplyMessage{
-		Text:   b.String(),
-		ChatId: replyChatID,
-	})
 	return nil
 }
 
