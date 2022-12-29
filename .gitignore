@@ -1,3 +1,6 @@
 settings.json
 tgtorrentbot
 *.swp
+.vscode/
+out/
+bin/

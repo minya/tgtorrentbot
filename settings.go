@@ -1,9 +1,14 @@
 package main
 
+import (
+	"github.com/minya/tgtorrentbot/rutracker"
+)
+
 type Settings struct {
 	BotToken        string                 `json:"botToken"`
-	TransmissionRPC TransmissionRPCSettngs `json:"transmissionRPC"`
 	DownloadPath    string                 `json:"downloadPath"`
+	TransmissionRPC TransmissionRPCSettngs `json:"transmissionRPC"`
+	RutrackerConfig rutracker.Config       `json:"rutrackerConfig"`
 }
 
 type TransmissionRPCSettngs struct {

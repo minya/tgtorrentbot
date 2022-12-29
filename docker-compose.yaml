@@ -4,11 +4,13 @@ services:
     image: tgtorrentbot_img
     container_name: tgtorrentbot
     environment:
-      - TGT_BOTTOKEN=${TOKEN}
       - TGT_DOWNLOADPATH=/downloads
       - TGT_RPC_ADDR=http://transmission:9091/transmission/rpc
       - TGT_RPC_USER=tgtorrentbot
+      - TGT_BOTTOKEN=${TOKEN}
       - TGT_RPC_PASSWORD=${PASSWD}
+      - TGT_RUTRACKER_USERNAME=${RUTRACKER_USERNAME}
+      - TGT_RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
     volumes:
       - /var/transmission/downloads:/downloads
     restart: unless-stopped
@@ -44,6 +46,7 @@ services:
     restart: unless-stopped
   samba:
     image: dperson/samba
+    container_name: samba
     environment:
       TZ: 'EST5EDT'
     networks:

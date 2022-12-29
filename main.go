@@ -66,6 +66,7 @@ func main() {
 		transmissionClient: transmissionClient,
 		tgApi:              &api,
 		downloadPath:       settings.DownloadPath,
+		rutrackerConfig:    &settings.RutrackerConfig,
 	}
 
 	go checkCompleted()
@@ -88,6 +89,7 @@ func getTorrentChatID(torrent *transmission.Torrent) (int, error) {
 func readSettings() (Settings, error) {
 	settings, err := readSettingsFromEnv()
 	if err == nil {
+		fmt.Printf("settings %v\n", settings)
 		return settings, nil
 	}
 	settings, err = readSettingsFromFile()
@@ -104,6 +106,8 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.TransmissionRPC.Address = os.Getenv("TGT_RPC_ADDR")
 	settings.TransmissionRPC.User = os.Getenv("TGT_RPC_USER")
 	settings.TransmissionRPC.Password = os.Getenv("TGT_RPC_PASSWORD")
+	settings.RutrackerConfig.Username = os.Getenv("TGT_RUTRACKER_USERNAME")
+	settings.RutrackerConfig.Password = os.Getenv("TGT_RUTRACKER_PASSWORD")
 
 	if settings.BotToken == "" || settings.DownloadPath == "" || settings.TransmissionRPC.Address == "" {
 		return settings, fmt.Errorf("can't get settings from env")

@@ -3,7 +3,7 @@
 ##
 ## Build
 ##
-FROM golang:1.17-buster AS build
+FROM golang:1.18-buster AS build
 
 WORKDIR /app
 
@@ -12,8 +12,11 @@ COPY go.sum ./
 RUN go mod download
 
 COPY *.go ./
+COPY ./rutracker ./rutracker
+VOLUME [ "/app" ]
 
-RUN go build -o /tgtorrentbot
+RUN mkdir -p /out
+RUN go build -o /out ./...
 
 ##
 ## Deploy
@@ -22,7 +25,7 @@ FROM gcr.io/distroless/base-debian10
 
 WORKDIR /
 
-COPY --from=build /tgtorrentbot /tgtorrentbot
+COPY --from=build /out/tgtorrentbot /tgtorrentbot
 
 USER nonroot:nonroot
 
