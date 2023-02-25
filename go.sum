@@ -2,6 +2,8 @@ github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623 h1:o3OTK+6u5VCRaY04C
 github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623/go.mod h1:pv9bqgVMpS0PRT9sVvFIF+tHhk8+RjSzalfFE3eQwwc=
 github.com/minya/telegram v0.0.0-20211027173518-f0fb53fc1f84 h1:+bT+yunEPKAItgit8xh1VZH+p4rvsJIBUQaN2CwRfzE=
 github.com/minya/telegram v0.0.0-20211027173518-f0fb53fc1f84/go.mod h1:05eS06aw8jArT5wHdZHcpkGtkYjHyF0F6tJhUynNKc8=
+github.com/minya/telegram v0.0.0-20230226002341-3f56a12f31e0 h1:q8KPN/q4/GsdhBTGawFJgrzUYba+7Ifz6uY+FxZ5NVc=
+github.com/minya/telegram v0.0.0-20230226002341-3f56a12f31e0/go.mod h1:05eS06aw8jArT5wHdZHcpkGtkYjHyF0F6tJhUynNKc8=
 github.com/odwrtw/transmission v0.0.0-20211003115842-e3a58d4370e9 h1:NSa4mJd4CoTH+gqZOP+6WDxO1qroP/36EyedaTXYq6A=
 github.com/odwrtw/transmission v0.0.0-20211003115842-e3a58d4370e9/go.mod h1:o+HdjqpVQPFqVTG4jncidwE0/cQoAfCJ4JMFaB481xc=
 golang.org/x/text v0.5.0 h1:OLmvp0KP+FVG99Ct/qFiL/Fhk4zp4QQnZ7b2U+5piUM=

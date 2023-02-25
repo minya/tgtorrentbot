@@ -185,9 +185,17 @@ func (handler *UpdatesHandler) addTorrentAndReply(content []byte, chatID int) er
 	torrent, err := handler.transmissionClient.AddTorrent(transmission.AddTorrentArg{
 		Metainfo: torrentBase64,
 	})
+
 	if err != nil {
 		log.Printf("[ERROR] Error from transmission rpc. %v\n", err)
 		return err
+	}
+
+	torrent.Labels = []string{fmt.Sprintf("%v", chatID)}
+	err = torrent.Update()
+
+	if err != nil {
+		log.Printf("[ERROR] Error updating torrent. %v\n", err)
 	}
 
 	handler.tgApi.SendMessage(telegram.ReplyMessage{
