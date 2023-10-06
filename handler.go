@@ -218,6 +218,7 @@ func (handler *UpdatesHandler) addTorrentAndReply(content []byte, chatID int) er
 
 	if err != nil {
 		log.Printf("[ERROR] Error updating torrent. %v\n", err)
+		return err
 	}
 
 	handler.tgApi.SendMessage(telegram.ReplyMessage{
