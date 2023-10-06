@@ -68,8 +68,22 @@ func (handler *UpdatesHandler) handleCommand(commandText string, replyChatID int
 func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 	torrents, err := handler.transmissionClient.GetTorrents()
 	if err != nil {
+		log.Printf("Error getting torrents: %v\n", err)
+		handler.tgApi.SendMessage(telegram.ReplyMessage{
+			Text:   "Ошибка",
+			ChatId: replyChatID,
+		})
 		return err
 	}
+
+	if len(torrents) == 0 {
+		handler.tgApi.SendMessage(telegram.ReplyMessage{
+			Text:   "Нет активных торрентов",
+			ChatId: replyChatID,
+		})
+		return nil
+	}
+
 	var b strings.Builder
 	for _, torrent := range torrents {
 		fmt.Fprintf(&b, "%v %v %v\n", torrent.ID, torrent.Name, torrent.PercentDone*100)
@@ -78,12 +92,14 @@ func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 		Text:   b.String(),
 		ChatId: replyChatID,
 	})
+
 	return nil
 }
 
 func (handler *UpdatesHandler) handleRemoveTorrent(torrentID int, replyChatID int) error {
 	allTorrents, err := handler.transmissionClient.GetTorrents()
 	if err != nil {
+		log.Printf("Error getting torrents: %v\n", err)
 		return err
 	}
 
@@ -95,6 +111,7 @@ func (handler *UpdatesHandler) handleRemoveTorrent(torrentID int, replyChatID in
 	}
 	err = handler.transmissionClient.RemoveTorrents(torrents, true)
 	if err != nil {
+		log.Printf("Error removing torrents: %v\n", err)
 		return err
 	}
 	handler.tgApi.SendMessage(telegram.ReplyMessage{
@@ -108,6 +125,7 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 	api := handler.tgApi
 	file, err := api.GetFile(doc.FileID)
 	if err != nil {
+		log.Printf("Error getting file: %v\n", err)
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
 			Text:   "Ошибка",
@@ -116,6 +134,7 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 	}
 	content, err := api.DownloadFile(file)
 	if err != nil {
+		log.Printf("Error downloading file: %v\n", err)
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
 			Text:   fmt.Sprintf("Ошибка загрузки %v", err),
@@ -130,6 +149,7 @@ func (handler *UpdatesHandler) handleDownloadCommand(downloadUrl string, chatID 
 	cfg := handler.rutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
 	if err != nil {
+		log.Printf("Error creating authenticated rutracker client: %v\n", err)
 		return err
 	}
 	torrentBytes, err := rutrackerClient.DownloadTorrent(downloadUrl)
@@ -148,11 +168,13 @@ func (handler *UpdatesHandler) handleSearchCommand(pattern string, chatID int) e
 	cfg := handler.rutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
 	if err != nil {
+		log.Printf("Error creating authenticated rutracker client: %v\n", err)
 		return err
 	}
 	found, err := rutrackerClient.Find(pattern)
 	fmt.Printf("found: %v\n", found)
 	if err != nil {
+		log.Printf("Error searching: %v\n", err)
 		return err
 	}
 
