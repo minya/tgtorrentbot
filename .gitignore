@@ -4,3 +4,4 @@ tgtorrentbot
 .vscode/
 out/
 bin/
+*.code-workspace
