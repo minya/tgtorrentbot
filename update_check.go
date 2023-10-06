@@ -12,18 +12,18 @@ import (
 
 func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *telegram.Api) (func(), chan int) {
 	chanNotify := make(chan int)
-	return func() {
+
+	updateFn := func() {
 		var globalTorrentState transmission.TorrentMap
 		for {
 			<-chanNotify
-			log.Printf("[UpdatesChecker] Start check\n")
+			log.Printf("[UpdatesChecker] Start\n")
 			for {
 				newState, err := updateCheckRoutine(transmissionClient, api, globalTorrentState)
 				if err == nil {
 					globalTorrentState = newState
 					if allCompleted(globalTorrentState) {
 						log.Printf("[UpdatesChecker] All torrents completed\n")
-						break
 					}
 				} else {
 					log.Printf("[UpdatesChecker] Error %v\n", err)
@@ -32,7 +32,9 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 				time.Sleep(1 * time.Minute)
 			}
 		}
-	}, chanNotify
+	}
+
+	return updateFn, chanNotify
 }
 
 func updateCheckRoutine(
@@ -50,10 +52,13 @@ func updateCheckRoutine(
 	for hash, torrent := range torrents {
 		log.Printf("[UpdatesChecker] Check %v\n", torrent.Name)
 		previous, ok := state[hash]
-		if torrent.PercentDone == 1 && ok && previous.PercentDone < 1 {
+		if !ok {
+			previous = torrent
+		}
+		if torrent.PercentDone == 1 && previous.PercentDone < 1 {
 			chatID, err := getTorrentChatID(torrent)
 			if err != nil {
-				log.Printf("[UpdatesChecker] %v Error %v\n", torrent.Name, err)
+				log.Printf("[UpdatesChecker] Warn  %v: no chat id found (%v)\n", torrent.Name, err)
 				continue
 			}
 
