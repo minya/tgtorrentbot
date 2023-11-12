@@ -1,9 +1,5 @@
-# syntax=docker/dockerfile:1
+FROM golang:1.21 AS build
 
-##
-## Build
-##
-FROM golang:1.18-buster AS build
 
 WORKDIR /app
 
@@ -18,16 +14,15 @@ VOLUME [ "/app" ]
 RUN mkdir -p /out
 RUN go build -o /out ./...
 
-##
-## Deploy
-##
-FROM gcr.io/distroless/base-debian10
+FROM golang:alpine
 
-WORKDIR /
+RUN apk add libc6-compat
 
-COPY --from=build /out/tgtorrentbot /tgtorrentbot
+VOLUME /var/log
+VOLUME /root
 
-USER nonroot:nonroot
+COPY --from=build /out/tgtorrentbot /root/app/tgtorrentbot
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-ENTRYPOINT ["/tgtorrentbot"]
-
+WORKDIR /root/app/
+CMD /root/app/tgtorrentbot

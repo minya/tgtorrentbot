@@ -4,20 +4,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 )
 
-func ReadSettings() (Settings, error) {
+// ReadSettings reads settings from env or command line or file
+func ReadSettings(settingsPath string) (Settings, error) {
 	settings, err := readSettingsFromEnv()
 	if err == nil {
-		fmt.Printf("settings %v\n", settings)
+		log.Println("Settings read from env")
 		return settings, nil
 	}
-	settings, err = readSettingsFromFile()
+
+	settings, err = readSettingsFromFile(settingsPath)
 	if err == nil {
+		log.Println("Settings read from file")
 		return settings, nil
 	}
-	return Settings{}, fmt.Errorf("cant get settings")
+
+	return Settings{}, fmt.Errorf("Can't get settings")
 }
 
 func readSettingsFromEnv() (Settings, error) {
@@ -30,14 +35,16 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.RutrackerConfig.Username = os.Getenv("TGT_RUTRACKER_USERNAME")
 	settings.RutrackerConfig.Password = os.Getenv("TGT_RUTRACKER_PASSWORD")
 
-	if settings.BotToken == "" || settings.DownloadPath == "" || settings.TransmissionRPC.Address == "" {
+	if settings.BotToken == "" ||
+		settings.DownloadPath == "" ||
+		settings.TransmissionRPC.Address == "" {
 		return settings, fmt.Errorf("can't get settings from env")
 	}
 	return settings, nil
 }
 
-func readSettingsFromFile() (Settings, error) {
-	settingsBytes, err := ioutil.ReadFile("settings.json")
+func readSettingsFromFile(path string) (Settings, error) {
+	settingsBytes, err := ioutil.ReadFile(path)
 	var settings Settings
 	if err != nil {
 		return settings, err

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"time"
 
@@ -9,11 +11,13 @@ import (
 )
 
 func main() {
-	settings, err := ReadSettings()
+	settingsPath := flag.String("settings", "settings.json", "Path to settings file")
+	flag.Parse()
+
+	settings, err := ReadSettings(*settingsPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	api := telegram.NewApi(settings.BotToken)
 
 	conf := transmission.Config{
 		Address:  settings.TransmissionRPC.Address,
@@ -22,10 +26,11 @@ func main() {
 	}
 	transmissionClient, err := transmission.New(conf)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(fmt.Sprintf("Can't create transmission client: %v", err))
 		panic(err)
 	}
 
+	api := telegram.NewApi(settings.BotToken)
 	updateRoutine, chanNotify := CreateCompletedCheckRoutine(transmissionClient, &api)
 	go updateRoutine()
 
@@ -34,6 +39,8 @@ func main() {
 		tgApi:              &api,
 		downloadPath:       settings.DownloadPath,
 		rutrackerConfig:    &settings.RutrackerConfig,
+		notify:             func() { chanNotify <- 1 },
 	}
-	log.Fatal(telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1, chanNotify))
+
+	log.Fatal(telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1))
 }

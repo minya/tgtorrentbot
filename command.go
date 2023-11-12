@@ -20,10 +20,10 @@ type DownloadCommand struct {
 }
 
 func ParseCommand(cmdText string) (ok bool, cmd interface{}) {
-	re_list_cmd := regexp.MustCompile("^/list\\s*?$")
-	re_rem_cmd := regexp.MustCompile("^/remove\\s(\\d+)\\s*?$")
-	re_search_cmd := regexp.MustCompile("^/search\\s(.+?)$")
-	re_dl_cmd := regexp.MustCompile("^/dl\\s(.+?)$")
+	re_list_cmd		:= regexp.MustCompile("^/list\\s*?$")
+	re_rem_cmd		:= regexp.MustCompile("^/remove\\s(\\d+)\\s*?$")
+	re_search_cmd	:= regexp.MustCompile("^/search\\s(.+?)$")
+	re_dl_cmd		:= regexp.MustCompile("^/dl\\s(.+?)$")
 
 	if matched := re_list_cmd.Match([]byte(cmdText)); matched {
 		return true, ListCommand{}

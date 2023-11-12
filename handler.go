@@ -17,6 +17,7 @@ type UpdatesHandler struct {
 	tgApi              *telegram.Api
 	downloadPath       string
 	rutrackerConfig    *rutracker.Config
+	notify             func()
 }
 
 func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
@@ -30,6 +31,8 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 		replyChatID = upd.CallbackQuery.Message.Chat.Id
 	}
 
+	handler.notify()
+
 	if messageText != "" && messageText[0] == '/' {
 		return handler.handleCommand(messageText, replyChatID)
 	}
@@ -37,7 +40,7 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 	if !upd.Message.HasDocument() {
 		handler.tgApi.SendMessage(telegram.ReplyMessage{
 			ChatId: replyChatID,
-			Text:   "Ожидается команда или файл torrent",
+			Text:   "Ожидается команда или файл torrent", // TODO: tranlate
 		})
 		return nil
 	}
@@ -62,7 +65,7 @@ func (handler *UpdatesHandler) handleCommand(commandText string, replyChatID int
 		return handler.handleDownloadCommand(downloadCmd.URL, replyChatID)
 	}
 
-	return fmt.Errorf("неизвестная команда")
+	return fmt.Errorf("Неизвестная команда") // TODO: translate
 }
 
 func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
@@ -78,7 +81,7 @@ func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 
 	if len(torrents) == 0 {
 		handler.tgApi.SendMessage(telegram.ReplyMessage{
-			Text:   "Нет активных торрентов",
+			Text:   "Нет активных торрентов", // TODO: translate
 			ChatId: replyChatID,
 		})
 		return nil
@@ -128,7 +131,7 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 		log.Printf("Error getting file: %v\n", err)
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
-			Text:   "Ошибка",
+			Text:   "Ошибка", // TODO: translate
 		})
 		return err
 	}
@@ -137,7 +140,7 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 		log.Printf("Error downloading file: %v\n", err)
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
-			Text:   fmt.Sprintf("Ошибка загрузки %v", err),
+			Text:   fmt.Sprintf("Ошибка загрузки %v", err), // TODO: translate
 		})
 		return err
 	}
@@ -190,7 +193,7 @@ func (handler *UpdatesHandler) handleSearchCommand(pattern string, chatID int) e
 				InlineKeyboard: [][]telegram.InlineKeyboardButton{
 					{
 						{
-							Text:         "Добавить",
+							Text:         "Добавить", // TODO: translate
 							CallbackData: fmt.Sprintf("/dl %v", f.DownloadURL),
 						},
 					},
@@ -223,7 +226,7 @@ func (handler *UpdatesHandler) addTorrentAndReply(content []byte, chatID int) er
 
 	handler.tgApi.SendMessage(telegram.ReplyMessage{
 		ChatId: chatID,
-		Text:   fmt.Sprintf("Добавлено: %v", torrent.ID),
+		Text:   fmt.Sprintf("Добавлено: %v", torrent.ID), // TODO: translate
 	})
 	return nil
 }

@@ -23,7 +23,8 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 				if err == nil {
 					globalTorrentState = newState
 					if allCompleted(globalTorrentState) {
-						log.Printf("[UpdatesChecker] All torrents completed\n")
+						log.Printf("[UpdatesChecker] All torrents completed. Update checking stopped.\n")
+						break
 					}
 				} else {
 					log.Printf("[UpdatesChecker] Error %v\n", err)
@@ -66,7 +67,7 @@ func updateCheckRoutine(
 
 			api.SendMessage(telegram.ReplyMessage{
 				ChatId: chatID,
-				Text:   fmt.Sprintf("Завершено: %v", torrent.Name),
+				Text:   fmt.Sprintf("Завершено: %v", torrent.Name), // TODO: tranlate
 			})
 		}
 	}

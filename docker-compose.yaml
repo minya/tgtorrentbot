@@ -1,13 +1,13 @@
-version: "2.1"
+version: "4"
 services:
   tgtorrentbot:
-    image: tgtorrentbot_img
-    container_name: tgtorrentbot
+    image: tgtorrentbot_img:latest
+    container_name: tgt-bot
     environment:
+      - TGT_BOTTOKEN=${BOT_TOKEN}
       - TGT_DOWNLOADPATH=/downloads
       - TGT_RPC_ADDR=http://transmission:9091/transmission/rpc
       - TGT_RPC_USER=tgtorrentbot
-      - TGT_BOTTOKEN=${TOKEN}
       - TGT_RPC_PASSWORD=${PASSWD}
       - TGT_RUTRACKER_USERNAME=${RUTRACKER_USERNAME}
       - TGT_RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
@@ -17,11 +17,11 @@ services:
 
   transmission:
     image: lscr.io/linuxserver/transmission
-    container_name: transmission
+    container_name: tgt-transmission
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=Asia/Yekaterinburg
+      - TZ=Canada/Eastern
       - USER=tgtorrentbot
       - PASS=${PASSWD}
     volumes:
@@ -36,7 +36,7 @@ services:
 
   minidlna:
     image: vladgh/minidlna
-    container_name: minidlna
+    container_name: tgt-dlna
     network_mode: "host"
     environment:
       - MINIDLNA_MEDIA_DIR=/media
@@ -44,13 +44,10 @@ services:
     volumes:
       - /var/transmission/downloads/complete:/media
     restart: unless-stopped
+
   samba:
-    image: dperson/samba
-    container_name: samba
-    environment:
-      TZ: 'EST5EDT'
-    networks:
-      - default
+    image: dperson/samba:latest
+    container_name: tgt-samba
     ports:
       - "137:137/udp"
       - "138:138/udp"
@@ -59,9 +56,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    restart: unless-stopped
+    stdin_open: true
+    tty: true
     volumes:
-      - /var/transmission/downloads/complete:/downloads:z
-    command: '-s "downloads;/downloads;yes;no;no;${SAMBA_USER}" -u "${SAMBA_USER};${SAMBA_PASSWD}" -p'
-networks:
-  default:
+      - /var/transmission/downloads/complete:/media:z
+    command: '-s "media;/media" -n'
+    restart: unless-stopped
