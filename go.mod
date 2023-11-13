@@ -1,9 +1,9 @@
 module github.com/minya/tgtorrentbot
 
-go 1.21
+go 1.21.1
 
 require (
-	github.com/minya/telegram v0.0.0-20231109041550-c8f9cb6cfc6c
+	github.com/minya/telegram v0.0.0-20231113003241-d79ae581d469
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759
 )
 
