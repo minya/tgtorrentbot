@@ -78,6 +78,7 @@ func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 		})
 		return err
 	}
+	log.Printf("torrents got: %v\n", torrents)
 
 	if len(torrents) == 0 {
 		handler.tgApi.SendMessage(telegram.ReplyMessage{
