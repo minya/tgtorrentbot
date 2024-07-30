@@ -2,7 +2,7 @@ package rutracker
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 
@@ -58,7 +58,7 @@ func (c *RutrackerClient) Find(pattern string) ([]RutrackerSearchItem, error) {
 	}
 	defer res.Body.Close()
 
-	bodyData, err := ioutil.ReadAll(res.Body)
+	bodyData, err := io.ReadAll(res.Body)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 		return nil, err
@@ -81,7 +81,7 @@ func (c *RutrackerClient) DownloadTorrent(url string) ([]byte, error) {
 	}
 	defer res.Body.Close()
 
-	bodyData, err := ioutil.ReadAll(res.Body)
+	bodyData, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}

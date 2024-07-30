@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 )
@@ -44,7 +43,7 @@ func readSettingsFromEnv() (Settings, error) {
 }
 
 func readSettingsFromFile(path string) (Settings, error) {
-	settingsBytes, err := ioutil.ReadFile(path)
+	settingsBytes, err := os.ReadFile(path)
 	var settings Settings
 	if err != nil {
 		return settings, err
