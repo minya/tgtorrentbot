@@ -42,5 +42,6 @@ func main() {
 		notify:             func() { chanNotify <- 1 },
 	}
 
+	log.Println("Bot started")
 	log.Fatal(telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1))
 }

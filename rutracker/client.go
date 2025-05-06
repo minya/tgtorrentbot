@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/minya/goutils/web"
@@ -49,8 +50,10 @@ func authenticate(httpClient *http.Client, username string, password string) err
 }
 
 func (c *RutrackerClient) Find(pattern string) ([]RutrackerSearchItem, error) {
-	searchURL := "https://rutracker.org/forum/tracker.php?nm=" + pattern
-	searchBody := strings.NewReader("nm=" + pattern)
+    searchURL := fmt.Sprintf("https://rutracker.org/forum/tracker.php?nm=%s", url.QueryEscape(pattern))
+    searchBodyData := url.Values{}
+    searchBodyData.Set("nm", pattern)
+    searchBody := strings.NewReader(searchBodyData.Encode())
 	res, err := c.httpClient.Post(searchURL, "application/x-www-form-urlencoded", searchBody)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
@@ -58,13 +61,13 @@ func (c *RutrackerClient) Find(pattern string) ([]RutrackerSearchItem, error) {
 	}
 	defer res.Body.Close()
 
-	bodyData, err := io.ReadAll(res.Body)
+	responseBodyData, err := io.ReadAll(res.Body)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 		return nil, err
 	}
 
-	items, err := ParseSearchItems(&bodyData)
+	items, err := ParseSearchItems(&responseBodyData)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
 		return nil, err
