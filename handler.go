@@ -182,6 +182,14 @@ func (handler *UpdatesHandler) handleSearchCommand(pattern string, chatID int) e
 		return err
 	}
 
+    if len(found) == 0 {
+        handler.tgApi.SendMessage(telegram.ReplyMessage{
+            ChatId: chatID,
+            Text:   "Ничего не найдено", // TODO: translate
+        })
+        return nil
+    }
+
 	sort.Slice(found, func(i, j int) bool {
 		return found[i].Seeders > found[j].Seeders
 	})
