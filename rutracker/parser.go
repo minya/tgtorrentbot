@@ -1,10 +1,10 @@
 package rutracker
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 
+	"github.com/minya/logger"
 	"golang.org/x/text/encoding/charmap"
 )
 
@@ -17,7 +17,7 @@ func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 
 	var result []RutrackerSearchItem
 
-	for i := 0; i < len(match); i++ {
+	for i := range match {
 		group := match[i]
 		topicID, err := strconv.Atoi(group[2])
 		if err != nil {
@@ -25,7 +25,7 @@ func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 		}
 		seeders, err := strconv.Atoi(group[7])
 		if err != nil {
-			fmt.Printf("Error: %v", err)
+			logger.Error(err, "cannot parse seeders", "seeders", group[7])
 			continue
 		}
 		item := RutrackerSearchItem{
@@ -47,7 +47,7 @@ func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 func parseSize(sizeStr string) float64 {
 	size, err := strconv.ParseFloat(sizeStr, 64)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		logger.Error(err, "cannot parse size", "sizeStr", sizeStr)
 		return 0
 	}
 	return size

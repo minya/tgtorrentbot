@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 
+	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/rutracker"
 	"github.com/odwrtw/transmission"
@@ -71,14 +71,14 @@ func (handler *UpdatesHandler) handleCommand(commandText string, replyChatID int
 func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 	torrents, err := handler.transmissionClient.GetTorrents()
 	if err != nil {
-		log.Printf("Error getting torrents: %v\n", err)
+		logger.Error(err, "Error getting torrents")
 		handler.tgApi.SendMessage(telegram.ReplyMessage{
 			Text:   "Ошибка",
 			ChatId: replyChatID,
 		})
 		return err
 	}
-	log.Printf("torrents got: %v\n", torrents)
+	logger.Debug("Torrents received", "count", len(torrents))
 
 	if len(torrents) == 0 {
 		handler.tgApi.SendMessage(telegram.ReplyMessage{
@@ -103,7 +103,7 @@ func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 func (handler *UpdatesHandler) handleRemoveTorrent(torrentID int, replyChatID int) error {
 	allTorrents, err := handler.transmissionClient.GetTorrents()
 	if err != nil {
-		log.Printf("Error getting torrents: %v\n", err)
+		logger.Error(err, "Error getting torrents")
 		return err
 	}
 
@@ -115,7 +115,7 @@ func (handler *UpdatesHandler) handleRemoveTorrent(torrentID int, replyChatID in
 	}
 	err = handler.transmissionClient.RemoveTorrents(torrents, true)
 	if err != nil {
-		log.Printf("Error removing torrents: %v\n", err)
+		logger.Error(err, "Error removing torrents")
 		return err
 	}
 	handler.tgApi.SendMessage(telegram.ReplyMessage{
@@ -129,7 +129,7 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 	api := handler.tgApi
 	file, err := api.GetFile(doc.FileID)
 	if err != nil {
-		log.Printf("Error getting file: %v\n", err)
+		logger.Error(err, "Error getting file")
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
 			Text:   "Ошибка", // TODO: translate
@@ -138,7 +138,7 @@ func (handler *UpdatesHandler) handleTorrentFile(doc *telegram.Document, chatID 
 	}
 	content, err := api.DownloadFile(file)
 	if err != nil {
-		log.Printf("Error downloading file: %v\n", err)
+		logger.Error(err, "Error downloading file")
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
 			Text:   fmt.Sprintf("Ошибка загрузки %v", err), // TODO: translate
@@ -153,7 +153,7 @@ func (handler *UpdatesHandler) handleDownloadCommand(downloadUrl string, chatID 
 	cfg := handler.rutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
 	if err != nil {
-		log.Printf("Error creating authenticated rutracker client: %v\n", err)
+		logger.Error(err, "Error creating authenticated rutracker client")
 		return err
 	}
 	torrentBytes, err := rutrackerClient.DownloadTorrent(downloadUrl)
@@ -162,33 +162,35 @@ func (handler *UpdatesHandler) handleDownloadCommand(downloadUrl string, chatID 
 	}
 
 	torrentBase64 := base64.StdEncoding.EncodeToString(torrentBytes)
-	log.Printf("torrentBase64: %v\n", torrentBase64)
+	logger.Debug(fmt.Sprintf("Torrent encoded as base64: %s", torrentBase64))
 
 	return handler.addTorrentAndReply(torrentBytes, chatID)
 }
 
 func (handler *UpdatesHandler) handleSearchCommand(pattern string, chatID int) error {
-	log.Printf("Begin handle search: %v\n", pattern)
+	logger.Info("Starting search", "pattern", pattern)
 	cfg := handler.rutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
 	if err != nil {
-		log.Printf("Error creating authenticated rutracker client: %v\n", err)
+		logger.Error(err, "Error creating authenticated rutracker client")
 		return err
 	}
 	found, err := rutrackerClient.Find(pattern)
-	fmt.Printf("found: %v\n", found)
 	if err != nil {
-		log.Printf("Error searching: %v\n", err)
+		logger.Error(err, "Error searching")
 		return err
 	}
 
-    if len(found) == 0 {
-        handler.tgApi.SendMessage(telegram.ReplyMessage{
-            ChatId: chatID,
-            Text:   "Ничего не найдено", // TODO: translate
-        })
-        return nil
-    }
+	logger.Info("found: %v results\n", len(found))
+	logger.Debug("found: %v\n", found)
+
+	if len(found) == 0 {
+		handler.tgApi.SendMessage(telegram.ReplyMessage{
+			ChatId: chatID,
+			Text:   "Ничего не найдено", // TODO: translate
+		})
+		return nil
+	}
 
 	sort.Slice(found, func(i, j int) bool {
 		return found[i].Seeders > found[j].Seeders
@@ -221,7 +223,7 @@ func (handler *UpdatesHandler) addTorrentAndReply(content []byte, chatID int) er
 	})
 
 	if err != nil {
-		log.Printf("[ERROR] Error from transmission rpc. %v\n", err)
+		logger.Error(err, "Error from transmission RPC")
 		return err
 	}
 
@@ -229,7 +231,7 @@ func (handler *UpdatesHandler) addTorrentAndReply(content []byte, chatID int) er
 	err = torrent.Update()
 
 	if err != nil {
-		log.Printf("[ERROR] Error updating torrent. %v\n", err)
+		logger.Error(err, "Error updating torrent")
 		return err
 	}
 

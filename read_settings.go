@@ -3,21 +3,22 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
+
+	"github.com/minya/logger"
 )
 
 // ReadSettings reads settings from env or command line or file
 func ReadSettings(settingsPath string) (Settings, error) {
 	settings, err := readSettingsFromEnv()
 	if err == nil {
-		log.Println("Settings read from env")
+		logger.Info("Settings read from env")
 		return settings, nil
 	}
 
 	settings, err = readSettingsFromFile(settingsPath)
 	if err == nil {
-		log.Println("Settings read from file")
+		logger.Info("Settings read from file")
 		return settings, nil
 	}
 
@@ -48,6 +49,9 @@ func readSettingsFromFile(path string) (Settings, error) {
 	if err != nil {
 		return settings, err
 	}
-	json.Unmarshal(settingsBytes, &settings)
+	err = json.Unmarshal(settingsBytes, &settings)
+	if err != nil {
+		return settings, fmt.Errorf("error unmarshalling settings: %w", err)
+	}
 	return settings, nil
 }

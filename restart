@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$TGT_ENV" ]; then
+  echo "Error: $TGT_ENV file not found!"
+  exit 1
+fi
+
+# expand ~/ to full path
+TGT_ENV=$(echo $TGT_ENV | sed 's|^~|'"$HOME"'|')
+
+docker compose --env-file $TGT_ENV down
+docker compose --env-file $TGT_ENV up -d --force-recreate

@@ -2,37 +2,51 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
 	"github.com/minya/telegram"
+	"github.com/minya/logger"
 	"github.com/odwrtw/transmission"
 )
 
 func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *telegram.Api) (func(), chan int) {
-	chanNotify := make(chan int)
+	chanNotify := make(chan int, 1)
 
 	updateFn := func() {
 		var globalTorrentState transmission.TorrentMap
-		for {
-			<-chanNotify
-			log.Printf("[UpdatesChecker] Start\n")
-			for {
-				newState, err := updateCheckRoutine(transmissionClient, api, globalTorrentState)
-				if err == nil {
-					globalTorrentState = newState
-					if allCompleted(globalTorrentState) {
-						log.Printf("[UpdatesChecker] All torrents completed. Update checking stopped.\n")
-						break
-					}
-				} else {
-					log.Printf("[UpdatesChecker] Error %v\n", err)
+		active := false
+		checkTorrents := func() {
+			newState, err := updateCheckRoutine(transmissionClient, api, globalTorrentState)
+			if err == nil {
+				globalTorrentState = newState
+				if allCompleted(globalTorrentState) {
+					logger.Info("[UpdatesChecker] All torrents completed. Update checking paused.")
+					active = false
 				}
-				log.Printf("[UpdatesChecker] Completed\n")
-				time.Sleep(1 * time.Minute)
+			} else {
+				logger.Error(err, "[UpdatesChecker] Error checking torrents")
+			}
+			logger.Info("[UpdatesChecker] Completed check cycle")
+		}
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+
+		for {
+			select {
+			case <-chanNotify:
+				logger.Info("[UpdatesChecker] Starting torrent completion check")
+				active = true
+				checkTorrents()
+
+			case <-ticker.C:
+				if active {
+					checkTorrents()
+				}
 			}
 		}
+
 	}
 
 	return updateFn, chanNotify
@@ -46,12 +60,12 @@ func updateCheckRoutine(
 	torrents, err := transmissionClient.GetTorrentMap()
 
 	if err != nil {
-		log.Printf("[UpdatesChecker] error %v\n", err)
+		logger.Error(err, "[UpdatesChecker] Error getting torrent map")
 		return state, err
 	}
 
 	for hash, torrent := range torrents {
-		log.Printf("[UpdatesChecker] Check %v\n", torrent.Name)
+		logger.Debug("[UpdatesChecker] Check torrent", "name", torrent.Name)
 		previous, ok := state[hash]
 		if !ok {
 			previous = torrent
@@ -59,11 +73,11 @@ func updateCheckRoutine(
 		if torrent.PercentDone == 1 && previous.PercentDone < 1 {
 			chatID, err := getTorrentChatID(torrent)
 			if err != nil {
-				log.Printf("[UpdatesChecker] Warn  %v: no chat id found (%v)\n", torrent.Name, err)
+				logger.Warn("[UpdatesChecker] No chat ID found", "torrent", torrent.Name, "error", err)
 				continue
 			}
 
-			log.Printf("[UpdatesChecker] Found completed torent %v\n", torrent.Name)
+			logger.Info("[UpdatesChecker] Found completed torrent", "name", torrent.Name)
 
 			api.SendMessage(telegram.ReplyMessage{
 				ChatId: chatID,

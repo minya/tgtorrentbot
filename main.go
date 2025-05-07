@@ -2,21 +2,28 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"time"
 
 	"github.com/minya/telegram"
+	"github.com/minya/logger"
 	"github.com/odwrtw/transmission"
 )
 
 func main() {
 	settingsPath := flag.String("settings", "settings.json", "Path to settings file")
+	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	prettyLog := flag.Bool("pretty-log", true, "Enable pretty logging")
 	flag.Parse()
+
+	logger.InitLogger(logger.Config{
+		Level:      *logLevel,
+		Pretty:     *prettyLog,
+		WithCaller: true,
+	})
 
 	settings, err := ReadSettings(*settingsPath)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err, "Failed to read settings")
 	}
 
 	conf := transmission.Config{
@@ -26,8 +33,7 @@ func main() {
 	}
 	transmissionClient, err := transmission.New(conf)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Can't create transmission client: %v", err))
-		panic(err)
+		logger.Fatal(err, "Can't create transmission client")
 	}
 
 	api := telegram.NewApi(settings.BotToken)
@@ -42,6 +48,9 @@ func main() {
 		notify:             func() { chanNotify <- 1 },
 	}
 
-	log.Println("Bot started")
-	log.Fatal(telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1))
+	logger.Info("Bot started")
+	err = telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1)
+	if err != nil {
+		logger.Fatal(err, "Failed to start polling")
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/minya/goutils/web"
+	"github.com/minya/logger"
 )
 
 type RutrackerClient struct {
@@ -56,20 +57,20 @@ func (c *RutrackerClient) Find(pattern string) ([]RutrackerSearchItem, error) {
     searchBody := strings.NewReader(searchBodyData.Encode())
 	res, err := c.httpClient.Post(searchURL, "application/x-www-form-urlencoded", searchBody)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		logger.Error(err, "Request failed")
 		return nil, err
 	}
 	defer res.Body.Close()
 
 	responseBodyData, err := io.ReadAll(res.Body)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		logger.Error(err, "Failed to read response body")
 		return nil, err
 	}
 
 	items, err := ParseSearchItems(&responseBodyData)
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		logger.Error(err, "Failed to parse search items")
 		return nil, err
 	}
 

@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Function to check and update a module
+update_module() {
+    local target_mod_path="$1"      # Path to the project with go.mod to update
+    local module_name="$2"          # Name of the module to update (e.g., "logger", "telegram")
+    local module_src_path="$3"      # Path to the module's source directory
+
+    echo "Checking $module_name module in $(basename "$target_mod_path")..."
+
+    # Get module version from target's go.mod
+    local version=$(grep -E "github\.com/minya/$module_name v[0-9]" "$target_mod_path/go.mod" | grep -v '=>' | awk '{print $2}')
+    local date_part=$(echo "$version" | cut -d '-' -f 2)
+    local mod_commit=$(echo "$version" | cut -d '-' -f 3)
+
+    if [ -z "$mod_commit" ] || [ -z "$date_part" ]; then
+        echo "Failed to extract commit or date from $module_name version string in $(basename "$target_mod_path")"
+        return 1
+    fi
+
+    # Get latest commit from module source directory
+    local latest_commit=$(cd "$module_src_path" && git rev-parse --short=12 HEAD)
+
+    # Check if module needs updating
+    if [ "$mod_commit" == "$latest_commit" ]; then
+        echo "$module_name is up to date in $(basename "$target_mod_path") (commit: $mod_commit)"
+    else
+        echo "$module_name needs updating in $(basename "$target_mod_path"):"
+        echo "Latest commit: $latest_commit"
+        echo "Current commit in go.mod: $mod_commit"
+
+        # Get current date in the format YYYYMMDD for the pseudo-version
+        local current_date=$(date +"%Y%m%d%H%M%S")
+
+        # Create new version with current date and latest commit
+        local new_version="v0.0.0-$current_date-$latest_commit"
+
+        echo "Updating $module_name from $version to $new_version"
+
+        # Update module using go get command
+        (
+            cd "$target_mod_path"
+            echo "go get -u github.com/minya/$module_name@$latest_commit"
+            go get -u "github.com/minya/$module_name@$latest_commit"
+            go mod tidy
+        )
+
+        echo "$module_name updated successfully"
+    fi
+    echo ""
+}
+
+# Go to the script directory
+cd "$(dirname "$0")"
+scriptdir="$(pwd)"
+
+# Update logger module in tgtorrentbot
+update_module "$scriptdir" "logger" "$scriptdir/../logger"
+
+# Update logger module in telegram
+update_module "$scriptdir/../telegram" "logger" "$scriptdir/../logger"
+
+# Update telegram module in tgtorrentbot
+update_module "$scriptdir" "telegram" "$scriptdir/../telegram"
+
+echo "Dependency updates complete!"
