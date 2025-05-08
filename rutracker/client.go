@@ -38,8 +38,12 @@ func NewAuthenticatedRutrackerClient(username string, password string) (Rutracke
 
 func authenticate(httpClient *http.Client, username string, password string) error {
 	rutrackerLoginURL := "https://rutracker.org/forum/login.php"
-	body := strings.NewReader("login_username=" + username + "&login_password=" + password + "&login=%C2%F5%EE%E4")
-	res, err := httpClient.Post(rutrackerLoginURL, "application/x-www-form-urlencoded", body)
+	form := url.Values{}
+	form.Set("login_username", username)
+	form.Set("login_password", password)
+	form.Set("login", "%C2%F5%EE%E4")
+	formData := strings.NewReader(form.Encode())
+	res, err := httpClient.Post(rutrackerLoginURL, "application/x-www-form-urlencoded", formData)
 	if err != nil {
 		return err
 	}
