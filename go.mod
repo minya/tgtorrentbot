@@ -3,7 +3,7 @@ module github.com/minya/tgtorrentbot
 go 1.23.3
 
 require (
-	github.com/minya/telegram v0.0.0-20250508150755-e7603b7105ba
+	github.com/minya/telegram v0.0.0-20250508165427-cfe92c43cb90
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759
 )
 
