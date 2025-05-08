@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/minya/telegram"
-	"github.com/minya/tgtorrentbot/pkg/logger"
+	"github.com/minya/logger"
 	"github.com/odwrtw/transmission"
 )
 
@@ -15,10 +15,23 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 
 	updateFn := func() {
 		var globalTorrentState transmission.TorrentMap
+		active := false
+		checkTorrents := func() {
+			newState, err := updateCheckRoutine(transmissionClient, api, globalTorrentState)
+			if err == nil {
+				globalTorrentState = newState
+				if allCompleted(globalTorrentState) {
+					logger.Info("[UpdatesChecker] All torrents completed. Update checking paused.")
+					active = false
+				}
+			} else {
+				logger.Error(err, "[UpdatesChecker] Error checking torrents")
+			}
+			logger.Info("[UpdatesChecker] Completed check cycle")
+		}
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
-		active := false
 
 		for {
 			select {
@@ -34,19 +47,6 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 			}
 		}
 
-		checkTorrents := func() {
-			newState, err := updateCheckRoutine(transmissionClient, api, globalTorrentState)
-			if err == nil {
-				globalTorrentState = newState
-				if allCompleted(globalTorrentState) {
-					logger.Info("[UpdatesChecker] All torrents completed. Update checking paused.")
-					active = false
-				}
-			} else {
-				logger.Error(err, "[UpdatesChecker] Error checking torrents")
-			}
-			logger.Info("[UpdatesChecker] Completed check cycle")
-		}
 	}
 
 	return updateFn, chanNotify

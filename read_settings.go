@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/minya/tgtorrentbot/pkg/logger"
+	"github.com/minya/logger"
 )
 
 // ReadSettings reads settings from env or command line or file

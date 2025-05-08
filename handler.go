@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/minya/telegram"
-	"github.com/minya/tgtorrentbot/pkg/logger"
+	"github.com/minya/logger"
 	"github.com/minya/tgtorrentbot/rutracker"
 	"github.com/odwrtw/transmission"
 )
@@ -162,7 +162,7 @@ func (handler *UpdatesHandler) handleDownloadCommand(downloadUrl string, chatID 
 	}
 
 	torrentBase64 := base64.StdEncoding.EncodeToString(torrentBytes)
-	logger.Debug("Torrent encoded as base64")
+	logger.Debug(fmt.Sprintf("Torrent encoded as base64: %s", torrentBase64))
 
 	return handler.addTorrentAndReply(torrentBytes, chatID)
 }
@@ -172,7 +172,7 @@ func (handler *UpdatesHandler) handleSearchCommand(pattern string, chatID int) e
 	cfg := handler.rutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
 	if err != nil {
-		log.Printf("Error creating authenticated rutracker client: %v\n", err)
+		logger.Error(err, "Error creating authenticated rutracker client")
 		return err
 	}
 	found, err := rutrackerClient.Find(pattern)

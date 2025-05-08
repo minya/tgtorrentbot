@@ -2,11 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"time"
 
 	"github.com/minya/telegram"
-	"github.com/minya/tgtorrentbot/pkg/logger"
+	"github.com/minya/logger"
 	"github.com/odwrtw/transmission"
 )
 
