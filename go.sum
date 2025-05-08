@@ -11,8 +11,12 @@ github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623 h1:o3OTK+6u5VCRaY04C
 github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623/go.mod h1:pv9bqgVMpS0PRT9sVvFIF+tHhk8+RjSzalfFE3eQwwc=
 github.com/minya/logger v0.0.0-20250508140504-ea2e38096787 h1:i6iTiQ8ZUnkRbY+SGTqMYmILUsWSYax2Nf6XpYD4cn0=
 github.com/minya/logger v0.0.0-20250508140504-ea2e38096787/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
+github.com/minya/logger v0.0.0-20250508192728-70dabcd8e4a3 h1:KTm0PckYZJIdxId2ltYj3wIhkf+Jfw6rIU5QQ+kiQlY=
+github.com/minya/logger v0.0.0-20250508192728-70dabcd8e4a3/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
 github.com/minya/telegram v0.0.0-20250508165427-cfe92c43cb90 h1:6Q0h7z9gyDNfHnPeKPX5V3K2J0qQphTaIcmDWefA0b8=
 github.com/minya/telegram v0.0.0-20250508165427-cfe92c43cb90/go.mod h1:PphCg9KUTQjOrkXEQ4JsiTzbV6dPqpvCWsuEGj8PC8c=
+github.com/minya/telegram v0.0.0-20250508195051-a34120950088 h1:/GylySMtc218X1IGQhVVrzzLoGg84xhu0r/CYxsax6U=
+github.com/minya/telegram v0.0.0-20250508195051-a34120950088/go.mod h1:5e3ufgplhCnyEtOhlfppcrRkjcBGSuDhUHU8dpEr2i0=
 github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759 h1:r3iRIEQq8R+uCW0PY+ude4yerchKyYhO003kQk0g4pE=
 github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759/go.mod h1:GdV2H0+oYNNdo/vgsMbDBQ9CFrNJkJtpM0CbU/gbdls=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=

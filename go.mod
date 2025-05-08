@@ -3,12 +3,12 @@ module github.com/minya/tgtorrentbot
 go 1.23.3
 
 require (
-	github.com/minya/telegram v0.0.0-20250508165427-cfe92c43cb90
+	github.com/minya/telegram v0.0.0-20250508195051-a34120950088
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759
 )
 
 require (
-	github.com/minya/logger v0.0.0-20250508140504-ea2e38096787
+	github.com/minya/logger v0.0.0-20250508192728-70dabcd8e4a3
 	github.com/rs/zerolog v1.34.0 // indirect
 )
 
