@@ -10,7 +10,11 @@ import (
 
 func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 	re := regexp.MustCompile("<a.+?href=\"(viewtopic\\.php\\?t=(\\d+))\">(.+?)<\\/a>[\\s\\S]+?<a.+?href=\"(dl.php\\?t=\\d+)\">([\\d\\.]+)&nbsp;(\\w+)\\s\\&.+?<\\/a>[\\s\\S]+?<b class=\"seedmed\">(\\d+)<\\/b>")
-	out, _ := charmap.Windows1251.NewDecoder().Bytes(*responseBytes)
+	out, err := charmap.Windows1251.NewDecoder().Bytes(*responseBytes)
+	if err != nil {
+		logger.Error(err, "cannot decode response bytes")
+		return nil, err
+	}
 	searchResultsHtml := string(out)
 
 	match := re.FindAllStringSubmatch(searchResultsHtml, -1)
