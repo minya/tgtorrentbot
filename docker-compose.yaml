@@ -6,14 +6,18 @@ services:
     environment:
       - TGT_BOTTOKEN=${BOT_TOKEN}
       - TGT_DOWNLOADPATH=/downloads
-      - TGT_RPC_ADDR=http://transmission:9091/transmission/rpc
+      - TGT_RPC_ADDR=http://localhost:9091/transmission/rpc
       - TGT_RPC_USER=tgtorrentbot
       - TGT_RPC_PASSWORD=${PASSWD}
       - TGT_RUTRACKER_USERNAME=${RUTRACKER_USERNAME}
       - TGT_RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
     volumes:
       - /var/transmission/downloads:/downloads
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
+    network_mode: "host"
 
   transmission:
     image: lscr.io/linuxserver/transmission
@@ -28,8 +32,8 @@ services:
       - /var/transmission/config:/config
       - /var/transmission/downloads:/downloads
       - /var/transmission/watch:/watch
-    # ports:
-      # - 9091:9091
+    ports:
+      - 9091:9091
       # - 51413:51413
       # - 51413:51413/udp
     restart: unless-stopped

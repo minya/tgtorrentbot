@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/minya/goutils/web"
 	"github.com/minya/logger"
@@ -21,6 +22,7 @@ func NewAuthenticatedRutrackerClient(username string, password string) (Rutracke
 	httpClient := http.Client{
 		Jar:       web.NewJar(),
 		Transport: web.DefaultTransport(5000),
+		Timeout:   5 * time.Second,
 	}
 
 	client := RutrackerClient{
@@ -55,10 +57,10 @@ func authenticate(httpClient *http.Client, username string, password string) err
 }
 
 func (c *RutrackerClient) Find(pattern string) ([]RutrackerSearchItem, error) {
-    searchURL := fmt.Sprintf("https://rutracker.org/forum/tracker.php?nm=%s", url.QueryEscape(pattern))
-    searchBodyData := url.Values{}
-    searchBodyData.Set("nm", pattern)
-    searchBody := strings.NewReader(searchBodyData.Encode())
+	searchURL := fmt.Sprintf("https://rutracker.org/forum/tracker.php?nm=%s", url.QueryEscape(pattern))
+	searchBodyData := url.Values{}
+	searchBodyData.Set("nm", pattern)
+	searchBody := strings.NewReader(searchBodyData.Encode())
 	res, err := c.httpClient.Post(searchURL, "application/x-www-form-urlencoded", searchBody)
 	if err != nil {
 		logger.Error(err, "Request failed")
