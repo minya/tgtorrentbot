@@ -1,0 +1,13 @@
+FROM golang:alpine
+
+RUN apk add libc6-compat && apk cache clean
+# install curl for testing
+RUN apk add --no-cache curl
+
+VOLUME /var/log
+VOLUME /root
+
+COPY out/rutracker /root/rutracker
+
+WORKDIR /root/
+CMD ["/root/rutracker", "-u", "minya7", "-p", "*AXRLpPbms7tCkYd" ]
