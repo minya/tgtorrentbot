@@ -33,18 +33,23 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 
 	handler.notify()
 
-	if messageText != "" && messageText[0] == '/' {
-		return handler.handleCommand(messageText, replyChatID)
+	if upd.Message.HasDocument() {
+		return handler.handleTorrentFile(&upd.Message.Document, replyChatID)
 	}
 
-	if !upd.Message.HasDocument() {
+	if messageText == "" {
 		handler.tgApi.SendMessage(telegram.ReplyMessage{
 			ChatId: replyChatID,
-			Text:   "Ожидается команда или файл torrent", // TODO: tranlate
+			Text:   "Ожидается команда или файл torrent", // TODO: translate
 		})
 		return nil
 	}
-	return handler.handleTorrentFile(&upd.Message.Document, replyChatID)
+
+	if messageText[0] == '/' {
+		return handler.handleCommand(messageText, replyChatID)
+	} else {
+		return handler.handleSearchCommand(messageText, replyChatID)
+	}
 }
 
 func (handler *UpdatesHandler) handleCommand(commandText string, replyChatID int) error {
@@ -78,7 +83,7 @@ func (handler *UpdatesHandler) handleListCommand(replyChatID int) error {
 		})
 		return err
 	}
-	logger.Debug("Torrents received", "count", len(torrents))
+	logger.Debug(fmt.Sprintf("Torrents received, count: %d", len(torrents)))
 
 	if len(torrents) == 0 {
 		handler.tgApi.SendMessage(telegram.ReplyMessage{
