@@ -29,7 +29,7 @@ func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 		}
 		seeders, err := strconv.Atoi(group[7])
 		if err != nil {
-			logger.Error(err, "cannot parse seeders", "seeders", group[7])
+			logger.Error(err, "Cannot parse seeders. Got %s", group[7])
 			continue
 		}
 		item := RutrackerSearchItem{
@@ -51,7 +51,7 @@ func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 func parseSize(sizeStr string) float64 {
 	size, err := strconv.ParseFloat(sizeStr, 64)
 	if err != nil {
-		logger.Error(err, "cannot parse size", "sizeStr", sizeStr)
+		logger.Error(err, "Cannot parse size. Got %s", sizeStr)
 		return 0
 	}
 	return size
