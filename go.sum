@@ -7,12 +7,12 @@ github.com/mattn/go-isatty v0.0.16/go.mod h1:kYGgaQfpe5nmfYZH+SKPsOc2e4SrIfOl2e/
 github.com/mattn/go-isatty v0.0.19/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
-github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623 h1:o3OTK+6u5VCRaY04CaGknrOlvabfMZGBUJCj4k1GBm8=
-github.com/minya/goutils v0.0.0-20180115114943-130dc18ce623/go.mod h1:pv9bqgVMpS0PRT9sVvFIF+tHhk8+RjSzalfFE3eQwwc=
+github.com/minya/goutils v0.0.0-20250705185653-54c0c51e5216 h1:nnauY8qDvy56qsC4xSbOL1VFNHxeexEvkbPpToWBAs4=
+github.com/minya/goutils v0.0.0-20250705185653-54c0c51e5216/go.mod h1:vKS6bqDCCCsub1huHIAmPB0ph0of8a4pIMEwHbR1hCA=
 github.com/minya/logger v0.0.0-20250510174529-7368e68ff9d7 h1:Zf5GS4VK8xm240GV5oJFaZyfbTsvr08CCAOuaj7nSBQ=
 github.com/minya/logger v0.0.0-20250510174529-7368e68ff9d7/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
-github.com/minya/telegram v0.0.0-20250513150408-163acf21662d h1:txLJb7BdSp5Dz8JP/8zqiyymT0JA1gZQa1vOyz8ea2g=
-github.com/minya/telegram v0.0.0-20250513150408-163acf21662d/go.mod h1:aaCNBBOSeFcC9n4LOa9ZXowq7eB1MQSeJ2blnwyFv18=
+github.com/minya/telegram v0.0.0-20250705190607-5c5a5acf79b9 h1:ipXxJsuBt0UCdx3sg2eIoHXWi3H1+o49vOYbMhWke3E=
+github.com/minya/telegram v0.0.0-20250705190607-5c5a5acf79b9/go.mod h1:aaCNBBOSeFcC9n4LOa9ZXowq7eB1MQSeJ2blnwyFv18=
 github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759 h1:r3iRIEQq8R+uCW0PY+ude4yerchKyYhO003kQk0g4pE=
 github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759/go.mod h1:GdV2H0+oYNNdo/vgsMbDBQ9CFrNJkJtpM0CbU/gbdls=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
