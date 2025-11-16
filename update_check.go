@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/minya/telegram"
 	"github.com/minya/logger"
+	"github.com/minya/telegram"
 	"github.com/odwrtw/transmission"
 )
 
@@ -31,7 +31,6 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 		}
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
-
 
 		for {
 			select {

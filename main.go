@@ -4,8 +4,9 @@ import (
 	"flag"
 	"time"
 
-	"github.com/minya/telegram"
 	"github.com/minya/logger"
+	"github.com/minya/telegram"
+	"github.com/minya/tgtorrentbot/environment"
 	"github.com/odwrtw/transmission"
 )
 
@@ -40,13 +41,21 @@ func main() {
 	updateRoutine, chanNotify := CreateCompletedCheckRoutine(transmissionClient, &api)
 	go updateRoutine()
 
-	handler := UpdatesHandler{
-		transmissionClient: transmissionClient,
-		tgApi:              &api,
-		downloadPath:       settings.DownloadPath,
-		rutrackerConfig:    &settings.RutrackerConfig,
-		notify:             func() { chanNotify <- 1 },
+	env := environment.Env{
+		TransmissionClient: transmissionClient,
+		TgApi:              &api,
+		DownloadPath:       settings.DownloadPath,
+		RutrackerConfig:    &settings.RutrackerConfig,
 	}
+
+	notify := func() {
+		select {
+		case chanNotify <- 1:
+		default:
+		}
+	}
+
+	handler := NewUpdatesHandler(env, notify)
 
 	logger.Info("Bot started")
 	err = telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1)
