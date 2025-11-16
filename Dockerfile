@@ -1,4 +1,4 @@
-FROM golang:1.24.3 AS build
+FROM golang:1.24-alpine AS build
 
 WORKDIR /app
 
@@ -14,6 +14,5 @@ RUN apk add --no-cache ca-certificates libc6-compat
 
 WORKDIR /root/app
 COPY --from=build /out/tgtorrentbot ./tgtorrentbot
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 CMD ["/root/app/tgtorrentbot"]
