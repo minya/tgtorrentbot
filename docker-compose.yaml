@@ -1,4 +1,3 @@
-version: "4"
 services:
   tgtorrentbot:
     image: tgtorrentbot_img:latest
@@ -18,6 +17,10 @@ services:
       - 8.8.4.4
     restart: unless-stopped
     network_mode: "host"
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
 
   transmission:
     image: lscr.io/linuxserver/transmission
@@ -37,6 +40,10 @@ services:
       # - 51413:51413
       # - 51413:51413/udp
     restart: unless-stopped
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
 
   minidlna:
     image: vladgh/minidlna
@@ -66,3 +73,7 @@ services:
       - /var/transmission/downloads/complete:/media:z
     command: '-s "media;/media" -n'
     restart: unless-stopped
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
