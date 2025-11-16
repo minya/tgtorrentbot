@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/minya/telegram"
 	"github.com/minya/logger"
+	"github.com/minya/telegram"
 	"github.com/odwrtw/transmission"
 )
 
@@ -31,7 +31,6 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 		}
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
-
 
 		for {
 			select {
@@ -65,7 +64,7 @@ func updateCheckRoutine(
 	}
 
 	for hash, torrent := range torrents {
-		logger.Debug("[UpdatesChecker] Check torrent", "name", torrent.Name)
+		logger.Debug("[UpdatesChecker] Check torrent: %s", torrent.Name)
 		previous, ok := state[hash]
 		if !ok {
 			previous = torrent
@@ -73,11 +72,11 @@ func updateCheckRoutine(
 		if torrent.PercentDone == 1 && previous.PercentDone < 1 {
 			chatID, err := getTorrentChatID(torrent)
 			if err != nil {
-				logger.Warn("[UpdatesChecker] No chat ID found", "torrent", torrent.Name, "error", err)
+				logger.Warn("[UpdatesChecker] No chat ID found for torrent %s, error: %v", torrent.Name, err)
 				continue
 			}
 
-			logger.Info("[UpdatesChecker] Found completed torrent", "name", torrent.Name)
+			logger.Info("[UpdatesChecker] Found completed torrent: %s", torrent.Name)
 
 			api.SendMessage(telegram.ReplyMessage{
 				ChatId: chatID,

@@ -49,10 +49,10 @@ func authenticate(httpClient *http.Client, username string, password string) err
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 	if res.StatusCode >= 400 {
 		return fmt.Errorf("rutracker login failed. Status code: %v", res.StatusCode)
 	}
-
 	return nil
 }
 
