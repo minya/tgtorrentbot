@@ -1,0 +1,8 @@
+settings.json
+tgtorrentbot
+*.swp
+.vscode/
+out/
+bin/
+*.code-workspace
+.git/

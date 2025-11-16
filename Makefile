@@ -1,8 +1,8 @@
 IMAGE_NAME=tgtorrentbot_img
 
-build_image:
+image:
 	@echo "Building image..."
-	@docker build -t $(IMAGE_NAME) .
+	@docker-buildx build --tag $(IMAGE_NAME) .
 
 binaries:
 	@echo "Building binaries..."

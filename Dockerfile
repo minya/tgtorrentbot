@@ -1,31 +1,19 @@
 FROM golang:1.24.3 AS build
 
-
 WORKDIR /app
 
-#COPY go.mod ./
-#COPY go.sum ./
-#
-#COPY *.go ./
-#COPY ./rutracker ./rutracker
-COPY . ./
+COPY go.mod go.sum ./
 RUN go mod download
-RUN go mod tidy
 
-VOLUME [ "/app" ]
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/tgtorrentbot .
 
-RUN mkdir -p /out
-RUN go build -o /out ./...
+FROM alpine:3.20
 
-FROM golang:alpine
+RUN apk add --no-cache ca-certificates libc6-compat
 
-RUN apk add libc6-compat && apk cache clean
-
-VOLUME /var/log
-VOLUME /root
-
-COPY --from=build /out/tgtorrentbot /root/app/tgtorrentbot
+WORKDIR /root/app
+COPY --from=build /out/tgtorrentbot ./tgtorrentbot
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-WORKDIR /root/app/
 CMD ["/root/app/tgtorrentbot"]
