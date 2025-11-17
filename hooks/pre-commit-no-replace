@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+
+# Prevent committing local replace directives in go.mod.
+# Usage: copy or symlink this file to .git/hooks/pre-commit
+# You can bypass with ALLOW_REPLACE=1 git commit ...
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GOMOD="${REPO_ROOT}/go.mod"
+
+if [[ ! -f "${GOMOD}" ]]; then
+  exit 0
+fi
+
+if grep -Eq '^\s*replace\s' "${GOMOD}"; then
+  if [[ "${ALLOW_REPLACE:-}" == "1" ]]; then
+    echo "ALLOW_REPLACE set; skipping replace check"
+    exit 0
+  fi
+  echo "go.mod contains replace directives. Remove them before committing." >&2
+  echo "If intentional (e.g., vendoring or temp override), set ALLOW_REPLACE=1 to bypass." >&2
+  exit 1
+fi
