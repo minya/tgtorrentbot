@@ -88,12 +88,12 @@ func updateCheckRoutine(
 	return torrents, nil
 }
 
-func getTorrentChatID(torrent *transmission.Torrent) (int, error) {
+func getTorrentChatID(torrent *transmission.Torrent) (int64, error) {
 	if len(torrent.Labels) == 0 {
 		return 0, fmt.Errorf("no chatID in torrent's labels")
 	}
 
-	chatID, err := strconv.Atoi(torrent.Labels[0])
+	chatID, err := strconv.ParseInt(torrent.Labels[0], 10, 64)
 	if err != nil {
 		return 0, err
 	}

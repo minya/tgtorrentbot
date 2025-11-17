@@ -28,11 +28,15 @@ func NewUpdatesHandler(env environment.Env, notifyFunc func()) *UpdatesHandler {
 }
 
 func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
-	var replyChatID int
-	if upd.Message.MessageId != 0 {
+	var replyChatID int64
+
+	switch {
+	case upd.Message != nil && upd.Message.MessageId != 0:
 		replyChatID = upd.Message.Chat.Id
-	} else {
+	case upd.CallbackQuery != nil && upd.CallbackQuery.Message != nil:
 		replyChatID = upd.CallbackQuery.Message.Chat.Id
+	default:
+		return nil
 	}
 
 	handler.notify()

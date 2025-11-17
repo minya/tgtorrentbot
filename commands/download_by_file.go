@@ -21,17 +21,19 @@ type DownloadByFileCommandFactory struct {
 }
 
 func (factory *DownloadByFileCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
+	if upd == nil || upd.Message == nil {
+		return false, nil
+	}
 	if upd.Message.HasDocument() {
-		doc := upd.Message.Document
 		return true, &DownloadByFileCommand{
-			Doc: &doc,
+			Doc: upd.Message.Document,
 			Env: factory.Env,
 		}
 	}
 	return false, nil
 }
 
-func (cmd *DownloadByFileCommand) Handle(chatID int) error {
+func (cmd *DownloadByFileCommand) Handle(chatID int64) error {
 	api := cmd.TgApi
 	file, err := api.GetFile(cmd.Doc.FileID)
 	if err != nil {
@@ -55,7 +57,7 @@ func (cmd *DownloadByFileCommand) Handle(chatID int) error {
 	return cmd.addTorrentAndReply(content, chatID)
 }
 
-func (cmd *DownloadByFileCommand) addTorrentAndReply(content []byte, chatID int) error {
+func (cmd *DownloadByFileCommand) addTorrentAndReply(content []byte, chatID int64) error {
 	torrentBase64 := base64.StdEncoding.EncodeToString(content)
 
 	torrent, err := cmd.TransmissionClient.AddTorrent(transmission.AddTorrentArg{

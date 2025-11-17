@@ -4,12 +4,12 @@ import (
 	"github.com/minya/telegram"
 )
 
-type Command interface {
-	Handle(chatID int) error
-}
-
 type CommandFactory interface {
 	Accepts(upd *telegram.Update) (bool, Command)
+}
+
+type Command interface {
+	Handle(chatID int64) error
 }
 
 // func ParseCommand(cmdText string) (ok bool, cmd any) {

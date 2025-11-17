@@ -22,6 +22,9 @@ type RemoveTorrentCommandFactory struct {
 var reRemCmd = regexp.MustCompile(`^/remove\s(\d+)\s*?$`)
 
 func (factory *RemoveTorrentCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
+	if upd == nil || upd.Message == nil {
+		return false, nil
+	}
 	if found := reRemCmd.FindStringSubmatch(upd.Message.Text); len(found) == 2 {
 		torrentID, err := strconv.Atoi(found[1])
 		if err != nil {
@@ -36,7 +39,7 @@ func (factory *RemoveTorrentCommandFactory) Accepts(upd *telegram.Update) (bool,
 	return false, nil
 }
 
-func (cmd *RemoveTorrentCommand) Handle(chatID int) error {
+func (cmd *RemoveTorrentCommand) Handle(chatID int64) error {
 	allTorrents, err := cmd.TransmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Error getting torrents")

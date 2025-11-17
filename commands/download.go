@@ -25,7 +25,7 @@ type DownloadCommandFactory struct {
 var reDownloadCmd = regexp.MustCompile(`^/dl\s(.+?)$`)
 
 func (factory *DownloadCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
-	if upd.CallbackQuery.Data == "" {
+	if upd == nil || upd.CallbackQuery == nil {
 		return false, nil
 	}
 	if found := reDownloadCmd.FindStringSubmatch(upd.CallbackQuery.Data); len(found) == 2 {
@@ -38,7 +38,7 @@ func (factory *DownloadCommandFactory) Accepts(upd *telegram.Update) (bool, Comm
 	return false, nil
 }
 
-func (cmd *DownloadCommand) Handle(chatID int) error {
+func (cmd *DownloadCommand) Handle(chatID int64) error {
 	cfg := cmd.RutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
 	if err != nil {
@@ -53,7 +53,7 @@ func (cmd *DownloadCommand) Handle(chatID int) error {
 	return cmd.addTorrentAndReply(torrentBytes, chatID)
 }
 
-func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int) error {
+func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64) error {
 	torrentBase64 := base64.StdEncoding.EncodeToString(content)
 
 	torrent, err := cmd.TransmissionClient.AddTorrent(transmission.AddTorrentArg{

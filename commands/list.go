@@ -19,6 +19,9 @@ type ListCommandFactory struct {
 }
 
 func (f *ListCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
+	if upd == nil || upd.Message == nil {
+		return false, nil
+	}
 	reListCmd := regexp.MustCompile(`^/list\s*?$`)
 	if matched := reListCmd.Match([]byte(upd.Message.Text)); matched {
 		return true, &ListCommand{f.Env}
@@ -26,7 +29,7 @@ func (f *ListCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
 	return false, nil
 }
 
-func (cmd *ListCommand) Handle(chatID int) error {
+func (cmd *ListCommand) Handle(chatID int64) error {
 	torrents, err := cmd.TransmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Error getting torrents")

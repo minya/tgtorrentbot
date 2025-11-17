@@ -24,6 +24,9 @@ type SearchCommandFactory struct {
 }
 
 func (factory *SearchCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
+	if upd == nil || upd.Message == nil {
+		return false, nil
+	}
 	if cmd := Match(upd.Message.Text); cmd != nil {
 		cmd.Env = factory.Env
 		return true, cmd
@@ -53,7 +56,7 @@ func min(a int, b int) int {
 	return b
 }
 
-func (cmd *SearchCommand) Handle(chatID int) error {
+func (cmd *SearchCommand) Handle(chatID int64) error {
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
 	cfg := cmd.RutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)

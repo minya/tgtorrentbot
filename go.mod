@@ -4,7 +4,7 @@ go 1.23.3
 
 require (
 	github.com/minya/logger v0.0.0-20250510174529-7368e68ff9d7
-	github.com/minya/telegram v0.0.0-20250705190607-5c5a5acf79b9
+	github.com/minya/telegram v0.0.0-20251117190124-63a8573d1bb6
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759
 )
 

@@ -9,7 +9,7 @@ import (
 func TestSearchCommandFactoryAcceptsSlashSearch(t *testing.T) {
 	factory := SearchCommandFactory{}
 	upd := telegram.Update{
-		Message: telegram.Message{
+		Message: &telegram.Message{
 			MessageId: 1,
 			Text:      "/search   some query  ",
 		},
@@ -33,7 +33,7 @@ func TestSearchCommandFactoryAcceptsSlashSearch(t *testing.T) {
 func TestSearchCommandFactoryAcceptsPlainText(t *testing.T) {
 	factory := SearchCommandFactory{}
 	upd := telegram.Update{
-		Message: telegram.Message{
+		Message: &telegram.Message{
 			MessageId: 5,
 			Text:      "   movie title  ",
 		},
@@ -57,7 +57,7 @@ func TestSearchCommandFactoryAcceptsPlainText(t *testing.T) {
 func TestSearchCommandFactoryRejectsOtherCommands(t *testing.T) {
 	factory := SearchCommandFactory{}
 	upd := telegram.Update{
-		Message: telegram.Message{
+		Message: &telegram.Message{
 			MessageId: 7,
 			Text:      "/list",
 		},
@@ -72,7 +72,7 @@ func TestSearchCommandFactoryRejectsOtherCommands(t *testing.T) {
 func TestDownloadCommandFactoryAcceptsCallback(t *testing.T) {
 	factory := DownloadCommandFactory{}
 	upd := telegram.Update{
-		CallbackQuery: telegram.CallbackQuery{
+		CallbackQuery: &telegram.CallbackQuery{
 			Data: "/dl https://example.org/download?id=123",
 		},
 	}
@@ -96,7 +96,7 @@ func TestDownloadCommandFactoryAcceptsCallback(t *testing.T) {
 func TestDownloadCommandFactoryRejectsWithoutCallback(t *testing.T) {
 	factory := DownloadCommandFactory{}
 	upd := telegram.Update{
-		Message: telegram.Message{
+		Message: &telegram.Message{
 			MessageId: 10,
 			Text:      "/dl https://example.org/download?id=456",
 		},
@@ -111,9 +111,9 @@ func TestDownloadCommandFactoryRejectsWithoutCallback(t *testing.T) {
 func TestDownloadByFileCommandFactoryAcceptsDocument(t *testing.T) {
 	factory := DownloadByFileCommandFactory{}
 	upd := telegram.Update{
-		Message: telegram.Message{
+		Message: &telegram.Message{
 			MessageId: 12,
-			Document: telegram.Document{
+			Document: &telegram.Document{
 				FileID: "file123",
 			},
 		},
@@ -137,7 +137,7 @@ func TestDownloadByFileCommandFactoryAcceptsDocument(t *testing.T) {
 func TestDownloadByFileCommandFactoryRejectsWithoutDocument(t *testing.T) {
 	factory := DownloadByFileCommandFactory{}
 	upd := telegram.Update{
-		Message: telegram.Message{
+		Message: &telegram.Message{
 			MessageId: 13,
 		},
 	}
