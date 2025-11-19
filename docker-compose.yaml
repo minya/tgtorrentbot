@@ -81,6 +81,8 @@ services:
   jellyfin:
     image: jellyfin/jellyfin:latest
     container_name: tgt-jellyfin
+    networks:
+      - tunnel-net
     environment:
       - PUID=1000
       - PGID=1000
@@ -96,3 +98,21 @@ services:
       options:
         max-size: "5m"
         max-file: "3"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: tgt-cloudflare-tunnel
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    networks:
+      - tunnel-net
+    restart: unless-stopped
+    depends_on:
+      - jellyfin
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  tunnel-net:
+    driver: bridge
