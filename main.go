@@ -38,21 +38,13 @@ func main() {
 	}
 
 	api := telegram.NewApi(settings.BotToken)
-	updateRoutine, chanNotify := CreateCompletedCheckRoutine(transmissionClient, &api)
-	go updateRoutine()
+	notify := CreateCompletedCheckRoutine(transmissionClient, &api)
 
 	env := environment.Env{
 		TransmissionClient: transmissionClient,
 		TgApi:              &api,
 		DownloadPath:       settings.DownloadPath,
 		RutrackerConfig:    &settings.RutrackerConfig,
-	}
-
-	notify := func() {
-		select {
-		case chanNotify <- 1:
-		default:
-		}
 	}
 
 	handler := NewUpdatesHandler(env, notify)
