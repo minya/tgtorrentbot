@@ -39,12 +39,14 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 		return nil
 	}
 
-	handler.notify()
-
 	for _, factory := range handler.commandsList {
 		accepts, cmd := factory.Accepts(upd)
 		if accepts {
-			return cmd.Handle(replyChatID)
+			handleErr := cmd.Handle(replyChatID)
+			if handleErr == nil {
+				handler.notify()
+			}
+			return handleErr
 		}
 	}
 

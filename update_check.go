@@ -10,7 +10,7 @@ import (
 	"github.com/odwrtw/transmission"
 )
 
-func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *telegram.Api) (func(), chan int) {
+func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *telegram.Api) func() {
 	chanNotify := make(chan int, 1)
 
 	updateFn := func() {
@@ -48,7 +48,16 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 
 	}
 
-	return updateFn, chanNotify
+	go updateFn()
+
+	notifyFunc := func() {
+		select {
+		case chanNotify <- 1:
+		default:
+		}
+	}
+
+	return notifyFunc
 }
 
 func updateCheckRoutine(
