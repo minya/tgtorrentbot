@@ -51,7 +51,17 @@ func (cmd *ListCommand) Handle(chatID int64) error {
 
 	var b strings.Builder
 	for _, torrent := range torrents {
-		fmt.Fprintf(&b, "%v %v %v\n", torrent.ID, torrent.Name, torrent.PercentDone*100)
+		categoryLabel := "Unknown"
+		logger.Debug(fmt.Sprintf("Torrent %v has %d labels: %v", torrent.ID, len(torrent.Labels), torrent.Labels))
+		if len(torrent.Labels) >= 2 {
+			// labels[0] is chatID, labels[1] is category
+			if cat, ok := ParseCategory(torrent.Labels[1]); ok {
+				categoryLabel = cat.DisplayName()
+			} else {
+				logger.Debug(fmt.Sprintf("Failed to parse category from label: %s", torrent.Labels[1]))
+			}
+		}
+		fmt.Fprintf(&b, "[%s] %v %v %.0f%%\n", categoryLabel, torrent.ID, torrent.Name, torrent.PercentDone*100)
 	}
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
 		Text:   b.String(),

@@ -9,7 +9,6 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
-	"github.com/minya/tgtorrentbot/rutracker"
 	"github.com/odwrtw/transmission"
 )
 
@@ -39,25 +38,42 @@ func (factory *DownloadCommandFactory) Accepts(upd *telegram.Update) (bool, Comm
 }
 
 func (cmd *DownloadCommand) Handle(chatID int64) error {
-	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
-	if err != nil {
-		logger.Error(err, "Error creating authenticated rutracker client")
-		return err
-	}
-	torrentBytes, err := rutrackerClient.DownloadTorrent(cmd.URL)
-	if err != nil {
-		return err
-	}
-
-	return cmd.addTorrentAndReply(torrentBytes, chatID)
+	// Show category selection inline keyboard
+	keyboard := cmd.buildCategoryKeyboard()
+	cmd.TgApi.SendMessage(telegram.ReplyMessage{
+		ChatId:      chatID,
+		Text:        "Выберите категорию:", // TODO: translate
+		ReplyMarkup: keyboard,
+	})
+	return nil
 }
 
-func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64) error {
+func (cmd *DownloadCommand) buildCategoryKeyboard() telegram.InlineKeyboardMarkup {
+	var buttons [][]telegram.InlineKeyboardButton
+
+	for _, cat := range AllCategories() {
+		button := telegram.InlineKeyboardButton{
+			Text:         cat.DisplayName(),
+			CallbackData: fmt.Sprintf("/dlcat %s %s", cat.String(), cmd.URL),
+		}
+		buttons = append(buttons, []telegram.InlineKeyboardButton{button})
+	}
+
+	return telegram.InlineKeyboardMarkup{
+		InlineKeyboard: buttons,
+	}
+}
+
+func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, category Category) error {
 	torrentBase64 := base64.StdEncoding.EncodeToString(content)
 
+	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
+
+	logger.Debug(fmt.Sprintf("Adding torrent with category %s to directory %s", category.String(), downloadDir))
+
 	torrent, err := cmd.TransmissionClient.AddTorrent(transmission.AddTorrentArg{
-		Metainfo: torrentBase64,
+		Metainfo:    torrentBase64,
+		DownloadDir: downloadDir,
 	})
 
 	if err != nil {
@@ -65,17 +81,23 @@ func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64) err
 		return err
 	}
 
-	torrent.Labels = []string{fmt.Sprintf("%v", chatID)}
-	err = torrent.Update()
+	labels := []string{fmt.Sprintf("%v", chatID), category.String()}
+	logger.Debug(fmt.Sprintf("Torrent added with ID %v, setting labels to %v", torrent.ID, labels))
+
+	err = torrent.Set(transmission.SetTorrentArg{
+		Labels: labels,
+	})
 
 	if err != nil {
-		logger.Error(err, "Error updating torrent")
+		logger.Error(err, "Error setting torrent labels")
 		return err
 	}
 
+	logger.Debug(fmt.Sprintf("Torrent %v labels set successfully", torrent.ID))
+
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
 		ChatId: chatID,
-		Text:   fmt.Sprintf("Добавлено: %v", torrent.ID), // TODO: translate
+		Text:   fmt.Sprintf("Добавлено: %v [%s]", torrent.ID, category.DisplayName()), // TODO: translate
 	})
 	return nil
 }
