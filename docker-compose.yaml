@@ -53,7 +53,10 @@ services:
       - MINIDLNA_MEDIA_DIR=/media
       - MINIDLNA_FRIENDLY_NAME=Raspberry
     volumes:
-      - /var/transmission/downloads/complete:/media
+      - /var/transmission/downloads/movies:/media/movies
+      - /var/transmission/downloads/shows:/media/shows
+      - /var/transmission/downloads/music:/media/music
+      - /var/transmission/downloads/others:/media/others
     restart: unless-stopped
 
   samba:
@@ -70,7 +73,10 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - /var/transmission/downloads/complete:/media:z
+      - /var/transmission/downloads/movies:/media/movies:z
+      - /var/transmission/downloads/shows:/media/shows:z
+      - /var/transmission/downloads/music:/media/music:z
+      - /var/transmission/downloads/others:/media/others:z
     command: '-s "media;/media" -n'
     restart: unless-stopped
     logging:
@@ -89,7 +95,10 @@ services:
       - TZ=Canada/Eastern
     volumes:
       - /var/jellyfin/config:/config
-      - /var/transmission/downloads/complete:/media
+      - /var/transmission/downloads/movies:/media/movies
+      - /var/transmission/downloads/shows:/media/shows
+      - /var/transmission/downloads/music:/media/music
+      - /var/transmission/downloads/others:/media/others
     ports:
       - 8096:8096
       - 8920:8920
