@@ -9,6 +9,7 @@ type Settings struct {
 	DownloadPath    string                 `json:"downloadPath"`
 	TransmissionRPC TransmissionRPCSettngs `json:"transmissionRPC"`
 	RutrackerConfig rutracker.Config       `json:"rutrackerConfig"`
+	LogLevel        string                 `json:"logLevel"`
 }
 
 type TransmissionRPCSettngs struct {

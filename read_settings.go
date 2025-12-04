@@ -34,6 +34,7 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.TransmissionRPC.Password = os.Getenv("TGT_RPC_PASSWORD")
 	settings.RutrackerConfig.Username = os.Getenv("TGT_RUTRACKER_USERNAME")
 	settings.RutrackerConfig.Password = os.Getenv("TGT_RUTRACKER_PASSWORD")
+	settings.LogLevel = os.Getenv("TGT_LOGLEVEL")
 
 	if settings.BotToken == "" ||
 		settings.DownloadPath == "" ||

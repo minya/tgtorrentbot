@@ -12,20 +12,28 @@ import (
 
 func main() {
 	settingsPath := flag.String("settings", "settings.json", "Path to settings file")
-	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	logLevelFlag := flag.String("log-level", "", "Log level (debug, info, warn, error) - overrides settings file/env")
 	prettyLog := flag.Bool("pretty-log", true, "Enable pretty logging")
 	flag.Parse()
-
-	logger.InitLogger(logger.Config{
-		Level:      *logLevel,
-		Pretty:     *prettyLog,
-		WithCaller: true,
-	})
 
 	settings, err := ReadSettings(*settingsPath)
 	if err != nil {
 		logger.Fatal(err, "Failed to read settings")
 	}
+
+	// Determine log level priority: flag > settings > default
+	logLevel := "info"
+	if *logLevelFlag != "" {
+		logLevel = *logLevelFlag
+	} else if settings.LogLevel != "" {
+		logLevel = settings.LogLevel
+	}
+
+	logger.InitLogger(logger.Config{
+		Level:      logLevel,
+		Pretty:     *prettyLog,
+		WithCaller: true,
+	})
 
 	conf := transmission.Config{
 		Address:  settings.TransmissionRPC.Address,
