@@ -56,6 +56,7 @@ services:
       - /var/transmission/downloads/movies:/media/movies
       - /var/transmission/downloads/shows:/media/shows
       - /var/transmission/downloads/music:/media/music
+      - /var/transmission/downloads/audiobooks:/media/audiobooks
       - /var/transmission/downloads/others:/media/others
     restart: unless-stopped
 
@@ -76,6 +77,7 @@ services:
       - /var/transmission/downloads/movies:/media/movies:z
       - /var/transmission/downloads/shows:/media/shows:z
       - /var/transmission/downloads/music:/media/music:z
+      - /var/transmission/downloads/audiobooks:/media/audiobooks:z
       - /var/transmission/downloads/others:/media/others:z
     command: '-s "media;/media" -n'
     restart: unless-stopped
@@ -98,6 +100,7 @@ services:
       - /var/transmission/downloads/movies:/media/movies
       - /var/transmission/downloads/shows:/media/shows
       - /var/transmission/downloads/music:/media/music
+      - /var/transmission/downloads/audiobooks:/media/audiobooks
       - /var/transmission/downloads/others:/media/others
     ports:
       - 8096:8096

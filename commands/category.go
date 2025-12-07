@@ -4,10 +4,11 @@ package commands
 type Category string
 
 const (
-	CategoryMovies Category = "movies"
-	CategoryShows  Category = "shows"
-	CategoryMusic  Category = "music"
-	CategoryOthers Category = "others"
+	CategoryMovies     Category = "movies"
+	CategoryShows      Category = "shows"
+	CategoryMusic      Category = "music"
+	CategoryAudiobooks Category = "audiobooks"
+	CategoryOthers     Category = "others"
 )
 
 // AllCategories returns all available categories
@@ -16,6 +17,7 @@ func AllCategories() []Category {
 		CategoryMovies,
 		CategoryShows,
 		CategoryMusic,
+		CategoryAudiobooks,
 		CategoryOthers,
 	}
 }
@@ -29,6 +31,8 @@ func (c Category) DisplayName() string {
 		return "Сериалы"
 	case CategoryMusic:
 		return "Музыка"
+	case CategoryAudiobooks:
+		return "Аудиокниги"
 	case CategoryOthers:
 		return "Другое"
 	default:
