@@ -45,9 +45,11 @@ func (factory *DownloadFileWithCategoryCommandFactory) Accepts(upd *telegram.Upd
 	return false, nil
 }
 
-func (cmd *DownloadFileWithCategoryCommand) Handle(chatID int64) error {
+func (cmd *DownloadFileWithCategoryCommand) Handle(upd *telegram.Update) error {
 	api := cmd.TgApi
+	AnswerCallbackQuery(upd, api)
 	file, err := api.GetFile(cmd.FileID)
+	chatID := upd.CallbackQuery.Message.Chat.Id
 	if err != nil {
 		logger.Error(err, "Error getting file")
 		api.SendMessage(telegram.ReplyMessage{
@@ -67,7 +69,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(chatID int64) error {
 	}
 
 	// Reuse the addTorrentAndReply method from DownloadByFileCommand
-	downloadCmd := &DownloadByFileCommand{
+	downloadCmd := &DownloadCommand{
 		Env: cmd.Env,
 	}
 

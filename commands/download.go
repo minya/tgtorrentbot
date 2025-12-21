@@ -37,11 +37,12 @@ func (factory *DownloadCommandFactory) Accepts(upd *telegram.Update) (bool, Comm
 	return false, nil
 }
 
-func (cmd *DownloadCommand) Handle(chatID int64) error {
-	// Show category selection inline keyboard
+func (cmd *DownloadCommand) Handle(upd *telegram.Update) error {
+	AnswerCallbackQuery(upd, cmd.TgApi)
+
 	keyboard := cmd.buildCategoryKeyboard()
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
-		ChatId:      chatID,
+		ChatId:      upd.CallbackQuery.Message.Chat.Id,
 		Text:        "Выберите категорию:", // TODO: translate
 		ReplyMarkup: keyboard,
 	})

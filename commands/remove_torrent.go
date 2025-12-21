@@ -39,7 +39,7 @@ func (factory *RemoveTorrentCommandFactory) Accepts(upd *telegram.Update) (bool,
 	return false, nil
 }
 
-func (cmd *RemoveTorrentCommand) Handle(chatID int64) error {
+func (cmd *RemoveTorrentCommand) Handle(upd *telegram.Update) error {
 	allTorrents, err := cmd.TransmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Error getting torrents")
@@ -57,6 +57,7 @@ func (cmd *RemoveTorrentCommand) Handle(chatID int64) error {
 		logger.Error(err, "Error removing torrents")
 		return err
 	}
+	chatID := upd.Message.Chat.Id
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
 		Text:   "Удалено.",
 		ChatId: chatID,

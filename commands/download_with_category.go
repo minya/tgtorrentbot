@@ -46,7 +46,8 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 	return false, nil
 }
 
-func (cmd *DownloadWithCategoryCommand) Handle(chatID int64) error {
+func (cmd *DownloadWithCategoryCommand) Handle(upd *telegram.Update) error {
+	AnswerCallbackQuery(upd, cmd.TgApi)
 	cfg := cmd.RutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
 	if err != nil {
@@ -64,5 +65,6 @@ func (cmd *DownloadWithCategoryCommand) Handle(chatID int64) error {
 		Env: cmd.Env,
 	}
 
+	chatID := upd.CallbackQuery.Message.Chat.Id
 	return downloadCmd.addTorrentAndReply(torrentBytes, chatID, cmd.Category)
 }

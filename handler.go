@@ -30,8 +30,19 @@ func NewUpdatesHandler(env environment.Env, notifyFunc func()) *UpdatesHandler {
 }
 
 func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
-	var replyChatID int64
 
+	for _, factory := range handler.commandsList {
+		accepts, cmd := factory.Accepts(upd)
+		if accepts {
+			handleErr := cmd.Handle(upd)
+			if handleErr == nil {
+				handler.notify()
+			}
+			return handleErr
+		}
+	}
+
+	var replyChatID int64
 	switch {
 	case upd.Message != nil && upd.Message.MessageId != 0:
 		replyChatID = upd.Message.Chat.Id
@@ -39,17 +50,6 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 		replyChatID = upd.CallbackQuery.Message.Chat.Id
 	default:
 		return nil
-	}
-
-	for _, factory := range handler.commandsList {
-		accepts, cmd := factory.Accepts(upd)
-		if accepts {
-			handleErr := cmd.Handle(replyChatID)
-			if handleErr == nil {
-				handler.notify()
-			}
-			return handleErr
-		}
 	}
 
 	handler.TgApi.SendMessage(telegram.ReplyMessage{

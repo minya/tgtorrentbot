@@ -56,7 +56,7 @@ func min(a int, b int) int {
 	return b
 }
 
-func (cmd *SearchCommand) Handle(chatID int64) error {
+func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
 	cfg := cmd.RutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
@@ -73,6 +73,7 @@ func (cmd *SearchCommand) Handle(chatID int64) error {
 	logger.Info("found: %v results\n", len(found))
 	logger.Debug("found: %v\n", found)
 
+	chatID := upd.Message.Chat.Id
 	if len(found) == 0 {
 		cmd.TgApi.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,

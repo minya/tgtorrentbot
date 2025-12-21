@@ -9,7 +9,17 @@ type CommandFactory interface {
 }
 
 type Command interface {
-	Handle(chatID int64) error
+	Handle(upd *telegram.Update) error
+}
+
+func AnswerCallbackQuery(upd *telegram.Update, api *telegram.Api) {
+	if upd.CallbackQuery != nil {
+		api.AnswerCallbackQuery(&telegram.AnswerCallbackQueryParams{
+			CallbackQueryID: upd.CallbackQuery.Id,
+			Text:            "Обрабатываю...",
+			ShowAlert:       false,
+		})
+	}
 }
 
 // func ParseCommand(cmdText string) (ok bool, cmd any) {

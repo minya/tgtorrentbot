@@ -29,8 +29,9 @@ func (f *ListCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
 	return false, nil
 }
 
-func (cmd *ListCommand) Handle(chatID int64) error {
+func (cmd *ListCommand) Handle(upd *telegram.Update) error {
 	torrents, err := cmd.TransmissionClient.GetTorrents()
+	chatID := upd.Message.Chat.Id
 	if err != nil {
 		logger.Error(err, "Error getting torrents")
 		cmd.TgApi.SendMessage(telegram.ReplyMessage{
