@@ -6,6 +6,7 @@ import (
 
 type Settings struct {
 	BotToken        string                 `json:"botToken"`
+	WebHookURL      string                 `json:"webHookURL"`
 	DownloadPath    string                 `json:"downloadPath"`
 	TransmissionRPC TransmissionRPCSettngs `json:"transmissionRPC"`
 	RutrackerConfig rutracker.Config       `json:"rutrackerConfig"`

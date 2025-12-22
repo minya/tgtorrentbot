@@ -2,7 +2,8 @@ package main
 
 import (
 	"flag"
-	"time"
+	"net/http"
+	"encoding/json"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
@@ -57,9 +58,35 @@ func main() {
 
 	handler := NewUpdatesHandler(env, notify)
 
-	logger.Info("Bot started")
-	err = telegram.StartPolling(&api, handler.HandleUpdate, 3*time.Second, -1)
-	if err != nil {
-		logger.Fatal(err, "Failed to start polling")
+
+	webhookParams := telegram.SetWebhookParams{
+		Url:         settings.WebHookURL,
 	}
+
+	err = api.SetWebhook(&webhookParams)
+	if err != nil {
+		logger.Fatal(err, "Failed to set webhook")
+	}
+	startListen(80, handler.HandleUpdate)
 }
+
+func startListen(port int, handleUpdate func(*telegram.Update) error) {
+	logger.Info("Bot started")
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		var update telegram.Update
+		err := json.NewDecoder(r.Body).Decode(&update)
+
+		if err != nil {
+			logger.Error(err, "Failed to parse update from request")
+			return
+		}
+		err = handleUpdate(&update)
+		if err != nil {
+			logger.Error(err, "Failed to handle update from request")
+			return
+		}
+	})
+	http.ListenAndServe(":80", nil)
+
+}
+

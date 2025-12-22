@@ -4,8 +4,9 @@ services:
     container_name: tgt-bot
     environment:
       - TGT_BOTTOKEN=${BOT_TOKEN}
+      - TGT_WEBHOOKURL=${WEBHOOKURL}
       - TGT_DOWNLOADPATH=/downloads
-      - TGT_RPC_ADDR=http://localhost:9091/transmission/rpc
+      - TGT_RPC_ADDR=http://tgt-transmission:9091/transmission/rpc
       - TGT_RPC_USER=tgtorrentbot
       - TGT_RPC_PASSWORD=${PASSWD}
       - TGT_RUTRACKER_USERNAME=${RUTRACKER_USERNAME}
@@ -16,7 +17,8 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     restart: unless-stopped
-    network_mode: "host"
+    networks:
+      - tunnel-net
     logging:
       options:
         max-size: "5m"
@@ -35,6 +37,8 @@ services:
       - /var/transmission/config:/config
       - /var/transmission/downloads:/downloads
       - /var/transmission/watch:/watch
+    networks:
+      - tunnel-net
     ports:
       - 9091:9091
       # - 51413:51413
@@ -120,6 +124,7 @@ services:
     restart: unless-stopped
     depends_on:
       - jellyfin
+      - tgtorrentbot
     logging:
       options:
         max-size: "5m"

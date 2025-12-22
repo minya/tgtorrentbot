@@ -28,6 +28,7 @@ func ReadSettings(settingsPath string) (Settings, error) {
 func readSettingsFromEnv() (Settings, error) {
 	var settings Settings
 	settings.BotToken = os.Getenv("TGT_BOTTOKEN")
+	settings.WebHookURL = os.Getenv("TGT_WEBHOOKURL")
 	settings.DownloadPath = os.Getenv("TGT_DOWNLOADPATH")
 	settings.TransmissionRPC.Address = os.Getenv("TGT_RPC_ADDR")
 	settings.TransmissionRPC.User = os.Getenv("TGT_RPC_USER")
