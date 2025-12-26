@@ -3,7 +3,7 @@
 set -e
 
 if [ -z "$TGT_ENV" ]; then
-  echo "Error: $TGT_ENV is not set!"
+  echo "Error: TGT_ENV is not set!"
   exit 1
 fi
 
