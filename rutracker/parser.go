@@ -8,8 +8,11 @@ import (
 	"golang.org/x/text/encoding/charmap"
 )
 
+var pattern = `<tr\s[.\s\S]+?<a\sdata-topic_id="(\d+)".+?href="(.+?)">(.+?)<\/a>[.\s\S]+?<a.+?href="(dl\.php\?t=\d+)">(.+)&nbsp;(.+?)\s&#8595;<\/a>[.\s\S]+?<b class=".+?">(.+?)<\/b>[.\s\S]+?<\/tr>`
+
+var re = regexp.MustCompile(pattern)
+
 func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
-	re := regexp.MustCompile("<a.+?href=\"(viewtopic\\.php\\?t=(\\d+))\">(.+?)<\\/a>[\\s\\S]+?<a.+?href=\"(dl.php\\?t=\\d+)\">([\\d\\.]+)&nbsp;(\\w+)\\s\\&.+?<\\/a>[\\s\\S]+?<b class=\"seedmed\">(\\d+)<\\/b>")
 	out, err := charmap.Windows1251.NewDecoder().Bytes(*responseBytes)
 	if err != nil {
 		logger.Error(err, "cannot decode response bytes")
@@ -23,7 +26,7 @@ func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 
 	for i := range match {
 		group := match[i]
-		topicID, err := strconv.Atoi(group[2])
+		topicID, err := strconv.Atoi(group[1])
 		if err != nil {
 			continue
 		}
@@ -35,7 +38,7 @@ func ParseSearchItems(responseBytes *[]byte) ([]RutrackerSearchItem, error) {
 		item := RutrackerSearchItem{
 			TopicID:     topicID,
 			DownloadURL: group[4],
-			URL:         group[1],
+			URL:         group[3],
 			Title:       group[3],
 			Seeders:     seeders,
 			Size: ItemSize{
@@ -56,3 +59,4 @@ func parseSize(sizeStr string) float64 {
 	}
 	return size
 }
+

@@ -1,9 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"net/http"
-	"encoding/json"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"

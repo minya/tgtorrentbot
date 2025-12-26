@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 
@@ -8,27 +9,28 @@ import (
 )
 
 func main() {
-	var username, passwd string
-	readArgs(&username, &passwd)
+	var username, passwd, pattern string
+	readArgs(&username, &passwd, &pattern)
 	client, err := rutracker.NewAuthenticatedRutrackerClient(username, passwd)
 	if err != nil {
 		panic(err)
 	}
-	results, err := client.Find("The Big Bang Theory")
+	results, err := client.Find(pattern)
 	if err != nil {
 		panic(err)
 	}
-	if len(results) == 0 {
-		println("No results")
-	}
 
-	for _, result := range results {
-		fmt.Printf("Title: %v\tSize: %v\tURL: %v\tSeeders: %v\n", result.Title, result.Size, result.URL, result.Seeders)
+	jsonBytes, err := json.Marshal(results)
+
+	if err != nil {
+		panic(err)
 	}
+	fmt.Println(string(jsonBytes))
 }
 
-func readArgs(username *string, passwd *string) {
+func readArgs(username *string, passwd *string, pattern *string) {
 	flag.StringVar(username, "u", "", "Username")
 	flag.StringVar(passwd, "p", "", "Password")
+	flag.StringVar(pattern, "s", "", "Pattern to search for")
 	flag.Parse()
 }
