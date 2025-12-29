@@ -37,10 +37,34 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.RutrackerConfig.Password = os.Getenv("TGT_RUTRACKER_PASSWORD")
 	settings.LogLevel = os.Getenv("TGT_LOGLEVEL")
 
-	if settings.BotToken == "" ||
-		settings.DownloadPath == "" ||
-		settings.TransmissionRPC.Address == "" {
-		return settings, fmt.Errorf("can't get settings from env")
+	var missing []string
+	if settings.BotToken == "" {
+		missing = append(missing, "TGT_BOTTOKEN")
+	}
+	if settings.WebHookURL == "" {
+		missing = append(missing, "TGT_WEBHOOKURL")
+	}
+	if settings.DownloadPath == "" {
+		missing = append(missing, "TGT_DOWNLOADPATH")
+	}
+	if settings.TransmissionRPC.Address == "" {
+		missing = append(missing, "TGT_RPC_ADDR")
+	}
+	if settings.TransmissionRPC.User == "" {
+		missing = append(missing, "TGT_RPC_USER")
+	}
+	if settings.TransmissionRPC.Password == "" {
+		missing = append(missing, "TGT_RPC_PASSWORD")
+	}
+	if settings.RutrackerConfig.Username == "" {
+		missing = append(missing, "TGT_RUTRACKER_USERNAME")
+	}
+	if settings.RutrackerConfig.Password == "" {
+		missing = append(missing, "TGT_RUTRACKER_PASSWORD")
+	}
+
+	if len(missing) > 0 {
+		return settings, fmt.Errorf("missing required environment variables: %v", missing)
 	}
 	return settings, nil
 }
