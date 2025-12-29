@@ -8,12 +8,12 @@ type Settings struct {
 	BotToken        string                 `json:"botToken"`
 	WebHookURL      string                 `json:"webHookURL"`
 	DownloadPath    string                 `json:"downloadPath"`
-	TransmissionRPC TransmissionRPCSettngs `json:"transmissionRPC"`
+	TransmissionRPC TransmissionRPCSettings `json:"transmissionRPC"`
 	RutrackerConfig rutracker.Config       `json:"rutrackerConfig"`
 	LogLevel        string                 `json:"logLevel"`
 }
 
-type TransmissionRPCSettngs struct {
+type TransmissionRPCSettings struct {
 	Address  string `json:"address"`
 	User     string `json:"user"`
 	Password string `json:"password"`
