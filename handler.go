@@ -19,6 +19,7 @@ func NewUpdatesHandler(env environment.Env, notifyFunc func()) *UpdatesHandler {
 
 		commandsList: []commands.CommandFactory{
 			&commands.ListCommandFactory{Env: env},
+			&commands.ListPageCommandFactory{Env: env},
 			&commands.RemoveTorrentCommandFactory{Env: env},
 			&commands.SearchCommandFactory{Env: env},
 			&commands.DownloadWithCategoryCommandFactory{Env: env},       // Must come before DownloadCommandFactory

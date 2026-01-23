@@ -15,6 +15,8 @@ github.com/minya/telegram v0.0.0-20251221220747-85af9ba595ff h1:9LvHEBIsUzDeqjTh
 github.com/minya/telegram v0.0.0-20251221220747-85af9ba595ff/go.mod h1:aaCNBBOSeFcC9n4LOa9ZXowq7eB1MQSeJ2blnwyFv18=
 github.com/minya/telegram v0.0.0-20251221223143-2d3914996a08 h1:NuU5mBw8Lurxe8KYsEn7WvZH6tKdjuSEtcA6JykA5UI=
 github.com/minya/telegram v0.0.0-20251221223143-2d3914996a08/go.mod h1:aaCNBBOSeFcC9n4LOa9ZXowq7eB1MQSeJ2blnwyFv18=
+github.com/minya/telegram v0.0.0-20260123194026-dc4dbe962a45 h1:3gCwwtuK+241o6hFyr4JG7OWdXFGqaui29vDdYz6xfI=
+github.com/minya/telegram v0.0.0-20260123194026-dc4dbe962a45/go.mod h1:qiGIPPZ98XMbRQoqYt1ueCKd6Z5suU4DCHmwmt9SerY=
 github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759 h1:r3iRIEQq8R+uCW0PY+ude4yerchKyYhO003kQk0g4pE=
 github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759/go.mod h1:GdV2H0+oYNNdo/vgsMbDBQ9CFrNJkJtpM0CbU/gbdls=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
