@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/minya/logger v0.0.0-20250510174529-7368e68ff9d7
 	github.com/minya/rutracker v0.0.0-20260124161256-232b1f63e64c
-	github.com/minya/telegram v0.0.0-20260123194026-dc4dbe962a45
+	github.com/minya/telegram v0.0.0-20260125162800-ddf1ac8cb5c4
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759
 )
 

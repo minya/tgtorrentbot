@@ -5,12 +5,13 @@ import (
 )
 
 type Settings struct {
-	BotToken        string                 `json:"botToken"`
-	WebHookURL      string                 `json:"webHookURL"`
-	DownloadPath    string                 `json:"downloadPath"`
+	BotToken        string                  `json:"botToken"`
+	WebHookURL      string                  `json:"webHookURL"`
+	DownloadPath    string                  `json:"downloadPath"`
 	TransmissionRPC TransmissionRPCSettings `json:"transmissionRPC"`
-	RutrackerConfig rutracker.Config       `json:"rutrackerConfig"`
-	LogLevel        string                 `json:"logLevel"`
+	RutrackerConfig rutracker.Config        `json:"rutrackerConfig"`
+	LogLevel        string                  `json:"logLevel"`
+	WebAppURL       string                  `json:"webAppURL"`
 }
 
 type TransmissionRPCSettings struct {

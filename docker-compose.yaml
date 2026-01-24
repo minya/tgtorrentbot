@@ -12,8 +12,32 @@ services:
       - TGT_RUTRACKER_USERNAME=${RUTRACKER_USERNAME}
       - TGT_RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
       - TGT_LOGLEVEL=debug
+      - TGT_WEBAPP_URL=${WEBAPP_URL}
     volumes:
       - /var/transmission/downloads:/downloads
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    restart: unless-stopped
+    networks:
+      - tunnel-net
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  tgtorrentbot-webapp:
+    image: tgtorrentbot-webapp_img:latest
+    container_name: tgt-webapp
+    environment:
+      - TGT_BOTTOKEN=${BOT_TOKEN}
+      - TGT_DOWNLOADPATH=/downloads
+      - TGT_RPC_ADDR=http://tgt-transmission:9091/transmission/rpc
+      - TGT_RPC_USER=tgtorrentbot
+      - TGT_RPC_PASSWORD=${PASSWD}
+      - TGT_RUTRACKER_USERNAME=${RUTRACKER_USERNAME}
+      - TGT_RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
+      - PORT=8080
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -126,6 +150,7 @@ services:
     depends_on:
       - jellyfin
       - tgtorrentbot
+      - tgtorrentbot-webapp
     logging:
       options:
         max-size: "5m"

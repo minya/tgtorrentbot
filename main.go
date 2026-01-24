@@ -54,6 +54,7 @@ func main() {
 		TgApi:              &api,
 		DownloadPath:       settings.DownloadPath,
 		RutrackerConfig:    &settings.RutrackerConfig,
+		WebAppURL:          settings.WebAppURL,
 	}
 
 	handler := NewUpdatesHandler(env, notify)
@@ -67,6 +68,26 @@ func main() {
 	if err != nil {
 		logger.Fatal(err, "Failed to set webhook")
 	}
+
+	// Set menu button to open webapp
+	if settings.WebAppURL != "" {
+		menuButtonParams := telegram.SetChatMenuButtonParams{
+			MenuButton: &telegram.MenuButton{
+				Type: "web_app",
+				Text: "Open",
+				WebApp: &telegram.WebAppInfo{
+					Url: settings.WebAppURL,
+				},
+			},
+		}
+		err = api.SetChatMenuButton(&menuButtonParams)
+		if err != nil {
+			logger.Error(err, "Failed to set chat menu button")
+		} else {
+			logger.Info("Chat menu button set to webapp: %s", settings.WebAppURL)
+		}
+	}
+
 	startListen(80, handler.HandleUpdate)
 }
 

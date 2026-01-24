@@ -122,7 +122,8 @@ func prepareTorrentsList(env environment.Env, page int) (string, *telegram.Inlin
 	logger.Debug(fmt.Sprintf("Torrents received, count: %d", len(torrents)))
 
 	if len(torrents) == 0 {
-		return "Нет активных торрентов", nil, nil // TODO: translate
+		keyboard := buildPaginationKeyboard(0, 1, env.WebAppURL)
+		return "Нет активных торрентов", keyboard, nil // TODO: translate
 	}
 
 	// Sort by ID descending (most recent first)
@@ -147,7 +148,7 @@ func prepareTorrentsList(env environment.Env, page int) (string, *telegram.Inlin
 	pageTorrents := torrents[start:end]
 
 	text := formatTorrentsList(pageTorrents, page, totalPages, len(torrents))
-	keyboard := buildPaginationKeyboard(page, totalPages)
+	keyboard := buildPaginationKeyboard(page, totalPages, env.WebAppURL)
 
 	return text, keyboard, nil
 }
@@ -173,32 +174,42 @@ func formatTorrentsList(torrents []*transmission.Torrent, page, totalPages, tota
 	return sb.String()
 }
 
-func buildPaginationKeyboard(page, totalPages int) *telegram.InlineKeyboardMarkup {
-	if totalPages <= 1 {
-		return nil
-	}
+func buildPaginationKeyboard(page, totalPages int, webAppURL string) *telegram.InlineKeyboardMarkup {
+	var rows [][]telegram.InlineKeyboardButton
 
-	var buttons []telegram.InlineKeyboardButton
-
+	// Pagination buttons row
+	var navButtons []telegram.InlineKeyboardButton
 	if page > 0 {
-		buttons = append(buttons, telegram.InlineKeyboardButton{
+		navButtons = append(navButtons, telegram.InlineKeyboardButton{
 			Text:         "← Назад",
 			CallbackData: fmt.Sprintf("/list_page %d", page-1),
 		})
 	}
-
 	if page < totalPages-1 {
-		buttons = append(buttons, telegram.InlineKeyboardButton{
+		navButtons = append(navButtons, telegram.InlineKeyboardButton{
 			Text:         "Вперёд →",
 			CallbackData: fmt.Sprintf("/list_page %d", page+1),
 		})
 	}
+	if len(navButtons) > 0 {
+		rows = append(rows, navButtons)
+	}
 
-	if len(buttons) == 0 {
+	// Web app button row (only if URL is configured)
+	if webAppURL != "" {
+		rows = append(rows, []telegram.InlineKeyboardButton{
+			{
+				Text:   "Открыть приложение",
+				WebApp: &telegram.WebAppInfo{Url: webAppURL},
+			},
+		})
+	}
+
+	if len(rows) == 0 {
 		return nil
 	}
 
 	return &telegram.InlineKeyboardMarkup{
-		InlineKeyboard: [][]telegram.InlineKeyboardButton{buttons},
+		InlineKeyboard: rows,
 	}
 }

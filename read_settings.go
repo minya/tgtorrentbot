@@ -36,6 +36,7 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.RutrackerConfig.Username = os.Getenv("TGT_RUTRACKER_USERNAME")
 	settings.RutrackerConfig.Password = os.Getenv("TGT_RUTRACKER_PASSWORD")
 	settings.LogLevel = os.Getenv("TGT_LOGLEVEL")
+	settings.WebAppURL = os.Getenv("TGT_WEBAPP_URL")
 
 	var missing []string
 	if settings.BotToken == "" {

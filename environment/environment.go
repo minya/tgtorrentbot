@@ -11,6 +11,7 @@ type Env struct {
 	TgApi              *telegram.Api
 	DownloadPath       string
 	RutrackerConfig    *rutracker.Config
+	WebAppURL          string
 }
 
 func Environment(
