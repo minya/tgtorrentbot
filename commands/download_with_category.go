@@ -8,7 +8,7 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
-	"github.com/minya/tgtorrentbot/rutracker"
+	"github.com/minya/rutracker"
 )
 
 type DownloadWithCategoryCommand struct {

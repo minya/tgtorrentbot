@@ -2,7 +2,7 @@ package environment
 
 import (
 	"github.com/minya/telegram"
-	"github.com/minya/tgtorrentbot/rutracker"
+	"github.com/minya/rutracker"
 	"github.com/odwrtw/transmission"
 )
 

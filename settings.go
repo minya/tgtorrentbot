@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/minya/tgtorrentbot/rutracker"
+	"github.com/minya/rutracker"
 )
 
 type Settings struct {
