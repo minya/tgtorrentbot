@@ -74,46 +74,46 @@ services:
         max-size: "5m"
         max-file: "3"
 
-  minidlna:
-    image: vladgh/minidlna
-    container_name: tgt-dlna
-    network_mode: "host"
-    environment:
-      - MINIDLNA_MEDIA_DIR=/media
-      - MINIDLNA_FRIENDLY_NAME=Raspberry
-    volumes:
-      - /var/transmission/downloads/movies:/media/movies
-      - /var/transmission/downloads/shows:/media/shows
-      - /var/transmission/downloads/music:/media/music
-      - /var/transmission/downloads/audiobooks:/media/audiobooks
-      - /var/transmission/downloads/others:/media/others
-    restart: unless-stopped
+  #minidlna:
+    #image: vladgh/minidlna
+    #container_name: tgt-dlna
+    #network_mode: "host"
+    #environment:
+      #- MINIDLNA_MEDIA_DIR=/media
+      #- MINIDLNA_FRIENDLY_NAME=Raspberry
+    #volumes:
+      #- /var/transmission/downloads/movies:/media/movies
+      #- /var/transmission/downloads/shows:/media/shows
+      #- /var/transmission/downloads/music:/media/music
+      #- /var/transmission/downloads/audiobooks:/media/audiobooks
+      #- /var/transmission/downloads/others:/media/others
+    #restart: unless-stopped
 
-  samba:
-    image: dperson/samba:latest
-    container_name: tgt-samba
-    ports:
-      - "137:137/udp"
-      - "138:138/udp"
-      - "139:139/tcp"
-      - "445:445/tcp"
-    read_only: true
-    tmpfs:
-      - /tmp
-    stdin_open: true
-    tty: true
-    volumes:
-      - /var/transmission/downloads/movies:/media/movies:z
-      - /var/transmission/downloads/shows:/media/shows:z
-      - /var/transmission/downloads/music:/media/music:z
-      - /var/transmission/downloads/audiobooks:/media/audiobooks:z
-      - /var/transmission/downloads/others:/media/others:z
-    command: '-s "media;/media" -n'
-    restart: unless-stopped
-    logging:
-      options:
-        max-size: "5m"
-        max-file: "3"
+  #samba:
+    #image: dperson/samba:latest
+    #container_name: tgt-samba
+    #ports:
+      #- "137:137/udp"
+      #- "138:138/udp"
+      #- "139:139/tcp"
+      #- "445:445/tcp"
+    #read_only: true
+    #tmpfs:
+      #- /tmp
+    #stdin_open: true
+    #tty: true
+    #volumes:
+      #- /var/transmission/downloads/movies:/media/movies:z
+      #- /var/transmission/downloads/shows:/media/shows:z
+      #- /var/transmission/downloads/music:/media/music:z
+      #- /var/transmission/downloads/audiobooks:/media/audiobooks:z
+      #- /var/transmission/downloads/others:/media/others:z
+    #command: '-s "media;/media" -n'
+    #restart: unless-stopped
+    #logging:
+      #options:
+        #max-size: "5m"
+        #max-file: "3"
 
   jellyfin:
     image: jellyfin/jellyfin:latest

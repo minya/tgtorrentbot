@@ -10,4 +10,4 @@ fi
 # expand ~/ to full path
 TGT_ENV="${TGT_ENV/#\~/$HOME}"
 
-docker-compose --env-file "$TGT_ENV" up -d --force-recreate
+docker-compose --env-file "$TGT_ENV" up -d --force-recreate --remove-orphans
