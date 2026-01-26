@@ -7,3 +7,6 @@ image:
 binaries:
 	@echo "Building binaries..."
 	go build -o bin/ ./...
+
+.DEFAULT_GOAL := binaries
+
