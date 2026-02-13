@@ -91,7 +91,7 @@ func updateCheckRoutine(
 			category := getTorrentCategory(torrent)
 			api.SendMessage(telegram.ReplyMessage{
 				ChatId: chatID,
-				Text:   fmt.Sprintf("Завершено: %v [%s]", torrent.Name, category), // TODO: translate
+				Text:   fmt.Sprintf("Completed: %v [%s]", torrent.Name, category),
 			})
 		}
 	}

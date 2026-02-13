@@ -40,7 +40,7 @@ func (cmd *DownloadByFileCommand) Handle(upd *telegram.Update) error {
 		logger.Error(err, "Error getting file")
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
-			Text:   "Ошибка", // TODO: translate
+			Text:   "Error",
 		})
 		return err
 	}
@@ -49,7 +49,7 @@ func (cmd *DownloadByFileCommand) Handle(upd *telegram.Update) error {
 		logger.Error(err, "Error downloading file")
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
-			Text:   fmt.Sprintf("Ошибка загрузки %v", err), // TODO: translate
+			Text:   fmt.Sprintf("Download error: %v", err),
 		})
 		return err
 	}
@@ -59,7 +59,7 @@ func (cmd *DownloadByFileCommand) Handle(upd *telegram.Update) error {
 	keyboard := cmd.buildCategoryKeyboard()
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
 		ChatId:      chatID,
-		Text:        "Выберите категорию:", // TODO: translate
+		Text:        "Select category:",
 		ReplyMarkup: keyboard,
 	})
 	return nil

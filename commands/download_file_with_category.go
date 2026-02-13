@@ -54,7 +54,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(upd *telegram.Update) error {
 		logger.Error(err, "Error getting file")
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
-			Text:   "Ошибка", // TODO: translate
+			Text:   "Error",
 		})
 		return err
 	}
@@ -63,7 +63,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(upd *telegram.Update) error {
 		logger.Error(err, "Error downloading file")
 		api.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
-			Text:   fmt.Sprintf("Ошибка загрузки %v", err), // TODO: translate
+			Text:   fmt.Sprintf("Download error: %v", err),
 		})
 		return err
 	}

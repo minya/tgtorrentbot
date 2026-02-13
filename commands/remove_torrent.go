@@ -59,7 +59,7 @@ func (cmd *RemoveTorrentCommand) Handle(upd *telegram.Update) error {
 	}
 	chatID := upd.Message.Chat.Id
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
-		Text:   "Удалено.",
+		Text:   "Removed.",
 		ChatId: chatID,
 	})
 	return nil

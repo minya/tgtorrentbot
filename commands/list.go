@@ -74,7 +74,7 @@ func sendTorrentsList(env environment.Env, chatID int64, page int) error {
 	text, keyboard, err := prepareTorrentsList(env, page)
 	if err != nil {
 		env.TgApi.SendMessage(telegram.ReplyMessage{
-			Text:   "Ошибка",
+			Text:   "Error",
 			ChatId: chatID,
 		})
 		return err
@@ -123,7 +123,7 @@ func prepareTorrentsList(env environment.Env, page int) (string, *telegram.Inlin
 
 	if len(torrents) == 0 {
 		keyboard := buildPaginationKeyboard(0, 1, env.WebAppURL)
-		return "Нет активных торрентов", keyboard, nil // TODO: translate
+		return "No active torrents", keyboard, nil
 	}
 
 	// Sort by ID descending (most recent first)
@@ -170,7 +170,7 @@ func formatTorrentsList(torrents []*transmission.Torrent, page, totalPages, tota
 		fmt.Fprintf(&sb, "%v [%s] %v %.0f%%\n\n", torrent.ID, categoryLabel, torrent.Name, torrent.PercentDone*100)
 	}
 
-	fmt.Fprintf(&sb, "Страница %d/%d (всего: %d)", page+1, totalPages, total)
+	fmt.Fprintf(&sb, "Page %d/%d (total: %d)", page+1, totalPages, total)
 	return sb.String()
 }
 
@@ -181,13 +181,13 @@ func buildPaginationKeyboard(page, totalPages int, webAppURL string) *telegram.I
 	var navButtons []telegram.InlineKeyboardButton
 	if page > 0 {
 		navButtons = append(navButtons, telegram.InlineKeyboardButton{
-			Text:         "← Назад",
+			Text:         "← Back",
 			CallbackData: fmt.Sprintf("/list_page %d", page-1),
 		})
 	}
 	if page < totalPages-1 {
 		navButtons = append(navButtons, telegram.InlineKeyboardButton{
-			Text:         "Вперёд →",
+			Text:         "Next →",
 			CallbackData: fmt.Sprintf("/list_page %d", page+1),
 		})
 	}
@@ -199,7 +199,7 @@ func buildPaginationKeyboard(page, totalPages int, webAppURL string) *telegram.I
 	if webAppURL != "" {
 		rows = append(rows, []telegram.InlineKeyboardButton{
 			{
-				Text:   "Открыть приложение",
+				Text:   "Open app",
 				WebApp: &telegram.WebAppInfo{Url: webAppURL},
 			},
 		})

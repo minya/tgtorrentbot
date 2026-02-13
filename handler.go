@@ -55,7 +55,7 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 
 	handler.TgApi.SendMessage(telegram.ReplyMessage{
 		ChatId: replyChatID,
-		Text:   "Ожидается команда, запрос или torrent-файл", // TODO: translate
+		Text:   "Expected a command, search query, or torrent file",
 	})
 	return nil
 }

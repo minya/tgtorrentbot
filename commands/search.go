@@ -77,7 +77,7 @@ func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
 	if len(found) == 0 {
 		cmd.TgApi.SendMessage(telegram.ReplyMessage{
 			ChatId: chatID,
-			Text:   "Ничего не найдено", // TODO: translate
+			Text:   "Nothing found",
 		})
 		return nil
 	}
@@ -94,7 +94,7 @@ func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
 				InlineKeyboard: [][]telegram.InlineKeyboardButton{
 					{
 						{
-							Text:         "Добавить", // TODO: translate
+							Text:         "Download",
 							CallbackData: fmt.Sprintf("/dl %v", f.DownloadURL),
 						},
 					},

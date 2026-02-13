@@ -43,7 +43,7 @@ func (cmd *DownloadCommand) Handle(upd *telegram.Update) error {
 	keyboard := cmd.buildCategoryKeyboard()
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
 		ChatId:      upd.CallbackQuery.Message.Chat.Id,
-		Text:        "Выберите категорию:", // TODO: translate
+		Text:        "Select category:",
 		ReplyMarkup: keyboard,
 	})
 	return nil
@@ -98,7 +98,7 @@ func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, cat
 
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
 		ChatId: chatID,
-		Text:   fmt.Sprintf("Добавлено: %v [%s]", torrent.ID, category.DisplayName()), // TODO: translate
+		Text:   fmt.Sprintf("Added: %v [%s]", torrent.ID, category.DisplayName()),
 	})
 	return nil
 }

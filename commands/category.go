@@ -26,15 +26,15 @@ func AllCategories() []Category {
 func (c Category) DisplayName() string {
 	switch c {
 	case CategoryMovies:
-		return "Фильмы"
+		return "Movies"
 	case CategoryShows:
-		return "Сериалы"
+		return "TV Shows"
 	case CategoryMusic:
-		return "Музыка"
+		return "Music"
 	case CategoryAudiobooks:
-		return "Аудиокниги"
+		return "Audiobooks"
 	case CategoryOthers:
-		return "Другое"
+		return "Other"
 	default:
 		return string(c)
 	}

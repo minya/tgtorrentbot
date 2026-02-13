@@ -16,7 +16,7 @@ func AnswerCallbackQuery(upd *telegram.Update, api *telegram.Api) {
 	if upd.CallbackQuery != nil {
 		api.AnswerCallbackQuery(&telegram.AnswerCallbackQueryParams{
 			CallbackQueryID: upd.CallbackQuery.Id,
-			Text:            "Обрабатываю...",
+			Text:            "Processing...",
 			ShowAlert:       false,
 		})
 	}
