@@ -5,3 +5,9 @@ tgtorrentbot
 out/
 bin/
 *.code-workspace
+
+# ralphex progress logs
+progress*.txt
+
+# ralphex plans
+docs/
