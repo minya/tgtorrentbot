@@ -129,6 +129,7 @@ services:
       - /var/transmission/downloads/movies:/media/movies
       - /var/transmission/downloads/shows:/media/shows
       - /var/transmission/downloads/music:/media/music
+      - /var/transmission/downloads/musicvideos:/media/musicvideos
       - /var/transmission/downloads/audiobooks:/media/audiobooks
       - /var/transmission/downloads/others:/media/others
     ports:
