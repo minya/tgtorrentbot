@@ -8,6 +8,3 @@ bin/
 
 # ralphex progress logs
 progress*.txt
-
-# ralphex plans
-docs/
