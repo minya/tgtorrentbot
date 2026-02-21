@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
@@ -55,14 +53,13 @@ func (app *App) makeHandler(allowedMethods []string, handler appHandlerFunc) htt
 			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
-		if !validateRequest(r, w, app.config.BotToken) {
+		initDataObj, valid := validateRequest(r, w, app.config.BotToken)
+		if !valid {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 
-		initData := r.Header.Get("X-Telegram-Init-Data")
-		userID, err := extractUserID(initData)
-
+		userID, err := initDataObj.userID()
 		if err != nil {
 			logger.Warn("Failed to extract user ID: %v", err)
 			http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
@@ -149,15 +146,6 @@ func main() {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
 	}
-}
-
-type TorrentInfo struct {
-	ID          int     `json:"id"`
-	Name        string  `json:"name"`
-	PercentDone float64 `json:"percentDone"`
-	Category    string  `json:"category"`
-	TotalSize   int64   `json:"totalSize"`
-	AddedDate   int     `json:"addedDate"`
 }
 
 func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Request) {
@@ -252,11 +240,6 @@ func (app *App) handleRemoveTorrent(userID int64, w http.ResponseWriter, r *http
 	}
 }
 
-type DownloadRequest struct {
-	DownloadURL string `json:"downloadUrl"`
-	Category    string `json:"category"`
-}
-
 func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	var req DownloadRequest
@@ -348,13 +331,6 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 	}
 }
 
-type SearchResult struct {
-	Title       string `json:"title"`
-	Size        string `json:"size"`
-	Seeders     int    `json:"seeders"`
-	DownloadURL string `json:"downloadUrl"`
-}
-
 func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
@@ -405,103 +381,27 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func extractUserID(initData string) (int64, error) {
-	q, err := url.ParseQuery(initData)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse init data: %w", err)
-	}
-
-	userJSON := q.Get("user")
-	if userJSON == "" {
-		return 0, fmt.Errorf("user not found in init data")
-	}
-
-	var user struct {
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal([]byte(userJSON), &user); err != nil {
-		return 0, fmt.Errorf("failed to parse user data: %w", err)
-	}
-
-	return user.ID, nil
-}
-
-func validateRequest(r *http.Request, w http.ResponseWriter, botToken string) bool {
+func validateRequest(r *http.Request, w http.ResponseWriter, botToken string) (*initData, bool) {
 	initData := r.Header.Get("X-Telegram-Init-Data")
 	if initData == "" {
 		logger.Warn("Missing init data")
 		http.Error(w, `{"error": "missing init data"}`, http.StatusBadRequest)
-		return false
+		return nil, false
 	}
 
-	err := validateInitData(initData, botToken)
+	initDataObj, err := newInitData(initData)
 	if err != nil {
 		logger.Warn("Invalid init data: %v", err)
 		http.Error(w, `{"error": "invalid init data"}`, http.StatusUnauthorized)
-		return false
+		return nil, false
 	}
 
-	return true
-}
-
-func validateInitData(initData string, botToken string) error {
-	q, err := url.ParseQuery(initData)
+	err = initDataObj.validate(botToken)
 	if err != nil {
-		return fmt.Errorf("failed to parse init data: %w", err)
+		logger.Warn("Invalid init data: %v", err)
+		http.Error(w, `{"error": "invalid init data"}`, http.StatusUnauthorized)
+		return nil, false
 	}
 
-	hash := q.Get("hash")
-	if hash == "" {
-		return fmt.Errorf("missing hash in init data")
-	}
-
-	var keys []string
-	for key := range q {
-		if key != "hash" {
-			keys = append(keys, key)
-		}
-	}
-	sort.Strings(keys)
-
-	var pairs []string
-	for _, key := range keys {
-		value := q.Get(key)
-		pairs = append(pairs, fmt.Sprintf("%s=%s", key, value))
-	}
-
-	dataCheckString := strings.Join(pairs, "\n")
-
-	secretKey := computeHMACSHA256Bytes([]byte(botToken), []byte("WebAppData"))
-
-	expectedHash := computeHMACSHA256Hex([]byte(dataCheckString), secretKey)
-
-	if !hmac.Equal([]byte(hash), []byte(expectedHash)) {
-		return fmt.Errorf("invalid init data: hash mismatch")
-	}
-
-	authDateStr := q.Get("auth_date")
-	if authDateStr == "" {
-		return fmt.Errorf("missing auth_date in init data")
-	}
-	authDate, err := strconv.ParseInt(authDateStr, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid auth_date: %w", err)
-	}
-	if time.Since(time.Unix(authDate, 0)) > 24*time.Hour {
-		return fmt.Errorf("init data expired")
-	}
-
-	return nil
-}
-
-func computeHMACSHA256Bytes(data, key []byte) []byte {
-	h := hmac.New(sha256.New, key)
-	h.Write(data)
-	return h.Sum(nil)
-}
-
-func computeHMACSHA256Hex(data, key []byte) string {
-	h := hmac.New(sha256.New, key)
-	h.Write(data)
-	return fmt.Sprintf("%x", h.Sum(nil))
+	return initDataObj, true
 }
