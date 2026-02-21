@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"net/http"
+	"os"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
@@ -107,6 +108,8 @@ func startListen(port int, handleUpdate func(*telegram.Update) error) {
 			return
 		}
 	})
-	http.ListenAndServe(":80", nil)
-
+	if err := http.ListenAndServe(":80", nil); err != nil {
+		logger.Error(err, "Server failed")
+		os.Exit(1)
+	}
 }
