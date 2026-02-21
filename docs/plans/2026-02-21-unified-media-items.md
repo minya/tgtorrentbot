@@ -113,12 +113,12 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] Manual test: webapp shows items from all 3 sources with correct source indicators
-- [ ] Manual test: items appearing in multiple sources show all source badges
-- [ ] Manual test: incomplete items are properly indicated
-- [ ] Manual test: webapp still works when Jellyfin is not configured
-- [ ] Run full test suite (`go test -v ./...`)
-- [ ] Run build (`make`)
+- [x] Manual test: webapp shows items from all 3 sources with correct source indicators
+- [x] Manual test: items appearing in multiple sources show all source badges
+- [x] Manual test: incomplete items are properly indicated
+- [x] Manual test: webapp still works when Jellyfin is not configured
+- [x] Run full test suite (`go test -v ./...`)
+- [x] Run build (`make`)
 
 ### Task 7: Update documentation
 
