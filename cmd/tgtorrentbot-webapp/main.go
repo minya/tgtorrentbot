@@ -170,23 +170,11 @@ func main() {
 	}
 }
 
-func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Request) {
-	torrents, err := app.transmissionClient.GetTorrents()
-	if err != nil {
-		logger.Error(err, "Failed to get torrents")
-		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
-		return
-	}
-
-	// Sort by ID descending (most recent first)
-	sort.Slice(torrents, func(i, j int) bool {
-		return torrents[i].ID > torrents[j].ID
-	})
-
+// userTorrents filters and converts Transmission torrents to TorrentInfo for the given user.
+func userTorrents(torrents []*transmission.Torrent, userID int64) []TorrentInfo {
 	userIDStr := fmt.Sprintf("%d", userID)
-	result := make([]TorrentInfo, 0, len(torrents))
+	var result []TorrentInfo
 	for _, t := range torrents {
-		// Only return torrents belonging to the requesting user
 		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
 			continue
 		}
@@ -203,6 +191,23 @@ func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Requ
 			AddedDate:   t.AddedDate,
 		})
 	}
+	return result
+}
+
+func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Request) {
+	torrents, err := app.transmissionClient.GetTorrents()
+	if err != nil {
+		logger.Error(err, "Failed to get torrents")
+		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Sort by ID descending (most recent first)
+	sort.Slice(torrents, func(i, j int) bool {
+		return torrents[i].ID > torrents[j].ID
+	})
+
+	result := userTorrents(torrents, userID)
 
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		logger.Error(err, "Failed to encode torrents response")
@@ -411,25 +416,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 		return
 	}
 
-	userIDStr := fmt.Sprintf("%d", userID)
-	var userTorrents []TorrentInfo
-	for _, t := range torrents {
-		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
-			continue
-		}
-		category := "others"
-		if len(t.Labels) >= 2 {
-			category = t.Labels[1]
-		}
-		userTorrents = append(userTorrents, TorrentInfo{
-			ID:          t.ID,
-			Name:        t.Name,
-			PercentDone: t.PercentDone * 100,
-			Category:    category,
-			TotalSize:   t.TotalSize,
-			AddedDate:   t.AddedDate,
-		})
-	}
+	ut := userTorrents(torrents, userID)
 
 	// 2. Scan filesystem.
 	scanner := &filesystemScanner{
@@ -462,7 +449,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	}
 
 	// 4. Merge and return.
-	result := mergeItems(userTorrents, fsItems, incompleteItems, jellyfinItems)
+	result := mergeItems(ut, fsItems, incompleteItems, jellyfinItems)
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		logger.Error(err, "Failed to encode unified items response")
 	}
