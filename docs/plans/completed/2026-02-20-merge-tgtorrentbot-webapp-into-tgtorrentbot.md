@@ -87,6 +87,6 @@ Note: Image names stay unchanged (`tgtorrentbot_img`, `tgtorrentbot-webapp_img`)
 
 ### Task 7: Update documentation
 
-- [ ] Update `CLAUDE.md`: reflect new `cmd/` layout, new Dockerfile names, new Make targets, and note that static assets are embedded
-- [ ] Update memory file with new project structure
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update `CLAUDE.md`: reflect new `cmd/` layout, new Dockerfile names, new Make targets, and note that static assets are embedded
+- [x] Update memory file with new project structure
+- [x] Move this plan to `docs/plans/completed/`
