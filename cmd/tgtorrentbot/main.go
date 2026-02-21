@@ -110,4 +110,3 @@ func startListen(port int, handleUpdate func(*telegram.Update) error) {
 	http.ListenAndServe(":80", nil)
 
 }
-

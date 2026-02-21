@@ -30,8 +30,8 @@ Move webapp source code and static assets into the main bot repo, reorganize bot
 - Move: `read_settings.go` → `cmd/tgtorrentbot/read_settings.go`
 - Move: `settings.go` → `cmd/tgtorrentbot/settings.go`
 
-- [ ] Move all root-level `package main` files to `cmd/tgtorrentbot/`
-- [ ] Verify `go build ./cmd/tgtorrentbot/` compiles cleanly (imports stay the same since module path hasn't changed)
+- [x] Move all root-level `package main` files to `cmd/tgtorrentbot/`
+- [x] Verify `go build ./cmd/tgtorrentbot/` compiles cleanly (imports stay the same since module path hasn't changed)
 
 ### Task 2: Add webapp into cmd/tgtorrentbot-webapp/
 
