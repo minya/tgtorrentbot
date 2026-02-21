@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -52,22 +50,23 @@ func TestLoadConfig_AllFields(t *testing.T) {
 
 func TestLoadConfig_IncompletePathDefault(t *testing.T) {
 	setEnvVars(t, map[string]string{
-		"TGT_DOWNLOADPATH": "/downloads/complete",
+		"TGT_DOWNLOADPATH":    "/downloads/complete",
+		"TGT_INCOMPLETE_PATH": "",
 	})
-	// Ensure TGT_INCOMPLETE_PATH is not set
-	os.Unsetenv("TGT_INCOMPLETE_PATH")
 
 	cfg := loadConfig()
 
-	expected := filepath.Join("/downloads/complete", "..", "incomplete")
+	expected := "/downloads/incomplete"
 	if cfg.IncompletePath != expected {
 		t.Errorf("IncompletePath = %q, want %q", cfg.IncompletePath, expected)
 	}
 }
 
 func TestLoadConfig_IncompletePathEmptyWhenNoDownloadPath(t *testing.T) {
-	os.Unsetenv("TGT_DOWNLOADPATH")
-	os.Unsetenv("TGT_INCOMPLETE_PATH")
+	setEnvVars(t, map[string]string{
+		"TGT_DOWNLOADPATH":    "",
+		"TGT_INCOMPLETE_PATH": "",
+	})
 
 	cfg := loadConfig()
 
@@ -78,10 +77,10 @@ func TestLoadConfig_IncompletePathEmptyWhenNoDownloadPath(t *testing.T) {
 
 func TestLoadConfig_JellyfinOptional(t *testing.T) {
 	setEnvVars(t, map[string]string{
-		"TGT_DOWNLOADPATH": "/downloads",
+		"TGT_DOWNLOADPATH":    "/downloads",
+		"TGT_JELLYFIN_URL":    "",
+		"TGT_JELLYFIN_API_KEY": "",
 	})
-	os.Unsetenv("TGT_JELLYFIN_URL")
-	os.Unsetenv("TGT_JELLYFIN_API_KEY")
 
 	cfg := loadConfig()
 

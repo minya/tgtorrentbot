@@ -10,7 +10,7 @@ A Telegram bot for managing torrents via [Transmission](https://transmissionbt.c
 - **Remove** torrents (`/remove <id>`)
 - **Completion notifications** — bot messages you when a download finishes
 - **Telegram Mini App** — optional sidecar service that opens as a chat menu button inside Telegram; provides a full UI for searching, downloading, and managing torrents without leaving the app
-- Integrates with [Jellyfin](https://jellyfin.org/) media server via shared volume mounts
+- **Unified media view** — the Mini App shows media items merged from Transmission, filesystem, and Jellyfin with source indicators (T/F/J); works without Jellyfin
 
 ## Architecture
 
@@ -63,6 +63,7 @@ All endpoints require `X-Telegram-Init-Data` header with valid Telegram HMAC:
 | POST | `/api/torrents/remove?id=<n>` | Remove a torrent from Transmission (local data is kept) |
 | POST | `/api/torrents/download` | Add a torrent; body: `{"downloadUrl":"...","category":"..."}` |
 | GET | `/api/search?q=<query>` | Search Rutracker, returns up to 20 results |
+| GET | `/api/items` | Unified media items merged from Transmission, filesystem, and Jellyfin |
 
 ## Configuration
 
@@ -82,6 +83,9 @@ Settings are loaded from environment variables or a JSON file (`settings.json` b
 | `TGT_RUTRACKER_PASSWORD` | Yes | Rutracker password |
 | `TGT_LOGLEVEL` | No | Log level (`info`, `debug`, etc.) |
 | `TGT_WEBAPP_URL` | No | Mini App URL; registers it as the Telegram chat menu button |
+| `TGT_JELLYFIN_URL` | No | Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it |
+| `TGT_JELLYFIN_API_KEY` | No | Jellyfin API key (generated from Jellyfin admin dashboard) |
+| `TGT_INCOMPLETE_PATH` | No | Path to incomplete downloads directory; defaults to `{downloadPath}/../incomplete` |
 
 ### Settings File (`settings.json`)
 
@@ -163,6 +167,7 @@ Compose environment variables:
 | `RUTRACKER_PASSWORD` | Yes | Rutracker password |
 | `TUNNEL_TOKEN` | Yes | Cloudflare tunnel token |
 | `WEBAPP_URL` | No | Mini App public URL; enables the chat menu button and Mini App sidecar |
+| `JELLYFIN_API_KEY` | No | Jellyfin API key; enables unified media items with Jellyfin source |
 
 ## Testing
 

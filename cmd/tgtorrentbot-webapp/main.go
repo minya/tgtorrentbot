@@ -28,6 +28,9 @@ var staticFiles embed.FS
 // relativeDownloadRe matches the relative URL format returned by the rutracker library's Find().
 var relativeDownloadRe = regexp.MustCompile(`^dl\.php\?t=\d+$`)
 
+// validCategories is the single source of truth for valid download categories.
+var validCategories = []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
+
 type Config struct {
 	BotToken             string
 	TransmissionAddr     string
@@ -46,7 +49,7 @@ func loadConfig() Config {
 	downloadPath := os.Getenv("TGT_DOWNLOADPATH")
 	incompletePath := os.Getenv("TGT_INCOMPLETE_PATH")
 	if incompletePath == "" && downloadPath != "" {
-		incompletePath = filepath.Join(downloadPath, "..", "incomplete")
+		incompletePath = filepath.Clean(filepath.Join(downloadPath, "..", "incomplete"))
 	}
 
 	return Config{
@@ -290,7 +293,6 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		return
 	}
 
-	validCategories := []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
 	if !slices.Contains(validCategories, req.Category) {
 		http.Error(w, `{"error": "invalid category"}`, http.StatusBadRequest)
 		return
@@ -434,7 +436,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 		downloadPath:   app.config.DownloadPath,
 		incompletePath: app.config.IncompletePath,
 	}
-	categories := []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
+	categories := validCategories
 	fsItems := make(map[string][]FsItem)
 	for _, cat := range categories {
 		items, err := scanner.ScanCategory(cat)

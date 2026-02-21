@@ -132,8 +132,8 @@ func TestMergeItems_IncompleteNoMatch(t *testing.T) {
 	if item.Name != "OrphanedDownload" {
 		t.Errorf("expected OrphanedDownload, got %s", item.Name)
 	}
-	if item.Category != "" {
-		t.Errorf("expected empty category, got %s", item.Category)
+	if item.Category != "others" {
+		t.Errorf("expected others category, got %s", item.Category)
 	}
 	if !item.IsIncomplete {
 		t.Error("expected IsIncomplete to be true")
@@ -190,6 +190,55 @@ func TestMergeItems_MultipleItems(t *testing.T) {
 	result := mergeItems(torrents, fsItems, nil, jellyfinItems)
 	if len(result) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(result))
+	}
+
+	// Build a map for easier lookup
+	byName := make(map[string]UnifiedItem)
+	for _, item := range result {
+		byName[item.Name] = item
+	}
+
+	// Movie1: torrent + filesystem
+	m1 := byName["Movie1"]
+	if len(m1.Sources) != 2 {
+		t.Errorf("Movie1: expected 2 sources, got %v", m1.Sources)
+	}
+	if !slices.Contains(m1.Sources, "torrent") || !slices.Contains(m1.Sources, "filesystem") {
+		t.Errorf("Movie1: expected torrent+filesystem, got %v", m1.Sources)
+	}
+
+	// Movie2: torrent + jellyfin
+	m2 := byName["Movie2"]
+	if len(m2.Sources) != 2 {
+		t.Errorf("Movie2: expected 2 sources, got %v", m2.Sources)
+	}
+	if !slices.Contains(m2.Sources, "torrent") || !slices.Contains(m2.Sources, "jellyfin") {
+		t.Errorf("Movie2: expected torrent+jellyfin, got %v", m2.Sources)
+	}
+
+	// Movie3: filesystem only
+	m3 := byName["Movie3"]
+	if len(m3.Sources) != 1 || m3.Sources[0] != "filesystem" {
+		t.Errorf("Movie3: expected [filesystem], got %v", m3.Sources)
+	}
+	if m3.TotalSize != 3000 {
+		t.Errorf("Movie3: expected size 3000, got %d", m3.TotalSize)
+	}
+}
+
+func TestMergeItems_SizePrecedence(t *testing.T) {
+	torrents := []TorrentInfo{
+		{ID: 1, Name: "BigMovie", Category: "movies", TotalSize: 1000},
+	}
+	fsItems := map[string][]FsItem{
+		"movies": {{Name: "BigMovie", Size: 1500}},
+	}
+	result := mergeItems(torrents, fsItems, nil, nil)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result))
+	}
+	if result[0].TotalSize != 1500 {
+		t.Errorf("expected larger size 1500, got %d", result[0].TotalSize)
 	}
 }
 

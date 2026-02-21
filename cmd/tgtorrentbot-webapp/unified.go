@@ -2,6 +2,7 @@ package main
 
 import (
 	"slices"
+	"sort"
 	"strings"
 )
 
@@ -64,24 +65,30 @@ func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteI
 	}
 
 	// Add incomplete items. Try to match by name with any existing entry;
-	// if no match, create a new entry without a category.
-	for _, fi := range incompleteItems {
-		var matched *entry
-		for key, e := range merged {
-			nameFromKey := key[:strings.Index(key, "\x00")]
-			if strings.ToLower(strings.TrimSpace(fi.Name)) == nameFromKey {
-				matched = e
-				break
+	// if no match, create a new entry with "others" category.
+	// Build a name-only index for matching incomplete items deterministically.
+	nameIndex := make(map[string]*entry) // normalized name -> first entry
+	for key, e := range merged {
+		normName := key[:strings.Index(key, "\x00")]
+		if _, exists := nameIndex[normName]; !exists {
+			nameIndex[normName] = e
+		} else {
+			// Prefer an entry with a torrent source (more likely related to the incomplete download).
+			if slices.Contains(e.item.Sources, "torrent") && !slices.Contains(nameIndex[normName].item.Sources, "torrent") {
+				nameIndex[normName] = e
 			}
 		}
-		if matched != nil {
+	}
+	for _, fi := range incompleteItems {
+		normName := strings.ToLower(strings.TrimSpace(fi.Name))
+		if matched, ok := nameIndex[normName]; ok {
 			matched.item.IsIncomplete = true
 			matched.item.Sources = appendUnique(matched.item.Sources, "filesystem")
 			if fi.Size > matched.item.TotalSize {
 				matched.item.TotalSize = fi.Size
 			}
 		} else {
-			e := getOrCreate(fi.Name, "")
+			e := getOrCreate(fi.Name, "others")
 			e.item.Sources = appendUnique(e.item.Sources, "filesystem")
 			e.item.IsIncomplete = true
 			if fi.Size > e.item.TotalSize {
@@ -103,13 +110,9 @@ func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteI
 		ordered = append(ordered, e)
 	}
 	// Sort by insertion order to keep torrent items first (stable).
-	for i := 0; i < len(ordered); i++ {
-		for j := i + 1; j < len(ordered); j++ {
-			if ordered[j].order < ordered[i].order {
-				ordered[i], ordered[j] = ordered[j], ordered[i]
-			}
-		}
-	}
+	sort.Slice(ordered, func(i, j int) bool {
+		return ordered[i].order < ordered[j].order
+	})
 	for _, e := range ordered {
 		result = append(result, e.item)
 	}

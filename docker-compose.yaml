@@ -48,6 +48,8 @@ services:
       - TGT_JELLYFIN_URL=http://tgt-jellyfin:8096
       - TGT_JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
       - PORT=8080
+    volumes:
+      - /var/transmission/downloads:/downloads
     dns:
       - 8.8.8.8
       - 8.8.4.4
