@@ -121,6 +121,9 @@ func getTorrentCategory(torrent *transmission.Torrent) string {
 }
 
 func allCompleted(torrents transmission.TorrentMap) bool {
+	if len(torrents) == 0 {
+		return false
+	}
 	for _, torrent := range torrents {
 		if torrent.PercentDone < 1 {
 			return false
