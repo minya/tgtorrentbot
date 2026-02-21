@@ -80,10 +80,10 @@ Note: Image names stay unchanged (`tgtorrentbot_img`, `tgtorrentbot-webapp_img`)
 
 ### Task 6: Verify the build
 
-- [ ] Run `go build ./...` from repo root — should produce no errors
-- [ ] Run `go test ./...` — existing test failures are pre-existing and acceptable
-- [ ] Run `docker buildx build -f Dockerfile.bot .` — must succeed
-- [ ] Run `docker buildx build -f Dockerfile.webapp .` — must succeed
+- [x] Run `go build ./...` from repo root — should produce no errors
+- [x] Run `go test ./...` — existing test failures are pre-existing and acceptable
+- [x] Run `docker buildx build -f Dockerfile.bot .` — must succeed
+- [x] Run `docker buildx build -f Dockerfile.webapp .` — must succeed
 
 ### Task 7: Update documentation
 
