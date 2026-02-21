@@ -70,11 +70,16 @@ func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteI
 	nameIndex := make(map[string]*entry) // normalized name -> first entry
 	for key, e := range merged {
 		normName := key[:strings.Index(key, "\x00")]
-		if _, exists := nameIndex[normName]; !exists {
+		if existing, ok := nameIndex[normName]; !ok {
 			nameIndex[normName] = e
 		} else {
 			// Prefer an entry with a torrent source (more likely related to the incomplete download).
-			if slices.Contains(e.item.Sources, "torrent") && !slices.Contains(nameIndex[normName].item.Sources, "torrent") {
+			// Break ties deterministically by category (alphabetical).
+			eSrc := slices.Contains(e.item.Sources, "torrent")
+			existSrc := slices.Contains(existing.item.Sources, "torrent")
+			if eSrc && !existSrc {
+				nameIndex[normName] = e
+			} else if eSrc == existSrc && e.item.Category < existing.item.Category {
 				nameIndex[normName] = e
 			}
 		}

@@ -190,7 +190,7 @@ func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Requ
 		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
 			continue
 		}
-		category := "Unknown"
+		category := "others"
 		if len(t.Labels) >= 2 {
 			category = t.Labels[1]
 		}
@@ -417,7 +417,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
 			continue
 		}
-		category := ""
+		category := "others"
 		if len(t.Labels) >= 2 {
 			category = t.Labels[1]
 		}

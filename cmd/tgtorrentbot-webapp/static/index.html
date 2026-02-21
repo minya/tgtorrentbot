@@ -696,7 +696,7 @@
         function renderSourceBadges(sources) {
             const labels = { torrent: 'T', filesystem: 'F', jellyfin: 'J' };
             return sources.map(s =>
-                `<span class="source-badge source-badge--${escapeHtml(s)}">${labels[s] || s}</span>`
+                `<span class="source-badge source-badge--${escapeHtml(s)}">${labels[s] || escapeHtml(s)}</span>`
             ).join('');
         }
 
