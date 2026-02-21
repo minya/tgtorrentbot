@@ -42,11 +42,11 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
 - Modify: `cmd/tgtorrentbot-webapp/main.go`
 - Modify: `docker-compose.yaml`
 
-- [ ] Add `JellyfinURL` and `JellyfinAPIKey` fields to `Config` struct
-- [ ] Read `TGT_JELLYFIN_URL` and `TGT_JELLYFIN_API_KEY` env vars in `main()` (optional - webapp works without them)
-- [ ] Add `IncompletePath` field to Config (defaults to `{DownloadPath}/../incomplete` which matches Transmission's default layout under `/downloads`)
-- [ ] Add env vars to webapp service in `docker-compose.yaml`: `TGT_JELLYFIN_URL=http://tgt-jellyfin:8096`, `TGT_JELLYFIN_API_KEY=${JELLYFIN_API_KEY}`
-- [ ] Write tests for config loading
+- [x] Add `JellyfinURL` and `JellyfinAPIKey` fields to `Config` struct
+- [x] Read `TGT_JELLYFIN_URL` and `TGT_JELLYFIN_API_KEY` env vars in `main()` (optional - webapp works without them)
+- [x] Add `IncompletePath` field to Config (defaults to `{DownloadPath}/../incomplete` which matches Transmission's default layout under `/downloads`)
+- [x] Add env vars to webapp service in `docker-compose.yaml`: `TGT_JELLYFIN_URL=http://tgt-jellyfin:8096`, `TGT_JELLYFIN_API_KEY=${JELLYFIN_API_KEY}`
+- [x] Write tests for config loading
 
 ### Task 2: Implement filesystem scanner
 

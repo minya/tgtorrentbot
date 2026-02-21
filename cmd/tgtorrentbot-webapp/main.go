@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -36,6 +37,31 @@ type Config struct {
 	RutrackerPassword    string
 	DownloadPath         string
 	LogLevel             string
+	JellyfinURL          string
+	JellyfinAPIKey       string
+	IncompletePath       string
+}
+
+func loadConfig() Config {
+	downloadPath := os.Getenv("TGT_DOWNLOADPATH")
+	incompletePath := os.Getenv("TGT_INCOMPLETE_PATH")
+	if incompletePath == "" && downloadPath != "" {
+		incompletePath = filepath.Join(downloadPath, "..", "incomplete")
+	}
+
+	return Config{
+		BotToken:             strings.TrimSpace(os.Getenv("TGT_BOTTOKEN")),
+		TransmissionAddr:     os.Getenv("TGT_RPC_ADDR"),
+		TransmissionUser:     os.Getenv("TGT_RPC_USER"),
+		TransmissionPassword: os.Getenv("TGT_RPC_PASSWORD"),
+		RutrackerUsername:    os.Getenv("TGT_RUTRACKER_USERNAME"),
+		RutrackerPassword:    os.Getenv("TGT_RUTRACKER_PASSWORD"),
+		DownloadPath:         downloadPath,
+		LogLevel:             os.Getenv("TGT_LOGLEVEL"),
+		JellyfinURL:          os.Getenv("TGT_JELLYFIN_URL"),
+		JellyfinAPIKey:       os.Getenv("TGT_JELLYFIN_API_KEY"),
+		IncompletePath:       incompletePath,
+	}
 }
 
 type App struct {
@@ -82,16 +108,8 @@ func main() {
 		Output: os.Stdout,
 	})
 
-	config := Config{
-		BotToken:             strings.TrimSpace(os.Getenv("TGT_BOTTOKEN")),
-		TransmissionAddr:     os.Getenv("TGT_RPC_ADDR"),
-		TransmissionUser:     os.Getenv("TGT_RPC_USER"),
-		TransmissionPassword: os.Getenv("TGT_RPC_PASSWORD"),
-		RutrackerUsername:    os.Getenv("TGT_RUTRACKER_USERNAME"),
-		RutrackerPassword:    os.Getenv("TGT_RUTRACKER_PASSWORD"),
-		DownloadPath:         os.Getenv("TGT_DOWNLOADPATH"),
-		LogLevel:             os.Getenv("TGT_LOGLEVEL"),
-	}
+	config := loadConfig()
+
 
 	if config.BotToken == "" {
 		logger.Error(nil, "TGT_BOTTOKEN environment variable is not set")
