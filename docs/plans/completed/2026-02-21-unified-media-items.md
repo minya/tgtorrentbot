@@ -122,5 +122,5 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
 
 ### Task 7: Update documentation
 
-- [ ] Update CLAUDE.md: document new env vars, new `/api/items` endpoint, unified item concept
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update CLAUDE.md: document new env vars, new `/api/items` endpoint, unified item concept
+- [x] Move this plan to `docs/plans/completed/`
