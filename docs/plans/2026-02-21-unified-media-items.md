@@ -64,13 +64,13 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
 **Files:**
 - Create: `cmd/tgtorrentbot-webapp/jellyfin.go`
 
-- [ ] Create `jellyfinClient` struct with URL and API key
-- [ ] Implement `GetItems() ([]JellyfinItem, error)` - calls `GET /Items?Recursive=true&Fields=Path,MediaSources` with API key header `Authorization: MediaBrowser Token="{key}"`
-- [ ] Parse response to extract item name, path, and ID
-- [ ] Determine category from path prefix (e.g., `/media/movies/...` -> `movies`)
-- [ ] `JellyfinItem` struct: `Name string`, `Category string`, `JellyfinID string`
-- [ ] Handle case where Jellyfin is not configured (return empty list)
-- [ ] Write tests with HTTP test server
+- [x] Create `jellyfinClient` struct with URL and API key
+- [x] Implement `GetItems() ([]JellyfinItem, error)` - calls `GET /Items?Recursive=true&Fields=Path,MediaSources` with API key header `Authorization: MediaBrowser Token="{key}"`
+- [x] Parse response to extract item name, path, and ID
+- [x] Determine category from path prefix (e.g., `/media/movies/...` -> `movies`)
+- [x] `JellyfinItem` struct: `Name string`, `Category string`, `JellyfinID string`
+- [x] Handle case where Jellyfin is not configured (return empty list)
+- [x] Write tests with HTTP test server
 
 ### Task 4: Create unified items API endpoint
 
