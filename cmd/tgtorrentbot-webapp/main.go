@@ -217,16 +217,16 @@ func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
 	initData := r.Header.Get("X-Telegram-Init-Data")
 	userID, err := extractUserID(initData)
 	if err != nil {
 		logger.Warn("Failed to extract user ID: %v", err)
 		http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 

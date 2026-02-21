@@ -605,6 +605,10 @@
         async function loadMainScreen() {
             try {
                 const response = await doFetch('/api/torrents');
+                if (!response.ok) {
+                    console.error('Failed to load torrents:', response.status);
+                    return;
+                }
                 allTorrents = await response.json();
 
                 // Compute category counts
@@ -744,6 +748,11 @@
         async function refreshCategoryView(cat) {
             try {
                 const response = await doFetch('/api/torrents');
+                if (!response.ok) {
+                    document.getElementById('category-torrent-list').innerHTML =
+                        '<div class="error">Failed to load torrents</div>';
+                    return;
+                }
                 allTorrents = await response.json();
                 renderCategoryTorrents(cat);
             } catch (err) {

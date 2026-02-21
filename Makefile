@@ -1,6 +1,8 @@
 BOT_IMAGE_NAME=tgtorrentbot_img
 WEBAPP_IMAGE_NAME=tgtorrentbot-webapp_img
 
+.PHONY: binaries bot-image webapp-image images
+
 binaries:
 	@echo "Building binaries..."
 	go build -o bin/ ./cmd/...
