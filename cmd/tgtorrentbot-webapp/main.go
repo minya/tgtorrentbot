@@ -418,6 +418,11 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Sort by ID descending (most recent first), consistent with handleTorrents.
+	sort.Slice(torrents, func(i, j int) bool {
+		return torrents[i].ID > torrents[j].ID
+	})
+
 	ut := userTorrents(torrents, userID)
 
 	// 2. Scan filesystem.
