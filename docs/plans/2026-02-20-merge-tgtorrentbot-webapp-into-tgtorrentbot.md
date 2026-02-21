@@ -62,11 +62,11 @@ Move webapp source code and static assets into the main bot repo, reorganize bot
 **Files:**
 - Modify: `Makefile`
 
-- [ ] Update `binaries` target to `go build -o bin/ ./cmd/...`
-- [ ] Rename `image` to `bot-image`, pointing to `Dockerfile.bot`
-- [ ] Add `webapp-image` target pointing to `Dockerfile.webapp`
-- [ ] Add `images` target that runs `bot-image` and `webapp-image`
-- [ ] Keep `.DEFAULT_GOAL := binaries`
+- [x] Update `binaries` target to `go build -o bin/ ./cmd/...`
+- [x] Rename `image` to `bot-image`, pointing to `Dockerfile.bot`
+- [x] Add `webapp-image` target pointing to `Dockerfile.webapp`
+- [x] Add `images` target that runs `bot-image` and `webapp-image`
+- [x] Keep `.DEFAULT_GOAL := binaries`
 
 ### Task 5: Update docker-compose.yaml
 
