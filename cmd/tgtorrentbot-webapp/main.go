@@ -45,6 +45,35 @@ type App struct {
 	transmissionClient *transmission.Client
 }
 
+type httpHandlerFunc func(http.ResponseWriter, *http.Request)
+type appHandlerFunc func(int64, http.ResponseWriter, *http.Request)
+
+func (app *App) makeHandler(allowedMethods []string, handler appHandlerFunc) httpHandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !slices.Contains(allowedMethods, r.Method) {
+			w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
+			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if !validateRequest(r, w, app.config.BotToken) {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+
+		initData := r.Header.Get("X-Telegram-Init-Data")
+		userID, err := extractUserID(initData)
+
+		if err != nil {
+			logger.Warn("Failed to extract user ID: %v", err)
+			http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
+			return
+		}
+
+		// Call the actual handler function
+		handler(userID, w, r)
+	}
+}
+
 func main() {
 	logLevel := "info"
 	if val, exists := os.LookupEnv("TGT_LOGLEVEL"); exists {
@@ -91,10 +120,10 @@ func main() {
 		transmissionClient: transmissionClient,
 	}
 
-	http.HandleFunc("/api/torrents", app.handleTorrents)
-	http.HandleFunc("/api/torrents/remove", app.handleRemoveTorrent)
-	http.HandleFunc("/api/torrents/download", app.handleDownloadTorrent)
-	http.HandleFunc("/api/search", app.handleSearch)
+	http.HandleFunc("/api/torrents", app.makeHandler([]string{http.MethodGet}, app.handleTorrents))
+	http.HandleFunc("/api/torrents/remove", app.makeHandler([]string{http.MethodPost, http.MethodDelete}, app.handleRemoveTorrent))
+	http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPost}, app.handleDownloadTorrent))
+	http.HandleFunc("/api/search", app.makeHandler([]string{http.MethodGet}, app.handleSearch))
 
 	subFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -131,25 +160,7 @@ type TorrentInfo struct {
 	AddedDate   int     `json:"addedDate"`
 }
 
-func (app *App) handleTorrents(w http.ResponseWriter, r *http.Request) {
-	if !validateRequest(r, w, app.config.BotToken) {
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method != http.MethodGet {
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	initData := r.Header.Get("X-Telegram-Init-Data")
-	userID, err := extractUserID(initData)
-	if err != nil {
-		logger.Warn("Failed to extract user ID: %v", err)
-		http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
-		return
-	}
-
+func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Request) {
 	torrents, err := app.transmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
@@ -188,25 +199,7 @@ func (app *App) handleTorrents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (app *App) handleRemoveTorrent(w http.ResponseWriter, r *http.Request) {
-	if !validateRequest(r, w, app.config.BotToken) {
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	initData := r.Header.Get("X-Telegram-Init-Data")
-	userID, err := extractUserID(initData)
-	if err != nil {
-		logger.Warn("Failed to extract user ID: %v", err)
-		http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
-		return
-	}
-
+func (app *App) handleRemoveTorrent(userID int64, w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	if idStr == "" {
 		http.Error(w, `{"error": "id parameter is required"}`, http.StatusBadRequest)
@@ -264,25 +257,7 @@ type DownloadRequest struct {
 	Category    string `json:"category"`
 }
 
-func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
-	if !validateRequest(r, w, app.config.BotToken) {
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	initData := r.Header.Get("X-Telegram-Init-Data")
-	userID, err := extractUserID(initData)
-	if err != nil {
-		logger.Warn("Failed to extract user ID: %v", err)
-		http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
-		return
-	}
-
+func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	var req DownloadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -380,17 +355,7 @@ type SearchResult struct {
 	DownloadURL string `json:"downloadUrl"`
 }
 
-func (app *App) handleSearch(w http.ResponseWriter, r *http.Request) {
-	if !validateRequest(r, w, app.config.BotToken) {
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method != http.MethodGet {
-		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
+func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		http.Error(w, `{"error": "query parameter 'q' is required"}`, http.StatusBadRequest)
@@ -401,6 +366,7 @@ func (app *App) handleSearch(w http.ResponseWriter, r *http.Request) {
 		app.config.RutrackerUsername,
 		app.config.RutrackerPassword,
 	)
+
 	if err != nil {
 		logger.Error(err, "Failed to authenticate with rutracker")
 		http.Error(w, `{"error": "failed to authenticate with rutracker"}`, http.StatusInternalServerError)
