@@ -53,11 +53,11 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
 **Files:**
 - Create: `cmd/tgtorrentbot-webapp/filesystem.go`
 
-- [ ] Create `filesystemScanner` struct that takes download path and incomplete path
-- [ ] Implement `ScanCategory(category string) ([]FsItem, error)` - lists subdirectories in `{downloadPath}/{category}/`, returns name + size
-- [ ] Implement `ScanIncomplete() ([]FsItem, error)` - lists subdirectories in incomplete path
-- [ ] `FsItem` struct: `Name string`, `Size int64`, `IsIncomplete bool`
-- [ ] Write tests using a temp directory structure
+- [x] Create `filesystemScanner` struct that takes download path and incomplete path
+- [x] Implement `ScanCategory(category string) ([]FsItem, error)` - lists subdirectories in `{downloadPath}/{category}/`, returns name + size
+- [x] Implement `ScanIncomplete() ([]FsItem, error)` - lists subdirectories in incomplete path
+- [x] `FsItem` struct: `Name string`, `Size int64`, `IsIncomplete bool`
+- [x] Write tests using a temp directory structure
 
 ### Task 3: Implement Jellyfin API client
 
