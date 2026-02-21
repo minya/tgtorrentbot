@@ -50,7 +50,7 @@ func TestLoadConfig_AllFields(t *testing.T) {
 
 func TestLoadConfig_IncompletePathDefault(t *testing.T) {
 	setEnvVars(t, map[string]string{
-		"TGT_DOWNLOADPATH":    "/downloads/complete",
+		"TGT_DOWNLOADPATH":    "/downloads",
 		"TGT_INCOMPLETE_PATH": "",
 	})
 

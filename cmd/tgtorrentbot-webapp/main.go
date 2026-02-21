@@ -49,7 +49,7 @@ func loadConfig() Config {
 	downloadPath := os.Getenv("TGT_DOWNLOADPATH")
 	incompletePath := os.Getenv("TGT_INCOMPLETE_PATH")
 	if incompletePath == "" && downloadPath != "" {
-		incompletePath = filepath.Clean(filepath.Join(downloadPath, "..", "incomplete"))
+		incompletePath = filepath.Join(downloadPath, "incomplete")
 	}
 
 	return Config{

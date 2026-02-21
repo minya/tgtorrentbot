@@ -96,7 +96,7 @@ func categoryFromPath(p string) string {
 	parts := strings.Split(strings.Trim(p, "/"), "/")
 	for i, part := range parts {
 		if part == "media" && i+1 < len(parts) {
-			return parts[i+1]
+			return strings.ToLower(parts[i+1])
 		}
 	}
 	return "others"
