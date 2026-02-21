@@ -223,6 +223,43 @@
             cursor: not-allowed;
         }
 
+        .source-badges {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+        .source-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .source-badge--torrent {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        .source-badge--filesystem {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .source-badge--jellyfin {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        .incomplete-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: #fff3e0;
+            color: #e65100;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .empty-state {
             text-align: center;
             padding: 40px 20px;
@@ -599,39 +636,39 @@
             return await fetch(url, options);
         }
 
-        let allTorrents = [];
+        let allItems = [];
 
         // --- Main screen ---
         async function loadMainScreen() {
             try {
-                const response = await doFetch('/api/torrents');
+                const response = await doFetch('/api/items');
                 if (!response.ok) {
-                    console.error('Failed to load torrents:', response.status);
+                    console.error('Failed to load items:', response.status);
                     return;
                 }
-                allTorrents = await response.json();
+                allItems = await response.json();
 
                 // Compute category counts
                 const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0 };
-                for (const t of allTorrents) {
-                    const cat = t.category in counts ? t.category : 'others';
+                for (const item of allItems) {
+                    const cat = item.category in counts ? item.category : 'others';
                     counts[cat]++;
                 }
                 for (const [cat, count] of Object.entries(counts)) {
                     const el = document.getElementById('count-' + cat);
-                    if (el) el.textContent = count + ' ' + torrentWord(count);
+                    if (el) el.textContent = count + ' ' + itemWord(count);
                 }
 
-                // Active downloads
-                const activeTorrents = allTorrents.filter(t => t.percentDone < 100);
+                // Active downloads (items with torrent source that are not complete)
+                const activeItems = allItems.filter(item => item.percentDone != null && item.percentDone < 100);
                 const activeSection = document.getElementById('active-section');
                 const activeList = document.getElementById('active-list');
                 const activeBadge = document.getElementById('active-badge');
 
-                if (activeTorrents.length > 0) {
+                if (activeItems.length > 0) {
                     activeSection.style.display = 'block';
-                    activeBadge.textContent = activeTorrents.length;
-                    activeList.innerHTML = activeTorrents.map(t => renderTorrentItem(t, true)).join('');
+                    activeBadge.textContent = activeItems.length;
+                    activeList.innerHTML = activeItems.map(item => renderItem(item, true)).join('');
                 } else {
                     activeSection.style.display = 'none';
                 }
@@ -640,8 +677,8 @@
             }
         }
 
-        function torrentWord(count) {
-            return count === 1 ? 'torrent' : 'torrents';
+        function itemWord(count) {
+            return count === 1 ? 'item' : 'items';
         }
 
         function formatSize(bytes) {
@@ -656,27 +693,46 @@
             return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
         }
 
-        function renderTorrentItem(t, showCategory) {
-            const done = t.percentDone >= 100;
-            const bottomHtml = done
-                ? `<div class="torrent-meta">
-                        <span>${formatSize(t.totalSize)}</span>
-                        <span>${formatDate(t.addedDate)}</span>
-                   </div>`
-                : `<div class="torrent-meta">
-                        <span>${showCategory ? escapeHtml(categoryNames[t.category] || t.category) : ''}</span>
-                        <span>${Math.round(t.percentDone)}%</span>
+        function renderSourceBadges(sources) {
+            const labels = { torrent: 'T', filesystem: 'F', jellyfin: 'J' };
+            return sources.map(s =>
+                `<span class="source-badge source-badge--${escapeHtml(s)}">${labels[s] || s}</span>`
+            ).join('');
+        }
+
+        function renderItem(item, showCategory) {
+            const hasTorrent = item.torrentId != null;
+            const isDownloading = item.percentDone != null && item.percentDone < 100;
+
+            let bottomHtml;
+            if (isDownloading) {
+                bottomHtml = `<div class="torrent-meta">
+                        <span>${showCategory ? escapeHtml(categoryNames[item.category] || item.category) : ''}</span>
+                        <span>${Math.round(item.percentDone)}%</span>
                    </div>
                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${t.percentDone}%"></div>
+                        <div class="progress-fill" style="width: ${item.percentDone}%"></div>
                    </div>`;
+            } else {
+                bottomHtml = `<div class="torrent-meta">
+                        <span>${formatSize(item.totalSize)}</span>
+                        <span>${item.addedDate ? formatDate(item.addedDate) : ''}</span>
+                   </div>`;
+            }
+
+            const badgesHtml = `<div class="source-badges">${renderSourceBadges(item.sources || [])}${item.isIncomplete ? '<span class="incomplete-badge">Incomplete</span>' : ''}</div>`;
+
+            const removeBtn = hasTorrent
+                ? `<button class="remove-btn" onclick="removeTorrent(${item.torrentId}, this)" title="Remove" aria-label="Remove torrent">&#10005;</button>`
+                : '';
 
             return `
-                <div class="torrent-item" data-id="${t.id}">
+                <div class="torrent-item" data-id="${item.torrentId || ''}">
                     <div class="torrent-header">
-                        <div class="torrent-name">${escapeHtml(t.name)}</div>
-                        <button class="remove-btn" onclick="removeTorrent(${t.id}, this)" title="Remove" aria-label="Remove torrent">&#10005;</button>
+                        <div class="torrent-name">${escapeHtml(item.name)}</div>
+                        ${removeBtn}
                     </div>
+                    ${badgesHtml}
                     ${bottomHtml}
                 </div>
             `;
@@ -700,7 +756,7 @@
 
             if (tg.BackButton) tg.BackButton.show();
 
-            renderCategoryTorrents(cat);
+            renderCategoryItems(cat);
             startRefresh();
         }
 
@@ -717,47 +773,47 @@
             });
         }
 
-        function renderCategoryTorrents(cat) {
+        function renderCategoryItems(cat) {
             const container = document.getElementById('category-torrent-list');
-            let torrents = allTorrents.filter(t => t.category === cat);
+            let items = allItems.filter(item => item.category === cat);
 
             // Apply filter
             if (categoryFilter) {
                 const q = categoryFilter.toLowerCase();
-                torrents = torrents.filter(t => t.name.toLowerCase().includes(q));
+                items = items.filter(item => item.name.toLowerCase().includes(q));
             }
 
             // Apply sort
             const dir = categorySort.asc ? 1 : -1;
             if (categorySort.field === 'date') {
-                torrents.sort((a, b) => dir * (a.addedDate - b.addedDate));
+                items.sort((a, b) => dir * ((a.addedDate || 0) - (b.addedDate || 0)));
             } else if (categorySort.field === 'name') {
-                torrents.sort((a, b) => dir * a.name.localeCompare(b.name));
+                items.sort((a, b) => dir * a.name.localeCompare(b.name));
             } else if (categorySort.field === 'size') {
-                torrents.sort((a, b) => dir * (a.totalSize - b.totalSize));
+                items.sort((a, b) => dir * (a.totalSize - b.totalSize));
             }
 
-            if (torrents.length === 0) {
-                container.innerHTML = '<div class="empty-state">No torrents</div>';
+            if (items.length === 0) {
+                container.innerHTML = '<div class="empty-state">No items</div>';
                 return;
             }
 
-            container.innerHTML = torrents.map(t => renderTorrentItem(t, false)).join('');
+            container.innerHTML = items.map(item => renderItem(item, false)).join('');
         }
 
         async function refreshCategoryView(cat) {
             try {
-                const response = await doFetch('/api/torrents');
+                const response = await doFetch('/api/items');
                 if (!response.ok) {
                     document.getElementById('category-torrent-list').innerHTML =
-                        '<div class="error">Failed to load torrents</div>';
+                        '<div class="error">Failed to load items</div>';
                     return;
                 }
-                allTorrents = await response.json();
-                renderCategoryTorrents(cat);
+                allItems = await response.json();
+                renderCategoryItems(cat);
             } catch (err) {
                 document.getElementById('category-torrent-list').innerHTML =
-                    '<div class="error">Failed to load torrents</div>';
+                    '<div class="error">Failed to load items</div>';
             }
         }
 
@@ -943,7 +999,7 @@
         // Category filter
         document.getElementById('category-filter').addEventListener('input', (e) => {
             categoryFilter = e.target.value;
-            if (currentCategory) renderCategoryTorrents(currentCategory);
+            if (currentCategory) renderCategoryItems(currentCategory);
         });
 
         // Sort chips
@@ -971,7 +1027,7 @@
                     }
                 });
 
-                if (currentCategory) renderCategoryTorrents(currentCategory);
+                if (currentCategory) renderCategoryItems(currentCategory);
             });
         });
 

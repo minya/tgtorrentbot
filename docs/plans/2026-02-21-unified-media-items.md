@@ -103,13 +103,13 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
 **Files:**
 - Modify: `cmd/tgtorrentbot-webapp/static/index.html`
 
-- [ ] Change `loadMainScreen()` to fetch from `/api/items` instead of `/api/torrents`
-- [ ] Update `renderTorrentItem()` to show source badges (small colored dots or tags: T=torrent, F=filesystem, J=jellyfin)
-- [ ] Show "incomplete" indicator for items stuck in incomplete directory
-- [ ] Update category counts to use unified items
-- [ ] Update `refreshCategoryView()` to use `/api/items`
-- [ ] Keep remove button only for items that have a torrent source (have `torrentId`)
-- [ ] Items without torrent source should not have remove button
+- [x] Change `loadMainScreen()` to fetch from `/api/items` instead of `/api/torrents`
+- [x] Update `renderTorrentItem()` to show source badges (small colored dots or tags: T=torrent, F=filesystem, J=jellyfin)
+- [x] Show "incomplete" indicator for items stuck in incomplete directory
+- [x] Update category counts to use unified items
+- [x] Update `refreshCategoryView()` to use `/api/items`
+- [x] Keep remove button only for items that have a torrent source (have `torrentId`)
+- [x] Items without torrent source should not have remove button
 
 ### Task 6: Verify acceptance criteria
 
