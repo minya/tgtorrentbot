@@ -227,7 +227,7 @@ func (app *App) handleRemoveTorrent(userID int64, w http.ResponseWriter, r *http
 		return
 	}
 
-	err = app.transmissionClient.RemoveTorrents([]*transmission.Torrent{torrentToRemove}, false)
+	err = app.transmissionClient.RemoveTorrents([]*transmission.Torrent{torrentToRemove}, true)
 	if err != nil {
 		logger.Error(err, "Failed to remove torrent")
 		http.Error(w, `{"error": "failed to remove torrent"}`, http.StatusInternalServerError)
