@@ -815,6 +815,11 @@
 
             try {
                 const response = await doFetch(`/api/search?q=${encodeURIComponent(query)}`);
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    container.innerHTML = `<div class="error">${escapeHtml(data.error || 'Search failed')}</div>`;
+                    return;
+                }
                 const results = await response.json();
 
                 if (results.length === 0) {
