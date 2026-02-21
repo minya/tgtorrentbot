@@ -40,11 +40,11 @@ Move webapp source code and static assets into the main bot repo, reorganize bot
 - Create: `cmd/tgtorrentbot-webapp/static/index.html` (from `../tgtorrentbot-webapp/static/index.html`)
 - Modify: `go.mod` (merge webapp deps if any are missing)
 
-- [ ] Copy webapp `main.go` to `cmd/tgtorrentbot-webapp/main.go`; keep package declaration as `package main`
-- [ ] Copy `static/` directory contents to `cmd/tgtorrentbot-webapp/static/`
-- [ ] Add `//go:embed static` directive and `embed.FS` variable; update the static file server to use `http.FileServer(http.FS(subFS))` so static assets are baked in at build time
-- [ ] Check if webapp's `go.mod` has deps not in the bot's `go.mod`; add any missing ones with `go get`
-- [ ] Verify `go build ./cmd/tgtorrentbot-webapp/` compiles cleanly
+- [x] Copy webapp `main.go` to `cmd/tgtorrentbot-webapp/main.go`; keep package declaration as `package main`
+- [x] Copy `static/` directory contents to `cmd/tgtorrentbot-webapp/static/`
+- [x] Add `//go:embed static` directive and `embed.FS` variable; update the static file server to use `http.FileServer(http.FS(subFS))` so static assets are baked in at build time
+- [x] Check if webapp's `go.mod` has deps not in the bot's `go.mod`; add any missing ones with `go get`
+- [x] Verify `go build ./cmd/tgtorrentbot-webapp/` compiles cleanly
 
 ### Task 3: Create Dockerfile.bot and Dockerfile.webapp
 
