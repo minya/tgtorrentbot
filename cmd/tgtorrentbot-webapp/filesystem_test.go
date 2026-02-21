@@ -14,7 +14,7 @@ func TestScanCategory(t *testing.T) {
 	os.MkdirAll(filepath.Join(moviesDir, "MovieB"), 0o755)
 	// Add a file inside MovieA
 	os.WriteFile(filepath.Join(moviesDir, "MovieA", "video.mkv"), make([]byte, 1024), 0o644)
-	// Add a standalone file at the category root (single-file download)
+	// Add a standalone file at the category root (should be ignored, only dirs scanned)
 	os.WriteFile(filepath.Join(moviesDir, "standalone.mkv"), make([]byte, 2048), 0o644)
 
 	scanner := &filesystemScanner{downloadPath: tmp}
@@ -22,8 +22,8 @@ func TestScanCategory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(items) != 3 {
-		t.Fatalf("expected 3 items, got %d", len(items))
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items (directories only), got %d", len(items))
 	}
 
 	// Find MovieA and check size
@@ -43,18 +43,11 @@ func TestScanCategory(t *testing.T) {
 		t.Error("expected IsIncomplete=false")
 	}
 
-	// Find standalone file and check size
-	var standalone *FsItem
+	// Verify standalone file is not included
 	for i := range items {
 		if items[i].Name == "standalone.mkv" {
-			standalone = &items[i]
+			t.Error("standalone.mkv should not be included (not a directory)")
 		}
-	}
-	if standalone == nil {
-		t.Fatal("standalone.mkv not found")
-	}
-	if standalone.Size != 2048 {
-		t.Errorf("expected size 2048, got %d", standalone.Size)
 	}
 }
 
