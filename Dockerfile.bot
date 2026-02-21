@@ -10,9 +10,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/tgtorrentbot ./cmd/tgtorrentbot
 
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates libc6-compat
+RUN apk add --no-cache ca-certificates libc6-compat && \
+    addgroup -S appgroup && adduser -S appuser -G appgroup
 
-WORKDIR /root/app
+WORKDIR /app
 COPY --from=build /out/tgtorrentbot ./tgtorrentbot
 
-CMD ["/root/app/tgtorrentbot"]
+USER appuser
+
+EXPOSE 80
+
+CMD ["/app/tgtorrentbot"]
