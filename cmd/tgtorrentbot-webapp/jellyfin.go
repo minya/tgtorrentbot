@@ -99,5 +99,5 @@ func categoryFromPath(p string) string {
 			return parts[i+1]
 		}
 	}
-	return ""
+	return "others"
 }

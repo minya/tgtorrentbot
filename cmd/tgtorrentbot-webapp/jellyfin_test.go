@@ -126,9 +126,9 @@ func TestCategoryFromPath(t *testing.T) {
 		{"/media/audiobooks/Book/chapter1.mp3", "audiobooks"},
 		{"/media/musicvideos/Video/clip.mp4", "musicvideos"},
 		{"/media/others/Misc/file.bin", "others"},
-		{"/some/other/path/file.mkv", ""},
-		{"", ""},
-		{"/media/", ""},
+		{"/some/other/path/file.mkv", "others"},
+		{"", "others"},
+		{"/media/", "others"},
 	}
 
 	for _, tt := range tests {
