@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -33,7 +32,7 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 
 		category, ok := ParseCategory(categoryStr)
 		if !ok {
-			logger.Error(nil, fmt.Sprintf("Invalid category: %s", categoryStr))
+			logger.Error(nil, "Invalid category: %s", categoryStr)
 			return false, nil
 		}
 

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -23,6 +24,9 @@ import (
 
 //go:embed static
 var staticFiles embed.FS
+
+// relativeDownloadRe matches the relative URL format returned by the rutracker library's Find().
+var relativeDownloadRe = regexp.MustCompile(`^dl\.php\?t=\d+$`)
 
 type Config struct {
 	BotToken             string
@@ -64,6 +68,10 @@ func main() {
 
 	if config.BotToken == "" {
 		logger.Error(nil, "TGT_BOTTOKEN environment variable is not set")
+		os.Exit(1)
+	}
+	if config.DownloadPath == "" {
+		logger.Error(nil, "TGT_DOWNLOADPATH environment variable is not set")
 		os.Exit(1)
 	}
 
@@ -244,8 +252,10 @@ func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parsedURL, err := url.Parse(req.DownloadURL)
-	if err != nil || (parsedURL.Host != "rutracker.org" && parsedURL.Host != "www.rutracker.org") {
-		logger.Warn("Invalid downloadUrl host: %s", req.DownloadURL)
+	isAbsoluteRutracker := err == nil && (parsedURL.Host == "rutracker.org" || parsedURL.Host == "www.rutracker.org")
+	isRelativeDownload := err == nil && parsedURL.Host == "" && relativeDownloadRe.MatchString(req.DownloadURL)
+	if !isAbsoluteRutracker && !isRelativeDownload {
+		logger.Warn("Invalid downloadUrl: %s", req.DownloadURL)
 		http.Error(w, `{"error": "invalid downloadUrl: must be a rutracker.org URL"}`, http.StatusBadRequest)
 		return
 	}

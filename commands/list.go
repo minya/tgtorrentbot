@@ -119,7 +119,7 @@ func prepareTorrentsList(env environment.Env, page int) (string, *telegram.Inlin
 		logger.Error(err, "Error getting torrents")
 		return "", nil, err
 	}
-	logger.Debug(fmt.Sprintf("Torrents received, count: %d", len(torrents)))
+	logger.Debug("Torrents received, count: %d", len(torrents))
 
 	if len(torrents) == 0 {
 		keyboard := buildPaginationKeyboard(0, 1, env.WebAppURL)
@@ -158,13 +158,13 @@ func formatTorrentsList(torrents []*transmission.Torrent, page, totalPages, tota
 
 	for _, torrent := range torrents {
 		categoryLabel := "Unknown"
-		logger.Debug(fmt.Sprintf("Torrent %v has %d labels: %v", torrent.ID, len(torrent.Labels), torrent.Labels))
+		logger.Debug("Torrent %v has %d labels: %v", torrent.ID, len(torrent.Labels), torrent.Labels)
 		if len(torrent.Labels) >= 2 {
 			// labels[0] is chatID, labels[1] is category
 			if cat, ok := ParseCategory(torrent.Labels[1]); ok {
 				categoryLabel = cat.DisplayName()
 			} else {
-				logger.Debug(fmt.Sprintf("Failed to parse category from label: %s", torrent.Labels[1]))
+				logger.Debug("Failed to parse category from label: %s", torrent.Labels[1])
 			}
 		}
 		fmt.Fprintf(&sb, "%v [%s] %v %.0f%%\n\n", torrent.ID, categoryLabel, torrent.Name, torrent.PercentDone*100)

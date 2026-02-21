@@ -70,7 +70,7 @@ func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, cat
 
 	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
 
-	logger.Debug(fmt.Sprintf("Adding torrent with category %s to directory %s", category.String(), downloadDir))
+	logger.Debug("Adding torrent with category %s to directory %s", category.String(), downloadDir)
 
 	torrent, err := cmd.TransmissionClient.AddTorrent(transmission.AddTorrentArg{
 		Metainfo:    torrentBase64,
@@ -83,7 +83,7 @@ func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, cat
 	}
 
 	labels := []string{fmt.Sprintf("%v", chatID), category.String()}
-	logger.Debug(fmt.Sprintf("Torrent added with ID %v, setting labels to %v", torrent.ID, labels))
+	logger.Debug("Torrent added with ID %v, setting labels to %v", torrent.ID, labels)
 
 	err = torrent.Set(transmission.SetTorrentArg{
 		Labels: labels,
@@ -94,7 +94,7 @@ func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, cat
 		return err
 	}
 
-	logger.Debug(fmt.Sprintf("Torrent %v labels set successfully", torrent.ID))
+	logger.Debug("Torrent %v labels set successfully", torrent.ID)
 
 	cmd.TgApi.SendMessage(telegram.ReplyMessage{
 		ChatId: chatID,

@@ -32,7 +32,7 @@ func (factory *DownloadFileWithCategoryCommandFactory) Accepts(upd *telegram.Upd
 
 		category, ok := ParseCategory(categoryStr)
 		if !ok {
-			logger.Error(nil, fmt.Sprintf("Invalid category: %s", categoryStr))
+			logger.Error(nil, "Invalid category: %s", categoryStr)
 			return false, nil
 		}
 
