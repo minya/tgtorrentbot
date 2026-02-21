@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minya/logger"
 	"github.com/minya/rutracker"
@@ -129,6 +130,11 @@ func (app *App) handleTorrents(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
 	torrents, err := app.transmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
@@ -157,7 +163,9 @@ func (app *App) handleTorrents(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(result)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		logger.Error(err, "Failed to encode torrents response")
+	}
 }
 
 func (app *App) handleRemoveTorrent(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +219,9 @@ func (app *App) handleRemoveTorrent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info("Removed torrent %d: %s", id, torrentToRemove.Name)
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		logger.Error(err, "Failed to encode remove response")
+	}
 }
 
 type DownloadRequest struct {
@@ -238,6 +248,7 @@ func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	var req DownloadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.Warn("Failed to decode request body: %v", err)
@@ -312,13 +323,15 @@ func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info("Added torrent %d: %s [%s] for user %d", torrent.ID, torrent.Name, req.Category, userID)
-	json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"torrent": map[string]any{
 			"id":   torrent.ID,
 			"name": torrent.Name,
 		},
-	})
+	}); err != nil {
+		logger.Error(err, "Failed to encode download response")
+	}
 }
 
 type SearchResult struct {
@@ -333,6 +346,11 @@ func (app *App) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
 
 	query := r.URL.Query().Get("q")
 	if query == "" {
@@ -377,7 +395,9 @@ func (app *App) handleSearch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(result)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		logger.Error(err, "Failed to encode search response")
+	}
 }
 
 func extractUserID(initData string) (int64, error) {
@@ -453,6 +473,19 @@ func validateInitData(initData string, botToken string) error {
 	if !hmac.Equal([]byte(hash), []byte(expectedHash)) {
 		return fmt.Errorf("invalid init data: hash mismatch")
 	}
+
+	authDateStr := q.Get("auth_date")
+	if authDateStr == "" {
+		return fmt.Errorf("missing auth_date in init data")
+	}
+	authDate, err := strconv.ParseInt(authDateStr, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid auth_date: %w", err)
+	}
+	if time.Since(time.Unix(authDate, 0)) > 24*time.Hour {
+		return fmt.Errorf("init data expired")
+	}
+
 	return nil
 }
 
