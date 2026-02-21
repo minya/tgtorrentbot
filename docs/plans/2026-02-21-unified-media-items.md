@@ -79,7 +79,7 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
 - Create: `cmd/tgtorrentbot-webapp/unified.go` (merge logic)
 - Modify: `cmd/tgtorrentbot-webapp/payloads.go` (new types)
 
-- [ ] Define `UnifiedItem` struct:
+- [x] Define `UnifiedItem` struct:
   ```go
   type UnifiedItem struct {
       Name        string   `json:"name"`
@@ -92,11 +92,11 @@ The incomplete directory (`/downloads/incomplete/`) is also scanned. Items found
       IsIncomplete bool    `json:"isIncomplete,omitempty"`
   }
   ```
-- [ ] Implement merge function: collect items from all 3 sources, match by normalized name + category, merge sources list
-- [ ] Items from incomplete dir: set `IsIncomplete: true`, try to match with torrent by name
-- [ ] Register `GET /api/items` endpoint that returns `[]UnifiedItem`
-- [ ] Keep existing `/api/torrents` endpoint unchanged (bot still uses it for downloads)
-- [ ] Write tests for merge logic with various combinations (item in all 3 sources, item in only 1 source, incomplete items)
+- [x] Implement merge function: collect items from all 3 sources, match by normalized name + category, merge sources list
+- [x] Items from incomplete dir: set `IsIncomplete: true`, try to match with torrent by name
+- [x] Register `GET /api/items` endpoint that returns `[]UnifiedItem`
+- [x] Keep existing `/api/torrents` endpoint unchanged (bot still uses it for downloads)
+- [x] Write tests for merge logic with various combinations (item in all 3 sources, item in only 1 source, incomplete items)
 
 ### Task 5: Update frontend to use unified items
 

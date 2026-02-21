@@ -139,6 +139,7 @@ func main() {
 	http.HandleFunc("/api/torrents/remove", app.makeHandler([]string{http.MethodPost, http.MethodDelete}, app.handleRemoveTorrent))
 	http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPost}, app.handleDownloadTorrent))
 	http.HandleFunc("/api/search", app.makeHandler([]string{http.MethodGet}, app.handleSearch))
+	http.HandleFunc("/api/items", app.makeHandler([]string{http.MethodGet}, app.handleUnifiedItems))
 
 	subFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -396,6 +397,72 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		logger.Error(err, "Failed to encode search response")
+	}
+}
+
+func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.Request) {
+	// 1. Get torrents for this user.
+	torrents, err := app.transmissionClient.GetTorrents()
+	if err != nil {
+		logger.Error(err, "Failed to get torrents")
+		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
+		return
+	}
+
+	userIDStr := fmt.Sprintf("%d", userID)
+	var userTorrents []TorrentInfo
+	for _, t := range torrents {
+		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
+			continue
+		}
+		category := ""
+		if len(t.Labels) >= 2 {
+			category = t.Labels[1]
+		}
+		userTorrents = append(userTorrents, TorrentInfo{
+			ID:          t.ID,
+			Name:        t.Name,
+			PercentDone: t.PercentDone * 100,
+			Category:    category,
+			TotalSize:   t.TotalSize,
+			AddedDate:   t.AddedDate,
+		})
+	}
+
+	// 2. Scan filesystem.
+	scanner := &filesystemScanner{
+		downloadPath:   app.config.DownloadPath,
+		incompletePath: app.config.IncompletePath,
+	}
+	categories := []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
+	fsItems := make(map[string][]FsItem)
+	for _, cat := range categories {
+		items, err := scanner.ScanCategory(cat)
+		if err != nil {
+			logger.Error(err, "Failed to scan filesystem category %s", cat)
+			continue
+		}
+		if len(items) > 0 {
+			fsItems[cat] = items
+		}
+	}
+
+	incompleteItems, err := scanner.ScanIncomplete()
+	if err != nil {
+		logger.Error(err, "Failed to scan incomplete directory")
+	}
+
+	// 3. Get Jellyfin items.
+	jClient := newJellyfinClient(app.config.JellyfinURL, app.config.JellyfinAPIKey)
+	jellyfinItems, err := jClient.GetItems()
+	if err != nil {
+		logger.Error(err, "Failed to get Jellyfin items")
+	}
+
+	// 4. Merge and return.
+	result := mergeItems(userTorrents, fsItems, incompleteItems, jellyfinItems)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		logger.Error(err, "Failed to encode unified items response")
 	}
 }
 
