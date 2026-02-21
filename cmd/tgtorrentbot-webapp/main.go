@@ -403,7 +403,6 @@ func validateRequest(r *http.Request, w http.ResponseWriter, botToken string) bo
 }
 
 func validateInitData(initData string, botToken string) error {
-	logger.Debug("Validating init data. initData=%s\n", initData)
 	q, err := url.ParseQuery(initData)
 	if err != nil {
 		return fmt.Errorf("failed to parse init data: %w", err)
