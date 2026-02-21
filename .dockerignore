@@ -1,5 +1,6 @@
 settings.json
 tgtorrentbot
+tgtorrentbot-webapp
 *.swp
 .vscode/
 out/

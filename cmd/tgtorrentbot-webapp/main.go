@@ -243,6 +243,13 @@ func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	parsedURL, err := url.Parse(req.DownloadURL)
+	if err != nil || (parsedURL.Host != "rutracker.org" && parsedURL.Host != "www.rutracker.org") {
+		logger.Warn("Invalid downloadUrl host: %s", req.DownloadURL)
+		http.Error(w, `{"error": "invalid downloadUrl: must be a rutracker.org URL"}`, http.StatusBadRequest)
+		return
+	}
+
 	logger.Info("Download request from user %d: %s [%s]", userID, req.DownloadURL, req.Category)
 
 	if req.Category == "" {
