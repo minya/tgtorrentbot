@@ -109,7 +109,14 @@ func main() {
 	}
 
 	logger.Info("Starting server on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	srv := &http.Server{
+		Addr:              ":" + port,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
 	}
@@ -135,6 +142,14 @@ func (app *App) handleTorrents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	initData := r.Header.Get("X-Telegram-Init-Data")
+	userID, err := extractUserID(initData)
+	if err != nil {
+		logger.Warn("Failed to extract user ID: %v", err)
+		http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
+		return
+	}
+
 	torrents, err := app.transmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
@@ -147,8 +162,13 @@ func (app *App) handleTorrents(w http.ResponseWriter, r *http.Request) {
 		return torrents[i].ID > torrents[j].ID
 	})
 
+	userIDStr := fmt.Sprintf("%d", userID)
 	result := make([]TorrentInfo, 0, len(torrents))
 	for _, t := range torrents {
+		// Only return torrents belonging to the requesting user
+		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
+			continue
+		}
 		category := "Unknown"
 		if len(t.Labels) >= 2 {
 			category = t.Labels[1]
@@ -179,6 +199,14 @@ func (app *App) handleRemoveTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	initData := r.Header.Get("X-Telegram-Init-Data")
+	userID, err := extractUserID(initData)
+	if err != nil {
+		logger.Warn("Failed to extract user ID: %v", err)
+		http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
+		return
+	}
+
 	idStr := r.URL.Query().Get("id")
 	if idStr == "" {
 		http.Error(w, `{"error": "id parameter is required"}`, http.StatusBadRequest)
@@ -198,9 +226,16 @@ func (app *App) handleRemoveTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userIDStr := fmt.Sprintf("%d", userID)
 	var torrentToRemove *transmission.Torrent
 	for _, t := range torrents {
 		if t.ID == id {
+			// Check that the requesting user owns this torrent.
+			// Return 404 (not 403) to avoid leaking existence of other users' torrents.
+			if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
+				http.Error(w, `{"error": "torrent not found"}`, http.StatusNotFound)
+				return
+			}
 			torrentToRemove = t
 			break
 		}
@@ -318,8 +353,12 @@ func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
 		Labels: labels,
 	})
 	if err != nil {
-		logger.Error(err, "Failed to set torrent labels")
-		// Don't fail the request, torrent is already added
+		logger.Error(err, "Failed to set torrent labels, removing orphaned torrent %d", torrent.ID)
+		if removeErr := app.transmissionClient.RemoveTorrents([]*transmission.Torrent{torrent}, false); removeErr != nil {
+			logger.Error(removeErr, "Failed to remove orphaned torrent %d", torrent.ID)
+		}
+		http.Error(w, `{"error": "failed to set torrent labels"}`, http.StatusInternalServerError)
+		return
 	}
 
 	logger.Info("Added torrent %d: %s [%s] for user %d", torrent.ID, torrent.Name, req.Category, userID)
