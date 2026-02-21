@@ -67,8 +67,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Debug("%v\n", config)
-
 	transmissionClient, err := transmission.New(transmission.Config{
 		Address:  config.TransmissionAddr,
 		User:     config.TransmissionUser,
@@ -214,24 +212,18 @@ type DownloadRequest struct {
 }
 
 func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
-	initData := r.Header.Get("X-Telegram-Init-Data")
-	if initData == "" {
-		logger.Warn("Missing init data")
-		http.Error(w, `{"error": "missing init data"}`, http.StatusBadRequest)
+	if !validateRequest(r, w, app.config.BotToken) {
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 
+	initData := r.Header.Get("X-Telegram-Init-Data")
 	userID, err := extractUserID(initData)
 	if err != nil {
 		logger.Warn("Failed to extract user ID: %v", err)
 		http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
 		return
 	}
-
-	if !validateRequest(r, w, app.config.BotToken) {
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
@@ -258,7 +250,7 @@ func (app *App) handleDownloadTorrent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validCategories := []string{"movies", "shows", "music", "audiobooks", "others"}
+	validCategories := []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
 	if !slices.Contains(validCategories, req.Category) {
 		http.Error(w, `{"error": "invalid category"}`, http.StatusBadRequest)
 		return
@@ -442,7 +434,7 @@ func validateInitData(initData string, botToken string) error {
 
 	expectedHash := computeHMACSHA256Hex([]byte(dataCheckString), secretKey)
 
-	if hash != expectedHash {
+	if !hmac.Equal([]byte(hash), []byte(expectedHash)) {
 		return fmt.Errorf("invalid init data: hash mismatch")
 	}
 	return nil

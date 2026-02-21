@@ -446,6 +446,10 @@
                     <div class="category-card-name">Music</div>
                     <div class="category-card-count" id="count-music">—</div>
                 </div>
+                <div class="category-card" onclick="showCategory('musicvideos')">
+                    <div class="category-card-name">Music Videos</div>
+                    <div class="category-card-count" id="count-musicvideos">—</div>
+                </div>
                 <div class="category-card" onclick="showCategory('audiobooks')">
                     <div class="category-card-name">Audiobooks</div>
                     <div class="category-card-count" id="count-audiobooks">—</div>
@@ -494,6 +498,7 @@
             <button class="category-btn" onclick="downloadWithCategory('movies')">Movies</button>
             <button class="category-btn" onclick="downloadWithCategory('shows')">TV Shows</button>
             <button class="category-btn" onclick="downloadWithCategory('music')">Music</button>
+            <button class="category-btn" onclick="downloadWithCategory('musicvideos')">Music Videos</button>
             <button class="category-btn" onclick="downloadWithCategory('audiobooks')">Audiobooks</button>
             <button class="category-btn" onclick="downloadWithCategory('others')">Other</button>
         </div>
@@ -539,6 +544,7 @@
             movies: 'Movies',
             shows: 'TV Shows',
             music: 'Music',
+            musicvideos: 'Music Videos',
             audiobooks: 'Audiobooks',
             others: 'Other',
         };
@@ -602,7 +608,7 @@
                 allTorrents = await response.json();
 
                 // Compute category counts
-                const counts = { movies: 0, shows: 0, music: 0, audiobooks: 0, others: 0 };
+                const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0 };
                 for (const t of allTorrents) {
                     const cat = t.category in counts ? t.category : 'others';
                     counts[cat]++;
@@ -813,7 +819,7 @@
                     <div class="search-result" data-result-index="${idx}">
                         <div class="search-title">${escapeHtml(r.title)}</div>
                         <div class="search-meta">
-                            <span>${r.size}</span> · <span>${r.seeders} seeders</span>
+                            <span>${escapeHtml(r.size)}</span> · <span>${r.seeders} seeders</span>
                         </div>
                         <button class="download-btn" onclick="showCategoryModalFromElement(this)">Download</button>
                     </div>
@@ -903,7 +909,7 @@
                         if (currentView === 'main') {
                             loadMainScreen();
                         } else if (currentView === 'category' && currentCategory) {
-                            loadCategoryTorrents(currentCategory);
+                            refreshCategoryView(currentCategory);
                         }
                     }, 300);
                 } else {
