@@ -73,8 +73,8 @@ Move webapp source code and static assets into the main bot repo, reorganize bot
 **Files:**
 - Modify: `docker-compose.yaml`
 
-- [ ] Add `build: { context: ., dockerfile: Dockerfile.bot }` to the `tgtorrentbot` service (optional: keeps compose self-contained)
-- [ ] Add `build: { context: ., dockerfile: Dockerfile.webapp }` to the `tgtorrentbot-webapp` service
+- [x] Add `build: { context: ., dockerfile: Dockerfile.bot }` to the `tgtorrentbot` service (optional: keeps compose self-contained)
+- [x] Add `build: { context: ., dockerfile: Dockerfile.webapp }` to the `tgtorrentbot-webapp` service
 
 Note: Image names stay unchanged (`tgtorrentbot_img`, `tgtorrentbot-webapp_img`) so deployment is unaffected.
 

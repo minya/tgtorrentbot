@@ -1,5 +1,8 @@
 services:
   tgtorrentbot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
     image: tgtorrentbot_img:latest
     container_name: tgt-bot
     environment:
@@ -27,6 +30,9 @@ services:
         max-file: "3"
 
   tgtorrentbot-webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.webapp
     image: tgtorrentbot-webapp_img:latest
     container_name: tgt-webapp
     environment:
