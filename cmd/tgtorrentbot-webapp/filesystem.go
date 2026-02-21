@@ -48,7 +48,7 @@ func scanDir(dir string, incomplete bool) ([]FsItem, error) {
 		}
 		size, err := dirSize(filepath.Join(dir, entry.Name()))
 		if err != nil {
-			return nil, err
+			size = 0
 		}
 		items = append(items, FsItem{
 			Name:         entry.Name(),

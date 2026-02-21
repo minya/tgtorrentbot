@@ -50,7 +50,7 @@ services:
       - TGT_INCOMPLETE_PATH=/downloads/incomplete
       - PORT=8080
     volumes:
-      - /var/transmission/downloads:/downloads
+      - /var/transmission/downloads:/downloads:ro
     dns:
       - 8.8.8.8
       - 8.8.4.4

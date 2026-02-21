@@ -70,6 +70,7 @@ func loadConfig() Config {
 type App struct {
 	config             Config
 	transmissionClient *transmission.Client
+	jellyfinClient     *jellyfinClient
 }
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
@@ -136,6 +137,7 @@ func main() {
 	app := &App{
 		config:             config,
 		transmissionClient: transmissionClient,
+		jellyfinClient:     newJellyfinClient(config.JellyfinURL, config.JellyfinAPIKey),
 	}
 
 	http.HandleFunc("/api/torrents", app.makeHandler([]string{http.MethodGet}, app.handleTorrents))
@@ -442,8 +444,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	}
 
 	// 3. Get Jellyfin items.
-	jClient := newJellyfinClient(app.config.JellyfinURL, app.config.JellyfinAPIKey)
-	jellyfinItems, err := jClient.GetItems()
+	jellyfinItems, err := app.jellyfinClient.GetItems()
 	if err != nil {
 		logger.Error(err, "Failed to get Jellyfin items")
 	}
