@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
@@ -108,7 +110,14 @@ func startListen(port int, handleUpdate func(*telegram.Update) error) {
 			return
 		}
 	})
-	if err := http.ListenAndServe(":80", nil); err != nil {
+	srv := &http.Server{
+		Addr:              fmt.Sprintf(":%d", port),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
 	}

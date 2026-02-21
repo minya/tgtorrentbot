@@ -827,10 +827,8 @@
                     return;
                 }
 
-                window.searchResults = results;
-
-                container.innerHTML = results.map((r, idx) => `
-                    <div class="search-result" data-result-index="${idx}">
+                container.innerHTML = results.map(r => `
+                    <div class="search-result" data-download-url="${escapeHtml(r.downloadUrl)}">
                         <div class="search-title">${escapeHtml(r.title)}</div>
                         <div class="search-meta">
                             <span>${escapeHtml(r.size)}</span> · <span>${r.seeders} seeders</span>
@@ -846,18 +844,13 @@
         // --- Download ---
         function showCategoryModalFromElement(btn) {
             const searchResult = btn.closest('.search-result');
-            const resultIndex = parseInt(searchResult.getAttribute('data-result-index'));
-            const result = window.searchResults[resultIndex];
+            const downloadUrl = searchResult.getAttribute('data-download-url');
 
-            if (!result) {
-                tg.showAlert('Error: Result not found at index ' + resultIndex);
-                return;
-            }
-            if (!result.downloadUrl) {
+            if (!downloadUrl) {
                 tg.showAlert('Error: Download URL is missing');
                 return;
             }
-            showCategoryModal(result.downloadUrl);
+            showCategoryModal(downloadUrl);
         }
 
         function showCategoryModal(downloadUrl) {
@@ -910,31 +903,33 @@
         }
 
         async function removeTorrent(id, btn) {
-            if (!confirm('Remove this torrent?')) return;
+            tg.showConfirm('Remove this torrent?', async function(confirmed) {
+                if (!confirmed) return;
 
-            btn.blur();
-            btn.disabled = true;
-            try {
-                const response = await doFetch(`/api/torrents/remove?id=${id}`, { method: 'POST' });
-                if (response.ok) {
-                    const item = btn.closest('.torrent-item');
-                    item.style.opacity = '0.5';
-                    setTimeout(() => {
-                        if (currentView === 'main') {
-                            loadMainScreen();
-                        } else if (currentView === 'category' && currentCategory) {
-                            refreshCategoryView(currentCategory);
-                        }
-                    }, 300);
-                } else {
-                    const data = await response.json();
-                    alert(data.error || 'Failed to remove torrent');
+                btn.blur();
+                btn.disabled = true;
+                try {
+                    const response = await doFetch(`/api/torrents/remove?id=${id}`, { method: 'POST' });
+                    if (response.ok) {
+                        const item = btn.closest('.torrent-item');
+                        item.style.opacity = '0.5';
+                        setTimeout(() => {
+                            if (currentView === 'main') {
+                                loadMainScreen();
+                            } else if (currentView === 'category' && currentCategory) {
+                                refreshCategoryView(currentCategory);
+                            }
+                        }, 300);
+                    } else {
+                        const data = await response.json();
+                        tg.showAlert(data.error || 'Failed to remove torrent');
+                        btn.disabled = false;
+                    }
+                } catch (err) {
+                    tg.showAlert('Failed to remove torrent');
                     btn.disabled = false;
                 }
-            } catch (err) {
-                alert('Failed to remove torrent');
-                btn.disabled = false;
-            }
+            });
         }
 
         function escapeHtml(text) {

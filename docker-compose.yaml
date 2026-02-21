@@ -16,6 +16,8 @@ services:
       - TGT_RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
       - TGT_LOGLEVEL=debug
       - TGT_WEBAPP_URL=${WEBAPP_URL}
+    cap_add:
+      - NET_BIND_SERVICE
     volumes:
       - /var/transmission/downloads:/downloads
     dns:
