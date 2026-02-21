@@ -53,9 +53,9 @@ Move webapp source code and static assets into the main bot repo, reorganize bot
 - Create: `Dockerfile.webapp` (based on webapp's `Dockerfile`, build path updated to `./cmd/tgtorrentbot-webapp`; no static COPY needed since assets are embedded)
 - Delete: `Dockerfile` (replaced by `Dockerfile.bot`)
 
-- [ ] Create `Dockerfile.bot` with build command `go build -o /out/tgtorrentbot ./cmd/tgtorrentbot`
-- [ ] Create `Dockerfile.webapp` with build command `go build -o /out/tgtorrentbot-webapp ./cmd/tgtorrentbot-webapp`; remove the `COPY --from=build /app/static ./static` line since files are embedded
-- [ ] Delete the old root-level `Dockerfile`
+- [x] Create `Dockerfile.bot` with build command `go build -o /out/tgtorrentbot ./cmd/tgtorrentbot`
+- [x] Create `Dockerfile.webapp` with build command `go build -o /out/tgtorrentbot-webapp ./cmd/tgtorrentbot-webapp`; remove the `COPY --from=build /app/static ./static` line since files are embedded
+- [x] Delete the old root-level `Dockerfile`
 
 ### Task 4: Update Makefile
 

@@ -1,0 +1,20 @@
+FROM golang:1.25-alpine AS build
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/tgtorrentbot-webapp ./cmd/tgtorrentbot-webapp
+
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates libc6-compat
+
+WORKDIR /root/app
+COPY --from=build /out/tgtorrentbot-webapp ./tgtorrentbot-webapp
+
+EXPOSE 8080
+
+CMD ["/root/app/tgtorrentbot-webapp"]
