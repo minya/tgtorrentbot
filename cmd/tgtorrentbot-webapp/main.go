@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/minya/logger"
 	"github.com/minya/rutracker"
@@ -185,10 +186,10 @@ func main() {
 	}
 
 	http.HandleFunc("/api/torrents", app.makeHandler([]string{http.MethodGet}, app.handleTorrents))
-	http.HandleFunc("/api/torrents/remove", app.makeHandler([]string{http.MethodPost, http.MethodDelete}, app.handleRemoveTorrent))
-	http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPost}, app.handleDownloadTorrent))
+http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPost}, app.handleDownloadTorrent))
 	http.HandleFunc("/api/search", app.makeHandler([]string{http.MethodGet}, app.handleSearch))
 	http.HandleFunc("/api/items", app.makeHandler([]string{http.MethodGet}, app.handleUnifiedItems))
+	http.HandleFunc("/api/items/", app.makeHandler([]string{http.MethodDelete}, app.handleItemDelete))
 
 	subFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -260,58 +261,6 @@ func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func (app *App) handleRemoveTorrent(userID int64, w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		http.Error(w, `{"error": "id parameter is required"}`, http.StatusBadRequest)
-		return
-	}
-
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		http.Error(w, `{"error": "invalid id"}`, http.StatusBadRequest)
-		return
-	}
-
-	torrents, err := app.transmissionClient.GetTorrents()
-	if err != nil {
-		logger.Error(err, "Failed to get torrents")
-		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
-		return
-	}
-
-	userIDStr := fmt.Sprintf("%d", userID)
-	var torrentToRemove *transmission.Torrent
-	for _, t := range torrents {
-		if t.ID == id {
-			// Check that the requesting user owns this torrent.
-			// Return 404 (not 403) to avoid leaking existence of other users' torrents.
-			if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
-				http.Error(w, `{"error": "torrent not found"}`, http.StatusNotFound)
-				return
-			}
-			torrentToRemove = t
-			break
-		}
-	}
-
-	if torrentToRemove == nil {
-		http.Error(w, `{"error": "torrent not found"}`, http.StatusNotFound)
-		return
-	}
-
-	err = app.transmissionClient.RemoveTorrents([]*transmission.Torrent{torrentToRemove}, true)
-	if err != nil {
-		logger.Error(err, "Failed to remove torrent")
-		http.Error(w, `{"error": "failed to remove torrent"}`, http.StatusInternalServerError)
-		return
-	}
-
-	logger.Info("Removed torrent %d: %s", id, torrentToRemove.Name)
-	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
-		logger.Error(err, "Failed to encode remove response")
-	}
-}
 
 func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
@@ -502,6 +451,165 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	result := mergeItems(ut, fsItems, incompleteItems, jellyfinItems)
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		logger.Error(err, "Failed to encode unified items response")
+	}
+}
+
+// decodeItemID decodes a base64url-encoded "category:name" item identifier.
+func decodeItemID(encoded string) (category, name string, err error) {
+	decoded, err := base64.URLEncoding.DecodeString(encoded)
+	if err != nil {
+		// Try without padding.
+		decoded, err = base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil {
+			return "", "", fmt.Errorf("invalid item id encoding")
+		}
+	}
+	if !utf8.Valid(decoded) {
+		return "", "", fmt.Errorf("invalid item id: not valid utf-8")
+	}
+	parts := strings.SplitN(string(decoded), ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("invalid item id format")
+	}
+	return parts[0], parts[1], nil
+}
+
+// findUserTorrent finds a Transmission torrent owned by userID with the given name and category.
+func (app *App) findUserTorrent(userID int64, category, name string) (*transmission.Torrent, error) {
+	torrents, err := app.transmissionClient.GetTorrents()
+	if err != nil {
+		return nil, err
+	}
+	userIDStr := fmt.Sprintf("%d", userID)
+	for _, t := range torrents {
+		if t.Name != name || len(t.Labels) == 0 || t.Labels[0] != userIDStr {
+			continue
+		}
+		// Match category from label, defaulting to "others" for legacy single-label torrents.
+		torrentCategory := "others"
+		if len(t.Labels) >= 2 {
+			torrentCategory = t.Labels[1]
+		}
+		if torrentCategory == category {
+			return t, nil
+		}
+	}
+	return nil, nil
+}
+
+// handleItemDelete routes DELETE /api/items/{id} and DELETE /api/items/{id}/torrent.
+func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Request) {
+	// Parse path: /api/items/{id} or /api/items/{id}/torrent
+	path := strings.TrimPrefix(r.URL.Path, "/api/items/")
+	if path == "" {
+		http.Error(w, `{"error": "item id is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	var encodedID string
+	var torrentOnly bool
+	if strings.HasSuffix(path, "/torrent") {
+		encodedID = strings.TrimSuffix(path, "/torrent")
+		torrentOnly = true
+	} else {
+		encodedID = path
+	}
+
+	category, name, err := decodeItemID(encodedID)
+	if err != nil {
+		http.Error(w, `{"error": "invalid item id"}`, http.StatusBadRequest)
+		return
+	}
+
+	if !slices.Contains(validCategories, category) {
+		http.Error(w, `{"error": "invalid category"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Reject path traversal.
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		http.Error(w, `{"error": "invalid item name"}`, http.StatusBadRequest)
+		return
+	}
+
+	if torrentOnly {
+		app.handleRemoveItemTorrent(userID, w, category, name)
+	} else {
+		app.handleRemoveItemData(userID, w, category, name)
+	}
+}
+
+// handleRemoveItemTorrent removes a torrent without deleting data files.
+func (app *App) handleRemoveItemTorrent(userID int64, w http.ResponseWriter, category, name string) {
+	torrent, err := app.findUserTorrent(userID, category, name)
+	if err != nil {
+		logger.Error(err, "Failed to get torrents")
+		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
+		return
+	}
+	if torrent == nil {
+		http.Error(w, `{"error": "torrent not found"}`, http.StatusNotFound)
+		return
+	}
+
+	err = app.transmissionClient.RemoveTorrents([]*transmission.Torrent{torrent}, false)
+	if err != nil {
+		logger.Error(err, "Failed to remove torrent")
+		http.Error(w, `{"error": "failed to remove torrent"}`, http.StatusInternalServerError)
+		return
+	}
+
+	logger.Info("Removed torrent (keep data) %d: %s [%s] for user %d", torrent.ID, name, category, userID)
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		logger.Error(err, "Failed to encode response")
+	}
+}
+
+// handleRemoveItemData removes data files and the associated torrent (if any).
+func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, category, name string) {
+	// Try to find and remove torrent first (with deleteData=true).
+	torrent, err := app.findUserTorrent(userID, category, name)
+	if err != nil {
+		logger.Error(err, "Failed to get torrents")
+		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if torrent != nil {
+		err = app.transmissionClient.RemoveTorrents([]*transmission.Torrent{torrent}, true)
+		if err != nil {
+			logger.Error(err, "Failed to remove torrent with data")
+			http.Error(w, `{"error": "failed to remove torrent"}`, http.StatusInternalServerError)
+			return
+		}
+		logger.Info("Removed torrent+data %d: %s [%s] for user %d", torrent.ID, name, category, userID)
+	} else {
+		// No torrent — delete filesystem directory directly.
+		dir := filepath.Join(app.config.DownloadPath, category, name)
+		dir = filepath.Clean(dir)
+		// Verify the resolved path is under downloadPath.
+		absDownload, _ := filepath.Abs(app.config.DownloadPath)
+		absDir, _ := filepath.Abs(dir)
+		if !strings.HasPrefix(absDir, absDownload+string(filepath.Separator)) {
+			http.Error(w, `{"error": "invalid item path"}`, http.StatusBadRequest)
+			return
+		}
+
+		if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+			http.Error(w, `{"error": "item not found"}`, http.StatusNotFound)
+			return
+		}
+
+		if err := os.RemoveAll(dir); err != nil {
+			logger.Error(err, "Failed to remove directory %s", dir)
+			http.Error(w, `{"error": "failed to remove data"}`, http.StatusInternalServerError)
+			return
+		}
+		logger.Info("Removed data directory: %s [%s] for user %d", name, category, userID)
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		logger.Error(err, "Failed to encode response")
 	}
 }
 
