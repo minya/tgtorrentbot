@@ -12,6 +12,7 @@ type Settings struct {
 	RutrackerConfig rutracker.Config        `json:"rutrackerConfig"`
 	LogLevel        string                  `json:"logLevel"`
 	WebAppURL       string                  `json:"webAppURL"`
+	AllowedUsers    []int64                 `json:"allowedUsers"`
 }
 
 type TransmissionRPCSettings struct {

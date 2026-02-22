@@ -58,7 +58,10 @@ func main() {
 		DownloadPath:       settings.DownloadPath,
 		RutrackerConfig:    &settings.RutrackerConfig,
 		WebAppURL:          settings.WebAppURL,
+		AllowedUsers:       settings.AllowedUsers,
 	}
+
+	logger.Info("Access restricted to %d allowed user(s)", len(settings.AllowedUsers))
 
 	handler := NewUpdatesHandler(env, notify)
 

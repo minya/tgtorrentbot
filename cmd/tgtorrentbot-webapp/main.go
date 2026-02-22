@@ -43,28 +43,52 @@ type Config struct {
 	JellyfinURL          string
 	JellyfinAPIKey       string
 	IncompletePath       string
+	AllowedUsers         []int64
 }
 
-func loadConfig() Config {
+func loadConfig() (Config, error) {
 	downloadPath := os.Getenv("TGT_DOWNLOADPATH")
 	incompletePath := os.Getenv("TGT_INCOMPLETE_PATH")
 	if incompletePath == "" && downloadPath != "" {
 		incompletePath = filepath.Join(downloadPath, "incomplete")
 	}
 
-	return Config{
-		BotToken:             strings.TrimSpace(os.Getenv("TGT_BOTTOKEN")),
-		TransmissionAddr:     os.Getenv("TGT_RPC_ADDR"),
-		TransmissionUser:     os.Getenv("TGT_RPC_USER"),
-		TransmissionPassword: os.Getenv("TGT_RPC_PASSWORD"),
-		RutrackerUsername:    os.Getenv("TGT_RUTRACKER_USERNAME"),
-		RutrackerPassword:    os.Getenv("TGT_RUTRACKER_PASSWORD"),
-		DownloadPath:         downloadPath,
-		LogLevel:             os.Getenv("TGT_LOGLEVEL"),
-		JellyfinURL:          os.Getenv("TGT_JELLYFIN_URL"),
-		JellyfinAPIKey:       os.Getenv("TGT_JELLYFIN_API_KEY"),
-		IncompletePath:       incompletePath,
+	var config Config
+	config.BotToken = strings.TrimSpace(os.Getenv("TGT_BOTTOKEN"))
+	config.TransmissionAddr = os.Getenv("TGT_RPC_ADDR")
+	config.TransmissionUser = os.Getenv("TGT_RPC_USER")
+	config.TransmissionPassword = os.Getenv("TGT_RPC_PASSWORD")
+	config.RutrackerUsername = os.Getenv("TGT_RUTRACKER_USERNAME")
+	config.RutrackerPassword = os.Getenv("TGT_RUTRACKER_PASSWORD")
+	config.DownloadPath = downloadPath
+	config.LogLevel = os.Getenv("TGT_LOGLEVEL")
+	config.JellyfinURL = os.Getenv("TGT_JELLYFIN_URL")
+	config.JellyfinAPIKey = os.Getenv("TGT_JELLYFIN_API_KEY")
+	config.IncompletePath = incompletePath
+
+	var problems []string
+	if config.BotToken == "" {
+		problems = append(problems, "TGT_BOTTOKEN is not set")
 	}
+	if config.DownloadPath == "" {
+		problems = append(problems, "TGT_DOWNLOADPATH is not set")
+	}
+
+	allowedUsersRaw := os.Getenv("TGT_ALLOWED_USERS")
+	if strings.TrimSpace(allowedUsersRaw) == "" {
+		problems = append(problems, "TGT_ALLOWED_USERS is not set")
+	} else {
+		allowedUsers, err := parseAllowedUsers(allowedUsersRaw)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("TGT_ALLOWED_USERS: %v", err))
+		}
+		config.AllowedUsers = allowedUsers
+	}
+
+	if len(problems) > 0 {
+		return config, fmt.Errorf("environment config problems: %v", problems)
+	}
+	return config, nil
 }
 
 type App struct {
@@ -96,9 +120,35 @@ func (app *App) makeHandler(allowedMethods []string, handler appHandlerFunc) htt
 			return
 		}
 
-		// Call the actual handler function
+		if !slices.Contains(app.config.AllowedUsers, userID) {
+			logger.Warn("Unauthorized webapp access: user_id=%d", userID)
+			http.Error(w, `{"error": "forbidden"}`, http.StatusForbidden)
+			return
+		}
+
 		handler(userID, w, r)
 	}
+}
+
+func parseAllowedUsers(s string) ([]int64, error) {
+	var result []int64
+	var invalid []string
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(part, 10, 64)
+		if err != nil {
+			invalid = append(invalid, part)
+			continue
+		}
+		result = append(result, id)
+	}
+	if len(invalid) > 0 {
+		return result, fmt.Errorf("invalid user IDs: %v", invalid)
+	}
+	return result, nil
 }
 
 func main() {
@@ -112,15 +162,9 @@ func main() {
 		Output: os.Stdout,
 	})
 
-	config := loadConfig()
-
-
-	if config.BotToken == "" {
-		logger.Error(nil, "TGT_BOTTOKEN environment variable is not set")
-		os.Exit(1)
-	}
-	if config.DownloadPath == "" {
-		logger.Error(nil, "TGT_DOWNLOADPATH environment variable is not set")
+	config, err := loadConfig()
+	if err != nil {
+		logger.Error(err, "Failed to load config")
 		os.Exit(1)
 	}
 

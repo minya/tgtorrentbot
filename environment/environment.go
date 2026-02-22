@@ -12,6 +12,7 @@ type Env struct {
 	DownloadPath       string
 	RutrackerConfig    *rutracker.Config
 	WebAppURL          string
+	AllowedUsers       []int64
 }
 
 func Environment(

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"slices"
+
+	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/commands"
 	"github.com/minya/tgtorrentbot/environment"
@@ -30,7 +33,28 @@ func NewUpdatesHandler(env environment.Env, notifyFunc func()) *UpdatesHandler {
 	}
 }
 
+func extractUser(upd *telegram.Update) *telegram.User {
+	if upd.Message != nil && upd.Message.From != nil {
+		return upd.Message.From
+	}
+	if upd.CallbackQuery != nil {
+		return upd.CallbackQuery.From
+	}
+	return nil
+}
+
 func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
+	user := extractUser(upd)
+	if user == nil {
+		logger.Warn("Ignoring update with no user info")
+		return nil
+	}
+	if !slices.Contains(handler.AllowedUsers, user.Id) {
+		logger.Warn("Unauthorized access attempt: id=%d username=%s name=%s %s",
+			user.Id, user.UserName, user.FirstName, user.LastName)
+		return nil
+	}
+	logger.Debug("Authorized user: id=%d username=%s", user.Id, user.UserName)
 
 	for _, factory := range handler.commandsList {
 		accepts, cmd := factory.Accepts(upd)
