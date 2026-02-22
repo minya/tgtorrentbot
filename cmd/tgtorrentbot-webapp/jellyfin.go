@@ -77,13 +77,33 @@ func (c *jellyfinClient) GetItems() ([]JellyfinItem, error) {
 	items := make([]JellyfinItem, 0, len(jResp.Items))
 	for _, ri := range jResp.Items {
 		category := categoryFromPath(ri.Path)
+		name := folderNameFromPath(ri.Path)
+		if name == "" {
+			name = ri.Name
+		}
 		items = append(items, JellyfinItem{
-			Name:       ri.Name,
+			Name:       name,
 			Category:   category,
 			JellyfinID: ri.ID,
 		})
 	}
 	return items, nil
+}
+
+// folderNameFromPath extracts the top-level folder name under the category
+// from a Jellyfin item path. For example, given
+// /media/music/Collection/Album/track.mp3
+// it returns "Collection". Returns "" if the path doesn't have
+// enough segments.
+func folderNameFromPath(p string) string {
+	p = filepath.ToSlash(p)
+	parts := strings.Split(strings.Trim(p, "/"), "/")
+	for i, part := range parts {
+		if part == "media" && i+2 < len(parts) {
+			return parts[i+2]
+		}
+	}
+	return ""
 }
 
 // categoryFromPath extracts the category from a Jellyfin item path.
