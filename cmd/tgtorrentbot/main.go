@@ -107,11 +107,15 @@ func startListen(port int, handleUpdate func(*telegram.Update) error) {
 			logger.Error(err, "Failed to parse update from request")
 			return
 		}
-		err = handleUpdate(&update)
-		if err != nil {
-			logger.Error(err, "Failed to handle update from request")
-			return
-		}
+
+		// Respond 200 immediately so Telegram doesn't retry the update.
+		w.WriteHeader(http.StatusOK)
+
+		go func() {
+			if err := handleUpdate(&update); err != nil {
+				logger.Error(err, "Failed to handle update from request")
+			}
+		}()
 	})
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
