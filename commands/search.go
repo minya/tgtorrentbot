@@ -5,11 +5,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/minya/logger"
+	"github.com/minya/rutracker"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
-	"github.com/minya/rutracker"
 )
 
 var reSearchCmd = regexp.MustCompile(`^/search\s(.+?)$`)
@@ -59,7 +60,7 @@ func min(a int, b int) int {
 func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
 	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
+	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second), rutracker.WithIPv6())
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err

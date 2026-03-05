@@ -3,11 +3,12 @@ package commands
 import (
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/minya/logger"
+	"github.com/minya/rutracker"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
-	"github.com/minya/rutracker"
 )
 
 type DownloadWithCategoryCommand struct {
@@ -48,7 +49,7 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 func (cmd *DownloadWithCategoryCommand) Handle(upd *telegram.Update) error {
 	AnswerCallbackQuery(upd, cmd.TgApi)
 	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password)
+	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second), rutracker.WithIPv6())
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err

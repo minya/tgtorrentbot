@@ -301,6 +301,8 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 	client, err := rutracker.NewAuthenticatedRutrackerClient(
 		app.config.RutrackerUsername,
 		app.config.RutrackerPassword,
+		rutracker.WithTimeout(30*time.Second),
+		rutracker.WithIPv6(),
 	)
 	if err != nil {
 		logger.Error(err, "Failed to authenticate with rutracker")
@@ -362,6 +364,8 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 	client, err := rutracker.NewAuthenticatedRutrackerClient(
 		app.config.RutrackerUsername,
 		app.config.RutrackerPassword,
+		rutracker.WithTimeout(30*time.Second),
+		rutracker.WithIPv6(),
 	)
 
 	if err != nil {
