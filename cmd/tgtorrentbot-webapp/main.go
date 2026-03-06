@@ -103,6 +103,7 @@ type appHandlerFunc func(int64, http.ResponseWriter, *http.Request)
 
 func (app *App) makeHandler(allowedMethods []string, handler appHandlerFunc) httpHandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("Received request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		if !slices.Contains(allowedMethods, r.Method) {
 			w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
 			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
@@ -408,7 +409,9 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 
 func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.Request) {
 	// 1. Get torrents for this user.
+	start := time.Now()
 	torrents, err := app.transmissionClient.GetTorrents()
+	logger.Debug("Fetch torrents took %s", time.Since(start))
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
 		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
@@ -429,6 +432,8 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	}
 	categories := validCategories
 	fsItems := make(map[string][]FsItem)
+
+	start = time.Now()
 	for _, cat := range categories {
 		items, err := scanner.ScanCategory(cat)
 		if err != nil {
@@ -439,6 +444,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 			fsItems[cat] = items
 		}
 	}
+	logger.Debug("Scan filesystem took %s", time.Since(start))
 
 	incompleteItems, err := scanner.ScanIncomplete()
 	if err != nil {
@@ -446,7 +452,9 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	}
 
 	// 3. Get Jellyfin items.
+	start = time.Now()
 	jellyfinItems, err := app.jellyfinClient.GetItems()
+	logger.Debug("Fetch Jellyfin items took %s", time.Since(start))
 	if err != nil {
 		logger.Error(err, "Failed to get Jellyfin items")
 	}
