@@ -724,6 +724,21 @@
             return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
         }
 
+        function formatSpeed(bytesPerSec) {
+            if (bytesPerSec >= 1048576) return (bytesPerSec / 1048576).toFixed(1) + ' MB/s';
+            if (bytesPerSec >= 1024) return (bytesPerSec / 1024).toFixed(0) + ' KB/s';
+            return bytesPerSec + ' B/s';
+        }
+
+        function formatEta(seconds) {
+            if (seconds < 0) return '∞';
+            if (seconds < 60) return seconds + 's';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            return h + 'h ' + m + 'm';
+        }
+
         function renderSourceBadges(sources) {
             const labels = { torrent: 'T', filesystem: 'F', jellyfin: 'J' };
             return sources.map(s =>
@@ -737,13 +752,20 @@
 
             let bottomHtml;
             if (isDownloading) {
+                const statsparts = [];
+                if (item.rateDownload != null && item.rateDownload > 0) statsparts.push('↓ ' + formatSpeed(item.rateDownload));
+                if (item.eta != null && item.eta >= 0) statsparts.push('ETA ' + formatEta(item.eta));
+                if (item.peersSendingToUs != null) statsparts.push(item.peersSendingToUs + ' seeds');
+                if (item.peersConnected != null) statsparts.push(item.peersConnected + ' peers');
+                const statsHtml = statsparts.length > 0 ? `<div class="torrent-meta" style="margin-top:6px"><span>${statsparts.join(' · ')}</span></div>` : '';
                 bottomHtml = `<div class="torrent-meta">
                         <span>${showCategory ? escapeHtml(categoryNames[item.category] || item.category) : ''}</span>
                         <span>${Math.round(item.percentDone)}%</span>
                    </div>
                    <div class="progress-bar">
                         <div class="progress-fill" style="width: ${item.percentDone}%"></div>
-                   </div>`;
+                   </div>
+                   ${statsHtml}`;
             } else {
                 bottomHtml = `<div class="torrent-meta">
                         <span>${formatSize(item.totalSize)}</span>
@@ -751,7 +773,8 @@
                    </div>`;
             }
 
-            const badgesHtml = `<div class="source-badges">${renderSourceBadges(item.sources || [])}${item.isIncomplete ? '<span class="incomplete-badge">Incomplete</span>' : ''}</div>`;
+            const showIncomplete = item.isIncomplete && !(item.percentDone != null && item.percentDone < 100);
+            const badgesHtml = `<div class="source-badges">${renderSourceBadges(item.sources || [])}${showIncomplete ? '<span class="incomplete-badge">Incomplete</span>' : ''}</div>`;
 
             const hasFs = (item.sources || []).includes('filesystem');
             const itemId = generateItemId(item.category, item.name);

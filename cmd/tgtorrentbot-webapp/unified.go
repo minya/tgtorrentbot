@@ -51,6 +51,14 @@ func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteI
 		}
 		date := t.AddedDate
 		e.item.AddedDate = &date
+		rate := t.RateDownload
+		e.item.RateDownload = &rate
+		eta := t.Eta
+		e.item.Eta = &eta
+		peers := t.PeersConnected
+		e.item.PeersConnected = &peers
+		seeds := t.PeersSendingToUs
+		e.item.PeersSendingToUs = &seeds
 	}
 
 	// Add filesystem items (per category).

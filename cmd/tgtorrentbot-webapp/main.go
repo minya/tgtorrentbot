@@ -231,12 +231,16 @@ func userTorrents(torrents []*transmission.Torrent, userID int64) []TorrentInfo 
 			category = t.Labels[1]
 		}
 		result = append(result, TorrentInfo{
-			ID:          t.ID,
-			Name:        t.Name,
-			PercentDone: t.PercentDone * 100,
-			Category:    category,
-			TotalSize:   t.TotalSize,
-			AddedDate:   t.AddedDate,
+			ID:               t.ID,
+			Name:             t.Name,
+			PercentDone:      t.PercentDone * 100,
+			Category:         category,
+			TotalSize:        t.TotalSize,
+			AddedDate:        t.AddedDate,
+			RateDownload:     t.RateDownload,
+			Eta:              t.Eta,
+			PeersConnected:   t.PeersConnected,
+			PeersSendingToUs: t.PeersSendingToUs,
 		})
 	}
 	return result
@@ -620,6 +624,8 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	} else {
 		logger.Info("Removed data directory: %s [%s] for user %d", name, category, userID)
 	}
+
+	app.jellyfinClient.RefreshLibrary()
 
 	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
 		logger.Error(err, "Failed to encode response")

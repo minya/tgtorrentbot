@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/minya/logger"
 )
 
 // JellyfinItem represents a media item from the Jellyfin library.
@@ -88,6 +90,34 @@ func (c *jellyfinClient) GetItems() ([]JellyfinItem, error) {
 		})
 	}
 	return items, nil
+}
+
+// RefreshLibrary triggers a Jellyfin library scan so it picks up file changes.
+func (c *jellyfinClient) RefreshLibrary() {
+	if c.url == "" || c.apiKey == "" {
+		return
+	}
+
+	reqURL := fmt.Sprintf("%s/Library/Refresh", c.url)
+	req, err := http.NewRequest(http.MethodPost, reqURL, nil)
+	if err != nil {
+		logger.Error(err, "Failed to create Jellyfin refresh request")
+		return
+	}
+	req.Header.Set("Authorization", fmt.Sprintf(`MediaBrowser Token="%s"`, c.apiKey))
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		logger.Error(err, "Failed to trigger Jellyfin library refresh")
+		return
+	}
+	logger.Debug("Jellyfin refresh response status: %v", resp)
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		logger.Warn("Jellyfin library refresh returned status %d", resp.StatusCode)
+		return
+	}
+	logger.Info("Triggered Jellyfin library refresh")
 }
 
 // folderNameFromPath extracts the top-level folder name under the category
