@@ -14,7 +14,7 @@ func TestScanCategory(t *testing.T) {
 	os.MkdirAll(filepath.Join(moviesDir, "MovieB"), 0o755)
 	// Add a file inside MovieA
 	os.WriteFile(filepath.Join(moviesDir, "MovieA", "video.mkv"), make([]byte, 1024), 0o644)
-	// Add a standalone file at the category root (should be ignored, only dirs scanned)
+	// Add a standalone file at the category root
 	os.WriteFile(filepath.Join(moviesDir, "standalone.mkv"), make([]byte, 2048), 0o644)
 
 	scanner := &filesystemScanner{downloadPath: tmp}
@@ -22,8 +22,8 @@ func TestScanCategory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items (directories only), got %d", len(items))
+	if len(items) != 3 {
+		t.Fatalf("expected 3 items (2 dirs + 1 file), got %d", len(items))
 	}
 
 	// Find MovieA and check size
@@ -43,11 +43,18 @@ func TestScanCategory(t *testing.T) {
 		t.Error("expected IsIncomplete=false")
 	}
 
-	// Verify standalone file is not included
+	// Verify standalone file is included with correct size
+	var standalone *FsItem
 	for i := range items {
 		if items[i].Name == "standalone.mkv" {
-			t.Error("standalone.mkv should not be included (not a directory)")
+			standalone = &items[i]
 		}
+	}
+	if standalone == nil {
+		t.Fatal("standalone.mkv should be included")
+	}
+	if standalone.Size != 2048 {
+		t.Errorf("expected size 2048, got %d", standalone.Size)
 	}
 }
 
@@ -82,6 +89,31 @@ func TestScanIncomplete(t *testing.T) {
 	}
 	if items[0].Size != 512 {
 		t.Errorf("expected size 512, got %d", items[0].Size)
+	}
+	if !items[0].IsIncomplete {
+		t.Error("expected IsIncomplete=true")
+	}
+}
+
+func TestScanIncompleteStandaloneFile(t *testing.T) {
+	tmp := t.TempDir()
+	incDir := filepath.Join(tmp, "incomplete")
+	os.MkdirAll(incDir, 0o755)
+	os.WriteFile(filepath.Join(incDir, "movie.mkv"), make([]byte, 4096), 0o644)
+
+	scanner := &filesystemScanner{incompletePath: incDir}
+	items, err := scanner.ScanIncomplete()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].Name != "movie.mkv" {
+		t.Errorf("expected movie.mkv, got %s", items[0].Name)
+	}
+	if items[0].Size != 4096 {
+		t.Errorf("expected size 4096, got %d", items[0].Size)
 	}
 	if !items[0].IsIncomplete {
 		t.Error("expected IsIncomplete=true")
