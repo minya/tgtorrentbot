@@ -678,33 +678,38 @@
                     return;
                 }
                 allItems = await response.json();
-
-                // Compute category counts
-                const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0 };
-                for (const item of allItems) {
-                    const cat = item.category in counts ? item.category : 'others';
-                    counts[cat]++;
-                }
-                for (const [cat, count] of Object.entries(counts)) {
-                    const el = document.getElementById('count-' + cat);
-                    if (el) el.textContent = count + ' ' + itemWord(count);
-                }
-
-                // Active downloads (items with torrent source that are not complete)
-                const activeItems = allItems.filter(item => item.percentDone != null && item.percentDone < 100);
-                const activeSection = document.getElementById('active-section');
-                const activeList = document.getElementById('active-list');
-                const activeBadge = document.getElementById('active-badge');
-
-                if (activeItems.length > 0) {
-                    activeSection.style.display = 'block';
-                    activeBadge.textContent = activeItems.length;
-                    activeList.innerHTML = activeItems.map(item => renderItem(item, true)).join('');
-                } else {
-                    activeSection.style.display = 'none';
-                }
+                renderMainScreen();
             } catch (err) {
                 console.error('Failed to load main screen:', err);
+            }
+        }
+
+        function renderMainScreen() {
+            // Compute category counts
+            const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0 };
+            for (const item of allItems) {
+                const cat = item.category in counts ? item.category : 'others';
+                counts[cat]++;
+            }
+            for (const [cat, count] of Object.entries(counts)) {
+                const el = document.getElementById('count-' + cat);
+                if (el) el.textContent = count + ' ' + itemWord(count);
+            }
+            renderActiveDownloads();
+        }
+
+        function renderActiveDownloads() {
+            const activeItems = allItems.filter(item => item.percentDone != null && item.percentDone < 100);
+            const activeSection = document.getElementById('active-section');
+            const activeList = document.getElementById('active-list');
+            const activeBadge = document.getElementById('active-badge');
+
+            if (activeItems.length > 0) {
+                activeSection.style.display = 'block';
+                activeBadge.textContent = activeItems.length;
+                activeList.innerHTML = activeItems.map(item => renderItem(item, true)).join('');
+            } else {
+                activeSection.style.display = 'none';
             }
         }
 
@@ -895,15 +900,131 @@
         }
 
         // --- Auto-refresh ---
+        const REFRESH_INTERVAL_WS = 60000;   // 60s when WebSocket is connected
+        const REFRESH_INTERVAL_POLL = 30000;  // 30s fallback
+
         function startRefresh() {
             if (refreshInterval) clearInterval(refreshInterval);
+            const interval = wsConnected ? REFRESH_INTERVAL_WS : REFRESH_INTERVAL_POLL;
             refreshInterval = setInterval(() => {
                 if (currentView === 'main') {
                     loadMainScreen();
                 } else if (currentView === 'category' && currentCategory) {
                     refreshCategoryView(currentCategory);
                 }
-            }, 30000);
+            }, interval);
+        }
+
+        // --- WebSocket ---
+        let ws = null;
+        let wsReconnectTimer = null;
+        let wsReconnectDelay = 1000;
+        let wsConnected = false;
+
+        function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url = protocol + '//' + location.host + '/api/ws';
+
+            // Pass auth via subprotocol header to keep initData out of URL/logs.
+            // base64url-encode the initData and prefix with "tg-auth.".
+            const authProto = 'tg-auth.' + btoa(String.fromCharCode(...new TextEncoder().encode(tg.initData)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            ws = new WebSocket(url, [authProto]);
+
+            ws.onopen = function() {
+                wsReconnectDelay = 1000;
+                wsConnected = true;
+                startRefresh(); // switch to slower polling
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleWSMessage(msg);
+                } catch (err) {
+                    console.error('WebSocket message parse error:', err);
+                }
+            };
+
+            ws.onclose = function() {
+                wsConnected = false;
+                startRefresh(); // switch to faster polling
+                scheduleReconnect();
+            };
+
+            ws.onerror = function() {
+                // onclose will fire after onerror
+            };
+        }
+
+        function scheduleReconnect() {
+            if (wsReconnectTimer) return;
+            wsReconnectTimer = setTimeout(() => {
+                wsReconnectTimer = null;
+                connectWebSocket();
+                wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+            }, wsReconnectDelay);
+        }
+
+        let hadActiveTorrents = false;
+
+        function handleWSMessage(msg) {
+            if (msg.type === 'torrentUpdate') {
+                hadActiveTorrents = true;
+                handleTorrentUpdate(msg.payload);
+            } else if (msg.type === 'noActive' && hadActiveTorrents) {
+                // Torrents stopped being active (removed, paused, etc.)
+                // without going through the isComplete path. Do a full
+                // refresh so the UI doesn't show stale active items.
+                hadActiveTorrents = false;
+                if (currentView === 'main') {
+                    loadMainScreen();
+                } else if (currentView === 'category' && currentCategory) {
+                    refreshCategoryView(currentCategory);
+                }
+            }
+        }
+
+        function handleTorrentUpdate(updates) {
+            let anyCompleted = false;
+
+            for (const update of updates) {
+                if (update.isComplete) {
+                    anyCompleted = true;
+                }
+
+                // Find matching item in allItems by torrentId
+                const idx = allItems.findIndex(item => item.torrentId === update.id);
+                if (idx !== -1) {
+                    allItems[idx].percentDone = update.percentDone;
+                    allItems[idx].rateDownload = update.rateDownload;
+                    allItems[idx].eta = update.eta;
+                    allItems[idx].peersConnected = update.peersConnected;
+                    allItems[idx].peersSendingToUs = update.peersSendingToUs;
+                }
+            }
+
+            // Re-render the relevant view
+            if (currentView === 'main') {
+                renderActiveDownloads();
+            } else if (currentView === 'category' && currentCategory) {
+                renderCategoryItems(currentCategory);
+            }
+
+            // If a torrent just completed, do a full refresh to update sources/filesystem
+            if (anyCompleted) {
+                setTimeout(() => {
+                    if (currentView === 'main') {
+                        loadMainScreen();
+                    } else if (currentView === 'category' && currentCategory) {
+                        refreshCategoryView(currentCategory);
+                    }
+                }, 2000);
+            }
         }
 
         // --- Search ---
@@ -1161,6 +1282,7 @@
         // --- Init ---
         loadMainScreen();
         startRefresh();
+        connectWebSocket();
     </script>
 </body>
 </html>

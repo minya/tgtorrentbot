@@ -12,6 +12,7 @@ require (
 require github.com/rs/zerolog v1.34.0 // indirect
 
 require (
+	github.com/coder/websocket v1.8.14 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minya/goutils v0.0.0-20250705185653-54c0c51e5216 // indirect

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
@@ -96,10 +97,34 @@ type App struct {
 	config             Config
 	transmissionClient *transmission.Client
 	jellyfinClient     *jellyfinClient
+	hub                *wsHub
 }
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
 type appHandlerFunc func(int64, http.ResponseWriter, *http.Request)
+
+// authenticateInitData validates raw init data and returns the authenticated userID.
+func (app *App) authenticateInitData(raw string) (int64, error) {
+	initDataObj, err := newInitData(raw)
+	if err != nil {
+		return 0, fmt.Errorf("parse: %w", err)
+	}
+
+	if err := initDataObj.validate(app.config.BotToken); err != nil {
+		return 0, fmt.Errorf("validate: %w", err)
+	}
+
+	userID, err := initDataObj.userID()
+	if err != nil {
+		return 0, fmt.Errorf("user id: %w", err)
+	}
+
+	if !slices.Contains(app.config.AllowedUsers, userID) {
+		return 0, fmt.Errorf("user %d not allowed", userID)
+	}
+
+	return userID, nil
+}
 
 func (app *App) makeHandler(allowedMethods []string, handler appHandlerFunc) httpHandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -109,25 +134,22 @@ func (app *App) makeHandler(allowedMethods []string, handler appHandlerFunc) htt
 			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
-		initDataObj, valid := validateRequest(r, w, app.config.BotToken)
-		if !valid {
+
+		raw := r.Header.Get("X-Telegram-Init-Data")
+		if raw == "" {
+			logger.Warn("Missing init data")
+			http.Error(w, `{"error": "missing init data"}`, http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
 
-		userID, err := initDataObj.userID()
+		userID, err := app.authenticateInitData(raw)
 		if err != nil {
-			logger.Warn("Failed to extract user ID: %v", err)
-			http.Error(w, `{"error": "invalid init data"}`, http.StatusBadRequest)
+			logger.Warn("Auth failed: %v", err)
+			http.Error(w, `{"error": "unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 
-		if !slices.Contains(app.config.AllowedUsers, userID) {
-			logger.Warn("Unauthorized webapp access: user_id=%d", userID)
-			http.Error(w, `{"error": "forbidden"}`, http.StatusForbidden)
-			return
-		}
-
+		w.Header().Set("Content-Type", "application/json")
 		handler(userID, w, r)
 	}
 }
@@ -184,8 +206,12 @@ func main() {
 		config:             config,
 		transmissionClient: transmissionClient,
 		jellyfinClient:     newJellyfinClient(config.JellyfinURL, config.JellyfinAPIKey),
+		hub:                newWsHub(),
 	}
 
+	go app.startTorrentPoller(context.Background())
+
+	http.HandleFunc("/api/ws", app.handleWS)
 	http.HandleFunc("/api/torrents", app.makeHandler([]string{http.MethodGet}, app.handleTorrents))
 http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPost}, app.handleDownloadTorrent))
 	http.HandleFunc("/api/search", app.makeHandler([]string{http.MethodGet}, app.handleSearch))
@@ -632,27 +658,3 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	}
 }
 
-func validateRequest(r *http.Request, w http.ResponseWriter, botToken string) (*initData, bool) {
-	initData := r.Header.Get("X-Telegram-Init-Data")
-	if initData == "" {
-		logger.Warn("Missing init data")
-		http.Error(w, `{"error": "missing init data"}`, http.StatusBadRequest)
-		return nil, false
-	}
-
-	initDataObj, err := newInitData(initData)
-	if err != nil {
-		logger.Warn("Invalid init data: %v", err)
-		http.Error(w, `{"error": "invalid init data"}`, http.StatusUnauthorized)
-		return nil, false
-	}
-
-	err = initDataObj.validate(botToken)
-	if err != nil {
-		logger.Warn("Invalid init data: %v", err)
-		http.Error(w, `{"error": "invalid init data"}`, http.StatusUnauthorized)
-		return nil, false
-	}
-
-	return initDataObj, true
-}
