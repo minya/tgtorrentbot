@@ -157,6 +157,25 @@ services:
         max-size: "5m"
         max-file: "3"
 
+  dufs:
+    image: sigoden/dufs:latest
+    container_name: tgt-dufs
+    command: /data -A --auth ${DUFS_USER}:${DUFS_PASSWORD}@/:rw
+    volumes:
+      - /var/transmission/downloads/movies:/data/movies
+      - /var/transmission/downloads/shows:/data/shows
+      - /var/transmission/downloads/music:/data/music
+      - /var/transmission/downloads/musicvideos:/data/musicvideos
+      - /var/transmission/downloads/audiobooks:/data/audiobooks
+      - /var/transmission/downloads/others:/data/others
+    networks:
+      - tunnel-net
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: tgt-cloudflare-tunnel
@@ -168,6 +187,7 @@ services:
       - jellyfin
       - tgtorrentbot
       - tgtorrentbot-webapp
+      - dufs
     logging:
       options:
         max-size: "5m"
