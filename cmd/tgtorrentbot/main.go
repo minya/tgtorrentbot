@@ -11,6 +11,7 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
+	"github.com/minya/tgtorrentbot/internal"
 	"github.com/odwrtw/transmission"
 )
 
@@ -51,6 +52,7 @@ func main() {
 
 	api := telegram.NewApi(settings.BotToken)
 	notify := CreateCompletedCheckRoutine(transmissionClient, &api)
+	var fileIDLookup internal.FileIDLookup
 
 	env := environment.Env{
 		TransmissionClient: transmissionClient,
@@ -59,6 +61,7 @@ func main() {
 		RutrackerConfig:    &settings.RutrackerConfig,
 		WebAppURL:          settings.WebAppURL,
 		AllowedUsers:       settings.AllowedUsers,
+		FileIDLookup:       &fileIDLookup,
 	}
 
 	logger.Info("Access restricted to %d allowed user(s)", len(settings.AllowedUsers))

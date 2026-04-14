@@ -26,23 +26,42 @@ func (factory *DownloadFileWithCategoryCommandFactory) Accepts(upd *telegram.Upd
 	if upd == nil || upd.CallbackQuery == nil {
 		return false, nil
 	}
-	if found := reDownloadFileWithCategoryCmd.FindStringSubmatch(upd.CallbackQuery.Data); len(found) == 3 {
-		categoryStr := strings.TrimSpace(found[1])
-		fileID := strings.TrimSpace(found[2])
-
-		category, ok := ParseCategory(categoryStr)
-		if !ok {
-			logger.Error(nil, "Invalid category: %s", categoryStr)
-			return false, nil
-		}
-
-		return true, &DownloadFileWithCategoryCommand{
-			FileID:   fileID,
-			Category: category,
-			Env:      factory.Env,
-		}
+	found := reDownloadFileWithCategoryCmd.FindStringSubmatch(upd.CallbackQuery.Data)
+	if len(found) != 3 {
+		return false, nil
 	}
-	return false, nil
+	categoryStr := strings.TrimSpace(found[1])
+	memFileID := strings.TrimSpace(found[2])
+
+	category, ok := ParseCategory(categoryStr)
+	if !ok {
+		return false, nil
+	}
+
+	fileID, ok := factory.FileIDLookup.Get(memFileID)
+	if !ok {
+		return true, &expiredFileButtonCommand{Env: factory.Env}
+	}
+
+	return true, &DownloadFileWithCategoryCommand{
+		FileID:   fileID,
+		Category: category,
+		Env:      factory.Env,
+	}
+}
+
+type expiredFileButtonCommand struct {
+	environment.Env
+}
+
+func (cmd *expiredFileButtonCommand) Handle(upd *telegram.Update) error {
+	AnswerCallbackQuery(upd, cmd.TgApi)
+	chatID := upd.CallbackQuery.Message.Chat.Id
+	logger.Warn("File ID lookup expired or missing for callback %q", upd.CallbackQuery.Data)
+	return cmd.TgApi.SendMessage(telegram.ReplyMessage{
+		ChatId: chatID,
+		Text:   "Кнопка устарела. Пожалуйста, загрузите файл заново.",
+	})
 }
 
 func (cmd *DownloadFileWithCategoryCommand) Handle(upd *telegram.Update) error {
@@ -68,7 +87,6 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(upd *telegram.Update) error {
 		return err
 	}
 
-	// Reuse the addTorrentAndReply method from DownloadByFileCommand
 	downloadCmd := &DownloadCommand{
 		Env: cmd.Env,
 	}

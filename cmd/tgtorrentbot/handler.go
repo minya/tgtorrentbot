@@ -25,8 +25,8 @@ func NewUpdatesHandler(env environment.Env, notifyFunc func()) *UpdatesHandler {
 			&commands.ListPageCommandFactory{Env: env},
 			&commands.RemoveTorrentCommandFactory{Env: env},
 			&commands.SearchCommandFactory{Env: env},
-			&commands.DownloadWithCategoryCommandFactory{Env: env},       // Must come before DownloadCommandFactory
-			&commands.DownloadFileWithCategoryCommandFactory{Env: env},   // Must come before DownloadByFileCommandFactory
+			&commands.DownloadWithCategoryCommandFactory{Env: env},     // Must come before DownloadCommandFactory
+			&commands.DownloadFileWithCategoryCommandFactory{Env: env}, // Must come before DownloadByFileCommandFactory
 			&commands.DownloadCommandFactory{Env: env},
 			&commands.DownloadByFileCommandFactory{Env: env},
 		},
@@ -44,6 +44,7 @@ func extractUser(upd *telegram.Update) *telegram.User {
 }
 
 func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
+	logger.Debug("Received update: %+v", upd)
 	user := extractUser(upd)
 	if user == nil {
 		logger.Warn("Ignoring update with no user info")
@@ -59,6 +60,7 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 	for _, factory := range handler.commandsList {
 		accepts, cmd := factory.Accepts(upd)
 		if accepts {
+			logger.Debug("Command accepted: %T", cmd)
 			handleErr := cmd.Handle(upd)
 			if handleErr == nil {
 				handler.notify()

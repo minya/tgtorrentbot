@@ -1,8 +1,9 @@
 package environment
 
 import (
-	"github.com/minya/telegram"
 	"github.com/minya/rutracker"
+	"github.com/minya/telegram"
+	"github.com/minya/tgtorrentbot/internal"
 	"github.com/odwrtw/transmission"
 )
 
@@ -13,6 +14,7 @@ type Env struct {
 	RutrackerConfig    *rutracker.Config
 	WebAppURL          string
 	AllowedUsers       []int64
+	FileIDLookup       *internal.FileIDLookup
 }
 
 func Environment(
