@@ -67,7 +67,6 @@ func (cmd *DownloadCommand) buildCategoryKeyboard() telegram.InlineKeyboardMarku
 
 func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, category Category) error {
 	torrentBase64 := base64.StdEncoding.EncodeToString(content)
-
 	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
 
 	logger.Debug("Adding torrent with category %s to directory %s", category.String(), downloadDir)
@@ -76,20 +75,36 @@ func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, cat
 		Metainfo:    torrentBase64,
 		DownloadDir: downloadDir,
 	})
-
 	if err != nil {
 		logger.Error(err, "Error from transmission RPC")
 		return err
 	}
 
+	return cmd.finalizeTorrent(torrent, chatID, category)
+}
+
+func (cmd *DownloadCommand) addMagnetAndReply(magnetURI string, chatID int64, category Category) error {
+	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
+
+	logger.Debug("Adding magnet with category %s to directory %s", category.String(), downloadDir)
+
+	torrent, err := cmd.TransmissionClient.AddTorrent(transmission.AddTorrentArg{
+		Filename:    magnetURI,
+		DownloadDir: downloadDir,
+	})
+	if err != nil {
+		logger.Error(err, "Error from transmission RPC")
+		return err
+	}
+
+	return cmd.finalizeTorrent(torrent, chatID, category)
+}
+
+func (cmd *DownloadCommand) finalizeTorrent(torrent *transmission.Torrent, chatID int64, category Category) error {
 	labels := []string{fmt.Sprintf("%v", chatID), category.String()}
 	logger.Debug("Torrent added with ID %v, setting labels to %v", torrent.ID, labels)
 
-	err = torrent.Set(transmission.SetTorrentArg{
-		Labels: labels,
-	})
-
-	if err != nil {
+	if err := torrent.Set(transmission.SetTorrentArg{Labels: labels}); err != nil {
 		logger.Error(err, "Error setting torrent labels")
 		return err
 	}

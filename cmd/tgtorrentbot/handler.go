@@ -24,9 +24,11 @@ func NewUpdatesHandler(env environment.Env, notifyFunc func()) *UpdatesHandler {
 			&commands.ListCommandFactory{Env: env},
 			&commands.ListPageCommandFactory{Env: env},
 			&commands.RemoveTorrentCommandFactory{Env: env},
+			&commands.DownloadByMagnetCommandFactory{Env: env}, // Must come before SearchCommandFactory
 			&commands.SearchCommandFactory{Env: env},
-			&commands.DownloadWithCategoryCommandFactory{Env: env},     // Must come before DownloadCommandFactory
+			&commands.DownloadWithCategoryCommandFactory{Env: env},       // Must come before DownloadCommandFactory
 			&commands.DownloadFileWithCategoryCommandFactory{Env: env}, // Must come before DownloadByFileCommandFactory
+			&commands.DownloadMagnetWithCategoryCommandFactory{Env: env},
 			&commands.DownloadCommandFactory{Env: env},
 			&commands.DownloadByFileCommandFactory{Env: env},
 		},

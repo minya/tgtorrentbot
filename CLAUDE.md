@@ -103,7 +103,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - `RutrackerConfig` - Credentials for Rutracker
 - `WebAppURL` - Optional URL for Telegram Mini Web App
 - `AllowedUsers` - Whitelist of Telegram user IDs permitted to use the bot
-- `FileIDLookup` - Pointer to shared `internal.FileIDLookup` used by the file-upload flow (see Download-by-File Flow)
+- `FileIDLookup` - Pointer to shared `internal.FileIDLookup` used by the file-upload and magnet-link flows to map long strings to short UUIDs for Telegram callback data (see Download-by-File Flow, Download-by-Magnet Flow)
 
 **cmd/tgtorrentbot/update_check.go** - Background routine that:
 - Polls Transmission every minute for torrent completion
@@ -132,12 +132,14 @@ Registered command factories (`cmd/tgtorrentbot/handler.go:20`):
 - `ListPageCommandFactory` - `/list_page <page>` handles pagination callbacks
 - `RemoveTorrentCommandFactory` - `/remove <id>` removes a torrent
 - `SearchCommandFactory` - `/search <query>` or plain text searches Rutracker
+- `DownloadByMagnetCommandFactory` - detects `magnet:?` URIs in plain text messages, prompts for category
 - `DownloadWithCategoryCommandFactory` - `/dlcat <category> <url>` downloads with category (callback only)
 - `DownloadFileWithCategoryCommandFactory` - handles file upload with category selection (callback only)
+- `DownloadMagnetWithCategoryCommandFactory` - `/dlmagnet <category> <uuid>` downloads magnet with category (callback only)
 - `DownloadCommandFactory` - `/dl <url>` prompts for category selection (callback only)
 - `DownloadByFileCommandFactory` - handles torrent file uploads, prompts for category
 
-**Command ordering matters:** Commands are matched in order. More specific patterns (e.g., `/dlcat`) must come before general ones (e.g., `/dl`) to avoid incorrect matching.
+**Command ordering matters:** Commands are matched in order. More specific patterns (e.g., `/dlcat`) must come before general ones (e.g., `/dl`) to avoid incorrect matching. `DownloadByMagnetCommandFactory` must come before `SearchCommandFactory` so magnet URIs aren't treated as search queries.
 
 ### Rutracker Integration
 
@@ -216,6 +218,14 @@ The completion checker uses Transmission labels to track which chat initiated ea
 
 **Why the UUID indirection:** Telegram `callback_data` is capped at 64 bytes. Telegram `file_id` values alone are routinely 60+ chars, so embedding the raw `file_id` plus a category prefix overflows the limit and the button silently does nothing. `FileIDLookup` keeps the `file_id` in process memory and puts only a 36-char UUID in the callback. It is a `sync.Mutex`-guarded map used concurrently from webhook handlers, and `Add` bounds memory by evicting entries older than 1 hour.
 
+### Download-by-Magnet Flow
+1. User pastes a `magnet:?xt=urn:btih:…` URI into the bot chat (case-insensitive match on `magnet:?` prefix)
+2. `DownloadByMagnetCommand` stores the magnet URI in `FileIDLookup` and receives a short UUID key (same indirection as the file-upload flow — magnet URIs exceed the 64-byte callback data limit)
+3. Category selection keyboard is sent with callbacks of the form `/dlmagnet <category> <uuid>`
+4. User picks a category → `DownloadMagnetWithCategoryCommand.Accepts` resolves the UUID back to the magnet URI; if the UUID is missing (bot restart), it returns an `expiredFileButtonCommand` that tells the user to re-send the link
+5. The magnet URI is passed to Transmission via `AddTorrentArg{Filename: magnetURI}` (Transmission RPC accepts magnet URIs in the `filename` field); labels `[chatID, category]` are set via `DownloadCommand.addMagnetAndReply`
+6. Transmission resolves torrent metadata asynchronously over DHT/peers
+
 ### List with Pagination
 1. User sends `/list`
 2. Torrents are fetched from Transmission and sorted by ID descending (most recent first)
@@ -274,4 +284,4 @@ Key external packages:
 - UI text is in Russian (search for `// TODO: translate` comments)
 - Completion checker polls every 1 minute when active
 - Search returns max 10 results sorted by seeders
-- Plain text messages without slash are treated as search queries
+- Plain text messages without slash are treated as search queries, unless they start with `magnet:?` (routed to magnet download)
