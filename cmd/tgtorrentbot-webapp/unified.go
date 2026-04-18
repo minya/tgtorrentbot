@@ -13,7 +13,13 @@ func normalizedKey(name, category string) string {
 
 // mergeItems combines items from torrents, filesystem, and Jellyfin into a
 // unified list. Items are matched by normalized name + category.
-func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteItems []FsItem, jellyfinItems []JellyfinItem, absItems []AudiobookshelfItem) []UnifiedItem {
+func mergeItems(
+	torrents []TorrentInfo,
+	fsItems map[string][]FsItem,
+	incompleteItems []FsItem,
+	jellyfinItems []JellyfinItem,
+	absItems []AudiobookshelfItem,
+) []UnifiedItem {
 	type entry struct {
 		item  UnifiedItem
 		order int // insertion order for stable sort
