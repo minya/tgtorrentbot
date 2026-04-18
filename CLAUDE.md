@@ -62,6 +62,8 @@ The bot can be configured via environment variables or a JSON settings file. Set
 - `TGT_WEBAPP_URL` - URL for the Telegram Mini Web App (enables web app menu button)
 - `TGT_JELLYFIN_URL` - Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it
 - `TGT_JELLYFIN_API_KEY` - Jellyfin API key (generated from Jellyfin admin dashboard)
+- `TGT_AUDIOBOOKSHELF_URL` - Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp works without it
+- `TGT_AUDIOBOOKSHELF_API_KEY` - Audiobookshelf API key (from Audiobookshelf Settings → Users → select user → API Token)
 - `TGT_INCOMPLETE_PATH` - Path to Transmission's incomplete downloads directory (defaults to `{DownloadPath}/incomplete`)
 
 Settings file uses 1Password secret references (e.g., `op://Private/...`).
@@ -70,7 +72,7 @@ Settings file uses 1Password secret references (e.g., `op://Private/...`).
 
 This repo uses a `cmd/` layout for multiple binaries:
 - `cmd/tgtorrentbot/` — Telegram bot binary (main.go, handler.go, update_check.go, read_settings.go, settings.go)
-- `cmd/tgtorrentbot-webapp/` — Web app binary (main.go, filesystem.go, jellyfin.go, unified.go, payloads.go, static/index.html embedded via go:embed)
+- `cmd/tgtorrentbot-webapp/` — Web app binary (main.go, filesystem.go, jellyfin.go, audiobookshelf.go, unified.go, payloads.go, static/index.html embedded via go:embed)
 - `commands/` — Bot command implementations (shared library)
 - `environment/` — Shared Env struct
 - `internal/` — Internal helpers not exported outside this module (e.g., `FileIDLookup`)
@@ -242,7 +244,7 @@ The completion checker uses Transmission labels to track which chat initiated ea
 - Uses the same Rutracker/Transmission credentials
 - The web app button also appears in the `/list` command keyboard
 - API endpoints (all require `X-Telegram-Init-Data` header with valid Telegram HMAC):
-  - `GET /api/items` — returns unified media items merged from Transmission, filesystem, and Jellyfin (see Unified Media Items below)
+  - `GET /api/items` — returns unified media items merged from Transmission, filesystem, Jellyfin, and Audiobookshelf (see Unified Media Items below)
   - `GET /api/torrents` — lists all torrents with category, sorted by ID descending
   - `POST /api/torrents/remove?id=<n>` — removes a torrent by Transmission ID
   - `POST /api/torrents/download` — downloads from Rutracker and adds to Transmission; body: `{"downloadUrl":"...","category":"..."}`
@@ -250,20 +252,24 @@ The completion checker uses Transmission labels to track which chat initiated ea
 
 ### Unified Media Items
 
-The webapp displays a unified view of media items merged from three sources:
+The webapp displays a unified view of media items merged from four sources:
 - **Transmission torrents** — active/completed downloads
 - **Filesystem** — directories in `{downloadPath}/{category}/` and the incomplete directory
 - **Jellyfin** — library items from the Jellyfin media server (optional)
+- **Audiobookshelf** — audiobook library items from Audiobookshelf (optional)
 
-Items are matched by normalized name (case-insensitive, trimmed) + category and merged into a single `UnifiedItem`. Each item shows which sources it appears in via a `sources` array (e.g., `["torrent", "filesystem", "jellyfin"]`). Items found only in the incomplete directory get `isIncomplete: true`.
+Items are matched by normalized name (case-insensitive, trimmed) + category and merged into a single `UnifiedItem`. Each item shows which sources it appears in via a `sources` array (e.g., `["torrent", "filesystem", "jellyfin", "audiobookshelf"]`). Items found only in the incomplete directory get `isIncomplete: true`.
+
+Audiobookshelf items are matched against existing entries by path prefix: if Audiobookshelf returns sub-items (e.g., `Author - Book/Том 1`, `Author - Book/Том 2`), they merge into the parent filesystem entry (`Author - Book`) rather than creating separate items.
 
 Key files:
 - `cmd/tgtorrentbot-webapp/unified.go` — merge logic
 - `cmd/tgtorrentbot-webapp/filesystem.go` — scans download directories
 - `cmd/tgtorrentbot-webapp/jellyfin.go` — Jellyfin API client
+- `cmd/tgtorrentbot-webapp/audiobookshelf.go` — Audiobookshelf API client
 - `cmd/tgtorrentbot-webapp/payloads.go` — response types including `UnifiedItem`
 
-The frontend (`static/index.html`) fetches from `/api/items` and shows source badges (T/F/J) on each item. Remove button only appears for items with a torrent source.
+The frontend (`static/index.html`) fetches from `/api/items` and shows source badges (T/F/J/A) on each item. Remove button only appears for items with a torrent source.
 
 ### Dependency Injection
 - `environment.Env` is created once in `cmd/tgtorrentbot/main.go`

@@ -44,6 +44,8 @@ type Config struct {
 	LogLevel             string
 	JellyfinURL          string
 	JellyfinAPIKey       string
+	AudiobookshelfURL    string
+	AudiobookshelfAPIKey string
 	IncompletePath       string
 	AllowedUsers         []int64
 }
@@ -66,6 +68,8 @@ func loadConfig() (Config, error) {
 	config.LogLevel = os.Getenv("TGT_LOGLEVEL")
 	config.JellyfinURL = os.Getenv("TGT_JELLYFIN_URL")
 	config.JellyfinAPIKey = os.Getenv("TGT_JELLYFIN_API_KEY")
+	config.AudiobookshelfURL = os.Getenv("TGT_AUDIOBOOKSHELF_URL")
+	config.AudiobookshelfAPIKey = os.Getenv("TGT_AUDIOBOOKSHELF_API_KEY")
 	config.IncompletePath = incompletePath
 
 	var problems []string
@@ -95,9 +99,10 @@ func loadConfig() (Config, error) {
 
 type App struct {
 	config             Config
-	transmissionClient *transmission.Client
-	jellyfinClient     *jellyfinClient
-	hub                *wsHub
+	transmissionClient     *transmission.Client
+	jellyfinClient         *jellyfinClient
+	audiobookshelfClient   *audiobookshelfClient
+	hub                    *wsHub
 }
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
@@ -205,8 +210,9 @@ func main() {
 	app := &App{
 		config:             config,
 		transmissionClient: transmissionClient,
-		jellyfinClient:     newJellyfinClient(config.JellyfinURL, config.JellyfinAPIKey),
-		hub:                newWsHub(),
+		jellyfinClient:       newJellyfinClient(config.JellyfinURL, config.JellyfinAPIKey),
+		audiobookshelfClient: newAudiobookshelfClient(config.AudiobookshelfURL, config.AudiobookshelfAPIKey),
+		hub:                  newWsHub(),
 	}
 
 	go app.startTorrentPoller(context.Background())
@@ -489,8 +495,16 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 		logger.Error(err, "Failed to get Jellyfin items")
 	}
 
-	// 4. Merge and return.
-	result := mergeItems(ut, fsItems, incompleteItems, jellyfinItems)
+	// 4. Get Audiobookshelf items.
+	start = time.Now()
+	absItems, err := app.audiobookshelfClient.GetItems()
+	logger.Debug("Fetch Audiobookshelf items took %s", time.Since(start))
+	if err != nil {
+		logger.Error(err, "Failed to get Audiobookshelf items")
+	}
+
+	// 5. Merge and return.
+	result := mergeItems(ut, fsItems, incompleteItems, jellyfinItems, absItems)
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		logger.Error(err, "Failed to encode unified items response")
 	}
@@ -652,6 +666,7 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	}
 
 	app.jellyfinClient.RefreshLibrary()
+	app.audiobookshelfClient.RefreshLibrary()
 
 	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
 		logger.Error(err, "Failed to encode response")

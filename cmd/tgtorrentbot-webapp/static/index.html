@@ -280,6 +280,10 @@
             background: #f3e5f5;
             color: #7b1fa2;
         }
+        .source-badge--audiobookshelf {
+            background: #fff3e0;
+            color: #e65100;
+        }
         .incomplete-badge {
             font-size: 10px;
             font-weight: 600;
@@ -745,7 +749,7 @@
         }
 
         function renderSourceBadges(sources) {
-            const labels = { torrent: 'T', filesystem: 'F', jellyfin: 'J' };
+            const labels = { torrent: 'T', filesystem: 'F', jellyfin: 'J', audiobookshelf: 'A' };
             return sources.map(s =>
                 `<span class="source-badge source-badge--${escapeHtml(s)}">${labels[s] || escapeHtml(s)}</span>`
             ).join('');

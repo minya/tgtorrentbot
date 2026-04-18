@@ -16,7 +16,7 @@ func TestMergeItems_AllThreeSources(t *testing.T) {
 		{Name: "MyMovie", Category: "movies", JellyfinID: "jf-1"},
 	}
 
-	result := mergeItems(torrents, fsItems, nil, jellyfinItems)
+	result := mergeItems(torrents, fsItems, nil, jellyfinItems, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(result))
 	}
@@ -47,7 +47,7 @@ func TestMergeItems_OnlyTorrent(t *testing.T) {
 	torrents := []TorrentInfo{
 		{ID: 5, Name: "Show1", PercentDone: 50, Category: "shows", TotalSize: 2000, AddedDate: 222},
 	}
-	result := mergeItems(torrents, nil, nil, nil)
+	result := mergeItems(torrents, nil, nil, nil, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(result))
 	}
@@ -64,7 +64,7 @@ func TestMergeItems_OnlyFilesystem(t *testing.T) {
 	fsItems := map[string][]FsItem{
 		"music": {{Name: "Album1", Size: 500}},
 	}
-	result := mergeItems(nil, fsItems, nil, nil)
+	result := mergeItems(nil, fsItems, nil, nil, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(result))
 	}
@@ -90,7 +90,7 @@ func TestMergeItems_OnlyJellyfin(t *testing.T) {
 	jellyfinItems := []JellyfinItem{
 		{Name: "JellyMovie", Category: "movies", JellyfinID: "jf-10"},
 	}
-	result := mergeItems(nil, nil, nil, jellyfinItems)
+	result := mergeItems(nil, nil, nil, jellyfinItems, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(result))
 	}
@@ -107,7 +107,7 @@ func TestMergeItems_IncompleteMatchesTorrent(t *testing.T) {
 	incompleteItems := []FsItem{
 		{Name: "Downloading", Size: 2000, IsIncomplete: true},
 	}
-	result := mergeItems(torrents, nil, incompleteItems, nil)
+	result := mergeItems(torrents, nil, incompleteItems, nil, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(result))
 	}
@@ -124,7 +124,7 @@ func TestMergeItems_IncompleteNoMatch(t *testing.T) {
 	incompleteItems := []FsItem{
 		{Name: "OrphanedDownload", Size: 1500, IsIncomplete: true},
 	}
-	result := mergeItems(nil, nil, incompleteItems, nil)
+	result := mergeItems(nil, nil, incompleteItems, nil, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(result))
 	}
@@ -147,7 +147,7 @@ func TestMergeItems_CaseInsensitiveMatching(t *testing.T) {
 	fsItems := map[string][]FsItem{
 		"movies": {{Name: "my movie", Size: 1000}},
 	}
-	result := mergeItems(torrents, fsItems, nil, nil)
+	result := mergeItems(torrents, fsItems, nil, nil, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item (case-insensitive match), got %d", len(result))
 	}
@@ -163,14 +163,14 @@ func TestMergeItems_DifferentCategories_NotMerged(t *testing.T) {
 	fsItems := map[string][]FsItem{
 		"music": {{Name: "Item", Size: 500}},
 	}
-	result := mergeItems(torrents, fsItems, nil, nil)
+	result := mergeItems(torrents, fsItems, nil, nil, nil)
 	if len(result) != 2 {
 		t.Fatalf("expected 2 items (different categories), got %d", len(result))
 	}
 }
 
 func TestMergeItems_EmptyInputs(t *testing.T) {
-	result := mergeItems(nil, nil, nil, nil)
+	result := mergeItems(nil, nil, nil, nil, nil)
 	if len(result) != 0 {
 		t.Fatalf("expected 0 items, got %d", len(result))
 	}
@@ -187,7 +187,7 @@ func TestMergeItems_MultipleItems(t *testing.T) {
 	jellyfinItems := []JellyfinItem{
 		{Name: "Movie2", Category: "movies", JellyfinID: "jf-2"},
 	}
-	result := mergeItems(torrents, fsItems, nil, jellyfinItems)
+	result := mergeItems(torrents, fsItems, nil, jellyfinItems, nil)
 	if len(result) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(result))
 	}
@@ -233,7 +233,7 @@ func TestMergeItems_SizePrecedence(t *testing.T) {
 	fsItems := map[string][]FsItem{
 		"movies": {{Name: "BigMovie", Size: 1500}},
 	}
-	result := mergeItems(torrents, fsItems, nil, nil)
+	result := mergeItems(torrents, fsItems, nil, nil, nil)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(result))
 	}

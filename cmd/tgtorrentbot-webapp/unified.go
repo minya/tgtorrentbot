@@ -13,7 +13,7 @@ func normalizedKey(name, category string) string {
 
 // mergeItems combines items from torrents, filesystem, and Jellyfin into a
 // unified list. Items are matched by normalized name + category.
-func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteItems []FsItem, jellyfinItems []JellyfinItem) []UnifiedItem {
+func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteItems []FsItem, jellyfinItems []JellyfinItem, absItems []AudiobookshelfItem) []UnifiedItem {
 	type entry struct {
 		item  UnifiedItem
 		order int // insertion order for stable sort
@@ -114,6 +114,31 @@ func mergeItems(torrents []TorrentInfo, fsItems map[string][]FsItem, incompleteI
 	for _, ji := range jellyfinItems {
 		e := getOrCreate(ji.Name, ji.Category)
 		e.item.Sources = appendUnique(e.item.Sources, "jellyfin")
+	}
+
+	// Add Audiobookshelf items. Match against existing entries by path prefix
+	// so that sub-items (e.g. "Author - Book/Том 1") merge into the parent
+	// filesystem entry ("Author - Book").
+	for _, ai := range absItems {
+		normName := strings.ToLower(strings.TrimSpace(ai.Name))
+		normCat := strings.ToLower(strings.TrimSpace(ai.Category))
+		var matched *entry
+		for key, e := range merged {
+			parts := strings.SplitN(key, "\x00", 2)
+			if len(parts) != 2 || parts[1] != normCat {
+				continue
+			}
+			if normName == parts[0] || strings.HasPrefix(normName, parts[0]+"/") {
+				matched = e
+				break
+			}
+		}
+		if matched != nil {
+			matched.item.Sources = appendUnique(matched.item.Sources, "audiobookshelf")
+		} else {
+			e := getOrCreate(ai.Name, ai.Category)
+			e.item.Sources = appendUnique(e.item.Sources, "audiobookshelf")
+		}
 	}
 
 	// Collect results ordered by insertion order.

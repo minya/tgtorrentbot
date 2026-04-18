@@ -50,6 +50,8 @@ services:
       - TGT_JELLYFIN_URL=http://tgt-jellyfin:8096
       - TGT_JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
       - TGT_INCOMPLETE_PATH=/downloads/incomplete
+      - TGT_AUDIOBOOKSHELF_URL=http://tgt-audiobookshelf:80
+      - TGT_AUDIOBOOKSHELF_API_KEY=${AUDIOBOOKSHELF_API_KEY}
       - TGT_LOGLEVEL=${LOGLEVEL}
       - PORT=8080
     volumes:
@@ -151,6 +153,25 @@ services:
     ports:
       - 8096:8096
       - 8920:8920
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: tgt-audiobookshelf
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Canada/Eastern
+    volumes:
+      - /var/audiobookshelf/config:/config
+      - /var/audiobookshelf/metadata:/metadata
+      - /var/transmission/downloads/audiobooks:/audiobooks
+    networks:
+      - tunnel-net
     restart: unless-stopped
     logging:
       options:
