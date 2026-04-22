@@ -1,4 +1,4 @@
-package main
+package media
 
 import (
 	"os"
@@ -8,16 +8,13 @@ import (
 
 func TestScanCategory(t *testing.T) {
 	tmp := t.TempDir()
-	// Create structure: {tmp}/movies/MovieA/ and {tmp}/movies/MovieB/
 	moviesDir := filepath.Join(tmp, "movies")
 	os.MkdirAll(filepath.Join(moviesDir, "MovieA"), 0o755)
 	os.MkdirAll(filepath.Join(moviesDir, "MovieB"), 0o755)
-	// Add a file inside MovieA
 	os.WriteFile(filepath.Join(moviesDir, "MovieA", "video.mkv"), make([]byte, 1024), 0o644)
-	// Add a standalone file at the category root
 	os.WriteFile(filepath.Join(moviesDir, "standalone.mkv"), make([]byte, 2048), 0o644)
 
-	scanner := &filesystemScanner{downloadPath: tmp}
+	scanner := &FilesystemScanner{DownloadPath: tmp}
 	items, err := scanner.ScanCategory("movies")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -26,7 +23,6 @@ func TestScanCategory(t *testing.T) {
 		t.Fatalf("expected 3 items (2 dirs + 1 file), got %d", len(items))
 	}
 
-	// Find MovieA and check size
 	var movieA *FsItem
 	for i := range items {
 		if items[i].Name == "MovieA" {
@@ -43,7 +39,6 @@ func TestScanCategory(t *testing.T) {
 		t.Error("expected IsIncomplete=false")
 	}
 
-	// Verify standalone file is included with correct size
 	var standalone *FsItem
 	for i := range items {
 		if items[i].Name == "standalone.mkv" {
@@ -60,7 +55,7 @@ func TestScanCategory(t *testing.T) {
 
 func TestScanCategoryMissing(t *testing.T) {
 	tmp := t.TempDir()
-	scanner := &filesystemScanner{downloadPath: tmp}
+	scanner := &FilesystemScanner{DownloadPath: tmp}
 	items, err := scanner.ScanCategory("nonexistent")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -76,7 +71,7 @@ func TestScanIncomplete(t *testing.T) {
 	os.MkdirAll(filepath.Join(incDir, "PartialDownload"), 0o755)
 	os.WriteFile(filepath.Join(incDir, "PartialDownload", "part.dat"), make([]byte, 512), 0o644)
 
-	scanner := &filesystemScanner{incompletePath: incDir}
+	scanner := &FilesystemScanner{IncompletePath: incDir}
 	items, err := scanner.ScanIncomplete()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -101,7 +96,7 @@ func TestScanIncompleteStandaloneFile(t *testing.T) {
 	os.MkdirAll(incDir, 0o755)
 	os.WriteFile(filepath.Join(incDir, "movie.mkv"), make([]byte, 4096), 0o644)
 
-	scanner := &filesystemScanner{incompletePath: incDir}
+	scanner := &FilesystemScanner{IncompletePath: incDir}
 	items, err := scanner.ScanIncomplete()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -121,7 +116,7 @@ func TestScanIncompleteStandaloneFile(t *testing.T) {
 }
 
 func TestScanIncompleteMissing(t *testing.T) {
-	scanner := &filesystemScanner{incompletePath: "/nonexistent/path/xyz"}
+	scanner := &FilesystemScanner{IncompletePath: "/nonexistent/path/xyz"}
 	items, err := scanner.ScanIncomplete()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -138,7 +133,7 @@ func TestScanCategoryNestedFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(showDir, "ep1.mkv"), make([]byte, 100), 0o644)
 	os.WriteFile(filepath.Join(showDir, "ep2.mkv"), make([]byte, 200), 0o644)
 
-	scanner := &filesystemScanner{downloadPath: tmp}
+	scanner := &FilesystemScanner{DownloadPath: tmp}
 	items, err := scanner.ScanCategory("shows")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

@@ -1,4 +1,4 @@
-package main
+package media
 
 import (
 	"encoding/json"
@@ -16,14 +16,14 @@ type AudiobookshelfItem struct {
 	ID       string
 }
 
-type audiobookshelfClient struct {
+type AudiobookshelfClient struct {
 	url    string
 	apiKey string
 	client *http.Client
 }
 
-func newAudiobookshelfClient(url, apiKey string) *audiobookshelfClient {
-	return &audiobookshelfClient{
+func NewAudiobookshelfClient(url, apiKey string) *AudiobookshelfClient {
+	return &AudiobookshelfClient{
 		url:    strings.TrimRight(url, "/"),
 		apiKey: apiKey,
 		client: &http.Client{Timeout: 30 * time.Second},
@@ -44,11 +44,11 @@ type absLibraryItemsResponse struct {
 }
 
 type absLibraryItem struct {
-	ID    string      `json:"id"`
-	Media absMedia    `json:"media"`
-	Ino   string      `json:"ino"`
-	Path  string      `json:"path"`
-	Name  string      `json:"relPath"`
+	ID    string   `json:"id"`
+	Media absMedia `json:"media"`
+	Ino   string   `json:"ino"`
+	Path  string   `json:"path"`
+	Name  string   `json:"relPath"`
 }
 
 type absMedia struct {
@@ -59,7 +59,7 @@ type absMetadata struct {
 	Title string `json:"title"`
 }
 
-func (c *audiobookshelfClient) doRequest(method, path string) (*http.Response, error) {
+func (c *AudiobookshelfClient) doRequest(method, path string) (*http.Response, error) {
 	req, err := http.NewRequest(method, c.url+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
@@ -68,7 +68,7 @@ func (c *audiobookshelfClient) doRequest(method, path string) (*http.Response, e
 	return c.client.Do(req)
 }
 
-func (c *audiobookshelfClient) GetItems() ([]AudiobookshelfItem, error) {
+func (c *AudiobookshelfClient) GetItems() ([]AudiobookshelfItem, error) {
 	if c.url == "" || c.apiKey == "" {
 		return nil, nil
 	}
@@ -100,7 +100,7 @@ func (c *audiobookshelfClient) GetItems() ([]AudiobookshelfItem, error) {
 	return items, nil
 }
 
-func (c *audiobookshelfClient) getLibraryItems(libraryID string) ([]AudiobookshelfItem, error) {
+func (c *AudiobookshelfClient) getLibraryItems(libraryID string) ([]AudiobookshelfItem, error) {
 	resp, err := c.doRequest(http.MethodGet, fmt.Sprintf("/api/libraries/%s/items", libraryID))
 	if err != nil {
 		return nil, fmt.Errorf("requesting library items: %w", err)
@@ -134,7 +134,7 @@ func (c *audiobookshelfClient) getLibraryItems(libraryID string) ([]Audiobookshe
 	return items, nil
 }
 
-func (c *audiobookshelfClient) RefreshLibrary() {
+func (c *AudiobookshelfClient) RefreshLibrary() {
 	if c.url == "" || c.apiKey == "" {
 		return
 	}

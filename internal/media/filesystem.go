@@ -1,4 +1,4 @@
-package main
+package media
 
 import (
 	"io/fs"
@@ -13,23 +13,23 @@ type FsItem struct {
 	IsIncomplete bool
 }
 
-// filesystemScanner scans download and incomplete directories for media items.
-type filesystemScanner struct {
-	downloadPath   string
-	incompletePath string
+// FilesystemScanner scans download and incomplete directories for media items.
+type FilesystemScanner struct {
+	DownloadPath   string
+	IncompletePath string
 }
 
-// ScanCategory lists subdirectories in {downloadPath}/{category}/ and returns
+// ScanCategory lists subdirectories in {DownloadPath}/{category}/ and returns
 // an FsItem for each one with the directory's total size.
-func (s *filesystemScanner) ScanCategory(category string) ([]FsItem, error) {
-	dir := filepath.Join(s.downloadPath, category)
+func (s *FilesystemScanner) ScanCategory(category string) ([]FsItem, error) {
+	dir := filepath.Join(s.DownloadPath, category)
 	return scanDir(dir, false)
 }
 
 // ScanIncomplete lists subdirectories in the incomplete path and returns
 // an FsItem for each one with IsIncomplete set to true.
-func (s *filesystemScanner) ScanIncomplete() ([]FsItem, error) {
-	return scanDir(s.incompletePath, true)
+func (s *FilesystemScanner) ScanIncomplete() ([]FsItem, error) {
+	return scanDir(s.IncompletePath, true)
 }
 
 func scanDir(dir string, incomplete bool) ([]FsItem, error) {
@@ -67,7 +67,6 @@ func scanDir(dir string, incomplete bool) ([]FsItem, error) {
 	return items, nil
 }
 
-// dirSize recursively computes the total size of all files in a directory.
 func dirSize(path string) (int64, error) {
 	var total int64
 	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {

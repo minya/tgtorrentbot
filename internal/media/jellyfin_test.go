@@ -1,4 +1,4 @@
-package main
+package media
 
 import (
 	"encoding/json"
@@ -32,7 +32,7 @@ func TestGetItems(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := newJellyfinClient(srv.URL, "testkey")
+	client := NewJellyfinClient(srv.URL, "testkey")
 	items, err := client.GetItems()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -41,7 +41,6 @@ func TestGetItems(t *testing.T) {
 		t.Fatalf("expected 3 items, got %d", len(items))
 	}
 
-	// Check first item
 	if items[0].Name != "The Matrix" {
 		t.Errorf("expected The Matrix, got %s", items[0].Name)
 	}
@@ -52,20 +51,17 @@ func TestGetItems(t *testing.T) {
 		t.Errorf("expected abc123, got %s", items[0].JellyfinID)
 	}
 
-	// Check second item
 	if items[1].Category != "shows" {
 		t.Errorf("expected shows, got %s", items[1].Category)
 	}
 
-	// Check third item
 	if items[2].Category != "music" {
 		t.Errorf("expected music, got %s", items[2].Category)
 	}
 }
 
 func TestGetItemsNotConfigured(t *testing.T) {
-	// Empty URL
-	client := newJellyfinClient("", "somekey")
+	client := NewJellyfinClient("", "somekey")
 	items, err := client.GetItems()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -74,8 +70,7 @@ func TestGetItemsNotConfigured(t *testing.T) {
 		t.Fatalf("expected nil, got %v", items)
 	}
 
-	// Empty API key
-	client = newJellyfinClient("http://localhost:8096", "")
+	client = NewJellyfinClient("http://localhost:8096", "")
 	items, err = client.GetItems()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -91,7 +86,7 @@ func TestGetItemsServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := newJellyfinClient(srv.URL, "testkey")
+	client := NewJellyfinClient(srv.URL, "testkey")
 	_, err := client.GetItems()
 	if err == nil {
 		t.Fatal("expected error for 500 response")
@@ -105,7 +100,7 @@ func TestGetItemsEmptyLibrary(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := newJellyfinClient(srv.URL, "testkey")
+	client := NewJellyfinClient(srv.URL, "testkey")
 	items, err := client.GetItems()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -148,8 +143,7 @@ func TestGetItemsTrailingSlashURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// URL with trailing slash should still work
-	client := newJellyfinClient(srv.URL+"/", "testkey")
+	client := NewJellyfinClient(srv.URL+"/", "testkey")
 	items, err := client.GetItems()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

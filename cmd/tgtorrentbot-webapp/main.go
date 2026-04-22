@@ -21,6 +21,7 @@ import (
 
 	"github.com/minya/logger"
 	"github.com/minya/rutracker"
+	"github.com/minya/tgtorrentbot/internal/media"
 	"github.com/odwrtw/transmission"
 )
 
@@ -98,11 +99,11 @@ func loadConfig() (Config, error) {
 }
 
 type App struct {
-	config             Config
-	transmissionClient     *transmission.Client
-	jellyfinClient         *jellyfinClient
-	audiobookshelfClient   *audiobookshelfClient
-	hub                    *wsHub
+	config               Config
+	transmissionClient   *transmission.Client
+	jellyfinClient       *media.JellyfinClient
+	audiobookshelfClient *media.AudiobookshelfClient
+	hub                  *wsHub
 }
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
@@ -208,10 +209,10 @@ func main() {
 	}
 
 	app := &App{
-		config:             config,
-		transmissionClient: transmissionClient,
-		jellyfinClient:       newJellyfinClient(config.JellyfinURL, config.JellyfinAPIKey),
-		audiobookshelfClient: newAudiobookshelfClient(config.AudiobookshelfURL, config.AudiobookshelfAPIKey),
+		config:               config,
+		transmissionClient:   transmissionClient,
+		jellyfinClient:       media.NewJellyfinClient(config.JellyfinURL, config.JellyfinAPIKey),
+		audiobookshelfClient: media.NewAudiobookshelfClient(config.AudiobookshelfURL, config.AudiobookshelfAPIKey),
 		hub:                  newWsHub(),
 	}
 
@@ -250,10 +251,10 @@ http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPo
 	}
 }
 
-// userTorrents filters and converts Transmission torrents to TorrentInfo for the given user.
-func userTorrents(torrents []*transmission.Torrent, userID int64) []TorrentInfo {
+// userTorrents filters and converts Transmission torrents to media.TorrentInfo for the given user.
+func userTorrents(torrents []*transmission.Torrent, userID int64) []media.TorrentInfo {
 	userIDStr := fmt.Sprintf("%d", userID)
-	var result []TorrentInfo
+	var result []media.TorrentInfo
 	for _, t := range torrents {
 		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
 			continue
@@ -262,7 +263,7 @@ func userTorrents(torrents []*transmission.Torrent, userID int64) []TorrentInfo 
 		if len(t.Labels) >= 2 {
 			category = t.Labels[1]
 		}
-		result = append(result, TorrentInfo{
+		result = append(result, media.TorrentInfo{
 			ID:               t.ID,
 			Name:             t.Name,
 			PercentDone:      t.PercentDone * 100,
@@ -462,12 +463,12 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	ut := userTorrents(torrents, userID)
 
 	// 2. Scan filesystem.
-	scanner := &filesystemScanner{
-		downloadPath:   app.config.DownloadPath,
-		incompletePath: app.config.IncompletePath,
+	scanner := &media.FilesystemScanner{
+		DownloadPath:   app.config.DownloadPath,
+		IncompletePath: app.config.IncompletePath,
 	}
 	categories := validCategories
-	fsItems := make(map[string][]FsItem)
+	fsItems := make(map[string][]media.FsItem)
 
 	start = time.Now()
 	for _, cat := range categories {
@@ -504,7 +505,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	}
 
 	// 5. Merge and return.
-	result := mergeItems(ut, fsItems, incompleteItems, jellyfinItems, absItems)
+	result := media.MergeItems(ut, fsItems, incompleteItems, jellyfinItems, absItems)
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		logger.Error(err, "Failed to encode unified items response")
 	}

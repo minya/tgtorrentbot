@@ -67,6 +67,35 @@ services:
         max-size: "5m"
         max-file: "3"
 
+  tgtorrentbot-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    image: tgtorrentbot-mcp_img:latest
+    container_name: tgt-mcp
+    environment:
+      - TGT_DOWNLOADPATH=/downloads
+      - TGT_INCOMPLETE_PATH=/downloads/incomplete
+      - TGT_RPC_ADDR=http://tgt-transmission:9091/transmission/rpc
+      - TGT_RPC_USER=tgtorrentbot
+      - TGT_RPC_PASSWORD=${PASSWD}
+      - TGT_JELLYFIN_URL=http://tgt-jellyfin:8096
+      - TGT_JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
+      - TGT_AUDIOBOOKSHELF_URL=http://tgt-audiobookshelf:80
+      - TGT_AUDIOBOOKSHELF_API_KEY=${AUDIOBOOKSHELF_API_KEY}
+      - TGT_MCP_TOKEN=${MCP_TOKEN}
+      - TGT_MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
+      - TGT_LOGLEVEL=${LOGLEVEL}
+    volumes:
+      - /var/transmission/downloads:/downloads
+    networks:
+      - tunnel-net
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
   transmission:
     image: lscr.io/linuxserver/transmission
     container_name: tgt-transmission
@@ -208,6 +237,7 @@ services:
       - jellyfin
       - tgtorrentbot
       - tgtorrentbot-webapp
+      - tgtorrentbot-mcp
       - dufs
     logging:
       options:

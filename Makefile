@@ -1,7 +1,8 @@
 BOT_IMAGE_NAME=tgtorrentbot_img
 WEBAPP_IMAGE_NAME=tgtorrentbot-webapp_img
+MCP_IMAGE_NAME=tgtorrentbot-mcp_img
 
-.PHONY: binaries bot-image webapp-image images
+.PHONY: binaries bot-image webapp-image mcp-image images
 
 binaries:
 	@echo "Building binaries..."
@@ -15,6 +16,10 @@ webapp-image:
 	@echo "Building webapp image..."
 	@docker-buildx build --tag $(WEBAPP_IMAGE_NAME) -f Dockerfile.webapp .
 
-images: bot-image webapp-image
+mcp-image:
+	@echo "Building mcp image..."
+	@docker-buildx build --tag $(MCP_IMAGE_NAME) -f Dockerfile.mcp .
+
+images: bot-image webapp-image mcp-image
 
 .DEFAULT_GOAL := binaries

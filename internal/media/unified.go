@@ -1,4 +1,4 @@
-package main
+package media
 
 import (
 	"slices"
@@ -11,9 +11,10 @@ func normalizedKey(name, category string) string {
 	return strings.ToLower(strings.TrimSpace(name)) + "\x00" + strings.ToLower(strings.TrimSpace(category))
 }
 
-// mergeItems combines items from torrents, filesystem, and Jellyfin into a
-// unified list. Items are matched by normalized name + category.
-func mergeItems(
+// MergeItems combines items from torrents, filesystem, Jellyfin, and
+// Audiobookshelf into a unified list. Items are matched by normalized
+// name + category.
+func MergeItems(
 	torrents []TorrentInfo,
 	fsItems map[string][]FsItem,
 	incompleteItems []FsItem,
@@ -22,7 +23,7 @@ func mergeItems(
 ) []UnifiedItem {
 	type entry struct {
 		item  UnifiedItem
-		order int // insertion order for stable sort
+		order int
 	}
 	merged := make(map[string]*entry)
 	nextOrder := 0
@@ -44,7 +45,6 @@ func mergeItems(
 		return e
 	}
 
-	// Add torrent items.
 	for _, t := range torrents {
 		e := getOrCreate(t.Name, t.Category)
 		e.item.Sources = appendUnique(e.item.Sources, "torrent")
@@ -67,7 +67,6 @@ func mergeItems(
 		e.item.PeersSendingToUs = &seeds
 	}
 
-	// Add filesystem items (per category).
 	for category, items := range fsItems {
 		for _, fi := range items {
 			e := getOrCreate(fi.Name, category)
@@ -78,17 +77,12 @@ func mergeItems(
 		}
 	}
 
-	// Add incomplete items. Try to match by name with any existing entry;
-	// if no match, create a new entry with "others" category.
-	// Build a name-only index for matching incomplete items deterministically.
-	nameIndex := make(map[string]*entry) // normalized name -> first entry
+	nameIndex := make(map[string]*entry)
 	for key, e := range merged {
 		normName := key[:strings.Index(key, "\x00")]
 		if existing, ok := nameIndex[normName]; !ok {
 			nameIndex[normName] = e
 		} else {
-			// Prefer an entry with a torrent source (more likely related to the incomplete download).
-			// Break ties deterministically by category (alphabetical).
 			eSrc := slices.Contains(e.item.Sources, "torrent")
 			existSrc := slices.Contains(existing.item.Sources, "torrent")
 			if eSrc && !existSrc {
@@ -116,15 +110,11 @@ func mergeItems(
 		}
 	}
 
-	// Add Jellyfin items.
 	for _, ji := range jellyfinItems {
 		e := getOrCreate(ji.Name, ji.Category)
 		e.item.Sources = appendUnique(e.item.Sources, "jellyfin")
 	}
 
-	// Add Audiobookshelf items. Match against existing entries by path prefix
-	// so that sub-items (e.g. "Author - Book/Том 1") merge into the parent
-	// filesystem entry ("Author - Book").
 	for _, ai := range absItems {
 		normName := strings.ToLower(strings.TrimSpace(ai.Name))
 		normCat := strings.ToLower(strings.TrimSpace(ai.Category))
@@ -147,13 +137,11 @@ func mergeItems(
 		}
 	}
 
-	// Collect results ordered by insertion order.
 	result := make([]UnifiedItem, 0, len(merged))
 	ordered := make([]*entry, 0, len(merged))
 	for _, e := range merged {
 		ordered = append(ordered, e)
 	}
-	// Sort by insertion order to keep torrent items first (stable).
 	sort.Slice(ordered, func(i, j int) bool {
 		return ordered[i].order < ordered[j].order
 	})
