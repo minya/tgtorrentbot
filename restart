@@ -10,4 +10,25 @@ fi
 # expand ~/ to full path
 TGT_ENV="${TGT_ENV/#\~/$HOME}"
 
-docker-compose --env-file "$TGT_ENV" up -d --force-recreate --remove-orphans
+usage() {
+  echo "Usage: $0 [bot|webapp|mcp ...]"
+  echo "  No args: restart all services"
+  exit 1
+}
+
+services=()
+for arg in "$@"; do
+  case "$arg" in
+    bot)    services+=(tgtorrentbot) ;;
+    webapp) services+=(tgtorrentbot-webapp) ;;
+    mcp)    services+=(tgtorrentbot-mcp) ;;
+    -h|--help) usage ;;
+    *) echo "Unknown service: $arg" >&2; usage ;;
+  esac
+done
+
+if [ ${#services[@]} -eq 0 ]; then
+  docker-compose --env-file "$TGT_ENV" up -d --force-recreate --remove-orphans
+else
+  docker-compose --env-file "$TGT_ENV" up -d --force-recreate "${services[@]}"
+fi
