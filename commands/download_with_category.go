@@ -49,7 +49,7 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 func (cmd *DownloadWithCategoryCommand) Handle(upd *telegram.Update) error {
 	AnswerCallbackQuery(upd, cmd.TgApi)
 	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second), rutracker.WithIPv6())
+	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err

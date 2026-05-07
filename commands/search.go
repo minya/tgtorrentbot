@@ -60,7 +60,7 @@ func min(a int, b int) int {
 func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
 	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second), rutracker.WithIPv6())
+	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err
