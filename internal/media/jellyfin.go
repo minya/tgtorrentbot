@@ -52,7 +52,7 @@ func (c *JellyfinClient) GetItems() ([]JellyfinItem, error) {
 		return nil, nil
 	}
 
-	reqURL := fmt.Sprintf("%s/Items?Recursive=true&Fields=Path,MediaSources&IncludeItemTypes=Movie,Series,MusicAlbum,AudioBook,MusicVideo", c.url)
+	reqURL := fmt.Sprintf("%s/Items?Recursive=true&Fields=Path&EnableImages=false&EnableUserData=false&EnableTotalRecordCount=false&IncludeItemTypes=Movie,Series,MusicAlbum,AudioBook,MusicVideo", c.url)
 	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
