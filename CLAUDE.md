@@ -309,7 +309,9 @@ The webapp displays a unified view of media items merged from four sources:
 - **Jellyfin** — library items from the Jellyfin media server (optional)
 - **Audiobookshelf** — audiobook library items from Audiobookshelf (optional)
 
-Items are matched by normalized name (case-insensitive, trimmed) + category and merged into a single `UnifiedItem`. Each item shows which sources it appears in via a `sources` array (e.g., `["torrent", "filesystem", "jellyfin", "audiobookshelf"]`). Items found only in the incomplete directory get `isIncomplete: true`.
+Items are matched by normalized name (case-insensitive, trimmed) + category and merged into a single `UnifiedItem`. Each item shows which sources it appears in via a `sources` array (e.g., `["torrent", "filesystem", "jellyfin", "audiobookshelf"]`). Items found in the incomplete directory get `isIncomplete: true`.
+
+An incomplete-directory folder that matches an existing torrent or completed `{category}/` directory (by normalized name) merges into that entry, keeping its real category with the `isIncomplete` flag set. A folder that matches **nothing** — orphaned leftover data, e.g. a stalled download whose torrent was removed — is surfaced under the **virtual `incomplete` category** (`media.IncompleteCategory`, see `internal/media/unified.go`). This is a cleanup affordance, not a real download category: nothing can be downloaded into it (it is absent from `validCategories`), the frontend only renders its grid card when non-empty, and `DELETE /api/items/{id}` maps it to `{IncompletePath}/{name}` instead of `{DownloadPath}/{category}/{name}` so the leftover data can be removed.
 
 Audiobookshelf items are matched against existing entries by path prefix: if Audiobookshelf returns sub-items (e.g., `Author - Book/Том 1`, `Author - Book/Том 2`), they merge into the parent filesystem entry (`Author - Book`) rather than creating separate items.
 

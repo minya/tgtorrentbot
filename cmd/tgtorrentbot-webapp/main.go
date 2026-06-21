@@ -576,7 +576,7 @@ func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !slices.Contains(validCategories, category) {
+	if !slices.Contains(validCategories, category) && category != media.IncompleteCategory {
 		http.Error(w, `{"error": "invalid category"}`, http.StatusBadRequest)
 		return
 	}
@@ -640,12 +640,17 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		logger.Info("Removed torrent %d: %s [%s] for user %d", torrent.ID, name, category, userID)
 	}
 
-	// Delete files from filesystem.
-	dir := filepath.Join(app.config.DownloadPath, category, name)
+	// Delete files from filesystem. Orphaned "incomplete" items live in the
+	// incomplete directory, not under {DownloadPath}/{category}.
+	base := filepath.Join(app.config.DownloadPath, category)
+	if category == media.IncompleteCategory {
+		base = app.config.IncompletePath
+	}
+	dir := filepath.Join(base, name)
 	dir = filepath.Clean(dir)
-	absDownload, _ := filepath.Abs(app.config.DownloadPath)
+	absBase, _ := filepath.Abs(base)
 	absDir, _ := filepath.Abs(dir)
-	if !strings.HasPrefix(absDir, absDownload+string(filepath.Separator)) {
+	if !strings.HasPrefix(absDir, absBase+string(filepath.Separator)) {
 		http.Error(w, `{"error": "invalid item path"}`, http.StatusBadRequest)
 		return
 	}

@@ -132,8 +132,8 @@ func TestMergeItems_IncompleteNoMatch(t *testing.T) {
 	if item.Name != "OrphanedDownload" {
 		t.Errorf("expected OrphanedDownload, got %s", item.Name)
 	}
-	if item.Category != "others" {
-		t.Errorf("expected others category, got %s", item.Category)
+	if item.Category != IncompleteCategory {
+		t.Errorf("expected %s category, got %s", IncompleteCategory, item.Category)
 	}
 	if !item.IsIncomplete {
 		t.Error("expected IsIncomplete to be true")

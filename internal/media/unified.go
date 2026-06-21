@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+// IncompleteCategory is a virtual category for files left in the incomplete
+// directory that no torrent owns (e.g. a stalled download whose torrent was
+// removed). It is not a real download category: nothing can be downloaded into
+// it, but its items can be deleted to clean up the leftover data.
+const IncompleteCategory = "incomplete"
+
 // normalizedKey returns a lowercase key used to match items across sources.
 func normalizedKey(name, category string) string {
 	return strings.ToLower(strings.TrimSpace(name)) + "\x00" + strings.ToLower(strings.TrimSpace(category))
@@ -101,7 +107,11 @@ func MergeItems(
 				matched.item.TotalSize = fi.Size
 			}
 		} else {
-			e := getOrCreate(fi.Name, "others")
+			// No torrent and no completed directory owns this incomplete
+			// folder — it's orphaned leftover data. Surface it under the
+			// virtual "incomplete" category so it can be deleted, rather
+			// than masquerading as real "others" media.
+			e := getOrCreate(fi.Name, IncompleteCategory)
 			e.item.Sources = appendUnique(e.item.Sources, "filesystem")
 			e.item.IsIncomplete = true
 			if fi.Size > e.item.TotalSize {

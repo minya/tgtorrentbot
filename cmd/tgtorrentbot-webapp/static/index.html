@@ -530,6 +530,10 @@
                     <div class="category-card-name">Other</div>
                     <div class="category-card-count" id="count-others">—</div>
                 </div>
+                <div class="category-card" id="card-incomplete" style="display: none;" onclick="showCategory('incomplete')">
+                    <div class="category-card-name">Incomplete</div>
+                    <div class="category-card-count" id="count-incomplete">—</div>
+                </div>
             </div>
         </div>
     </div>
@@ -619,6 +623,7 @@
             musicvideos: 'Music Videos',
             audiobooks: 'Audiobooks',
             others: 'Other',
+            incomplete: 'Incomplete',
         };
 
         let currentView = 'main'; // 'main' or 'category'
@@ -690,7 +695,7 @@
 
         function renderMainScreen() {
             // Compute category counts
-            const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0 };
+            const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0, incomplete: 0 };
             for (const item of allItems) {
                 const cat = item.category in counts ? item.category : 'others';
                 counts[cat]++;
@@ -699,6 +704,10 @@
                 const el = document.getElementById('count-' + cat);
                 if (el) el.textContent = count + ' ' + itemWord(count);
             }
+            // The "Incomplete" bucket is a cleanup affordance for orphaned
+            // leftover data — only show its card when there's something in it.
+            const incompleteCard = document.getElementById('card-incomplete');
+            if (incompleteCard) incompleteCard.style.display = counts.incomplete > 0 ? '' : 'none';
             renderActiveDownloads();
         }
 
