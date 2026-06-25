@@ -2,10 +2,8 @@
 
 set -e
 
-if [ -z "$TGT_ENV" ]; then
-  echo "Error: TGT_ENV is not set!"
-  exit 1
-fi
+# Default to .env in the current directory when not explicitly set.
+TGT_ENV="${TGT_ENV:-.env}"
 
 # expand ~/ to full path
 TGT_ENV="${TGT_ENV/#\~/$HOME}"

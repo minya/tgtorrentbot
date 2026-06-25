@@ -1,4 +1,6 @@
 settings.json
+.env
+.env.resolved
 /tgtorrentbot
 /tgtorrentbot-webapp
 *.swp
