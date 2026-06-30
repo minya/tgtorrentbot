@@ -78,7 +78,7 @@ Settings file uses 1Password secret references (e.g., `op://Private/...`).
 This repo uses a `cmd/` layout for multiple binaries:
 - `cmd/tgtorrentbot/` — Telegram bot binary (main.go, handler.go, update_check.go, read_settings.go, settings.go)
 - `cmd/tgtorrentbot-webapp/` — Web app binary (main.go, payloads.go, websocket.go, init_data.go, static/index.html embedded via go:embed)
-- `cmd/tgtorrentbot-mcp/` — MCP server binary for Claude Code integration (main.go, config.go, path.go, list_media.go, tags.go, abs.go; OAuth 2.1: jwt.go, oauth_metadata.go, oauth_register.go, oauth_authorize.go, oauth_token.go)
+- `cmd/tgtorrentbot-mcp/` — MCP server binary for Claude Code integration (main.go, config.go, path.go, list_media.go, tags.go, abs.go, move.go, remove_torrent.go, jellyfin.go; OAuth 2.1: jwt.go, oauth_metadata.go, oauth_register.go, oauth_authorize.go, oauth_token.go)
 - `commands/` — Bot command implementations (shared library)
 - `environment/` — Shared Env struct
 - `internal/` — Internal helpers not exported outside this module
@@ -252,8 +252,13 @@ Optional binary (`cmd/tgtorrentbot-mcp/`) that exposes media-library tools to Cl
 - `read_tags(path, recursive?)` — reads ID3v2 tags from `.mp3` files via `github.com/bogem/id3v2/v2`. Returns title/artist/album/album_artist/composer/year/genre/track/disc/comment. Emits an `encoding_hint: "cp1251"` flag when tags look like cp1251 bytes mis-decoded as Latin-1 (common for rutracker cyrillic downloads), telling Claude when to call `write_tags` with `fix_encoding`.
 - `write_tags(path, tags?, fix_encoding?, recursive?)` — two modes (combinable, applied in order fix → explicit): (1) re-decode ALL text frames and comment frames from a codepage (currently only `cp1251`) to UTF-8; (2) explicit overrides via `tags` map (keys: title, artist, album, album_artist, composer, year, genre, track, disc, comment). For multi-CD layouts where track/disc are missing, the model is expected to read the directory via `read_tags` recursive, decide the right TRCK/TPOS per file from filenames and parent folder names, and send explicit overrides — no path-parsing heuristic lives in the tool. Writes are guarded to `TGT_DOWNLOADPATH` via `resolvePath`; only `.mp3` is supported in this version.
 - `abs_rescan` — triggers an Audiobookshelf library scan. No-op when ABS isn't configured.
+- `move_media(source, destination)` — renames/moves a file or directory within `TGT_DOWNLOADPATH`. Source must exist (resolved via `resolvePath`); destination must not (validated via `resolveDestPath`, which allows a not-yet-existing target but still rejects traversal and symlinked-parent escapes); parent dirs are auto-created; existing destinations are never clobbered; cross-device moves are rejected (no copy fallback). Primary use is fixing TV-show folders Jellyfin mis-identifies (it matches shows by folder name) — the model strips release junk and translates transliterated titles to canonical English (`Proslushka.S01.2002…` → `The Wire (2002)`); no naming heuristic lives in the tool.
+- `remove_torrent(torrent_id, delete_data?)` — removes a torrent from Transmission. `delete_data` defaults to **false** (keeps files on disk, only stops tracking) — used before `move_media` to rename a folder still seeding without breaking Transmission. Mirrors `commands/remove_torrent.go`. No-op error when Transmission isn't configured.
+- `jellyfin_rescan` — triggers a Jellyfin library refresh via `JellyfinClient.RefreshLibrary()` so renamed folders are re-identified. No-op when Jellyfin isn't configured.
 
-All tool descriptions are in `main.go:registerTools` — keep them specific enough that Claude can pick the right tool from a natural-language request and knows when to chain calls (e.g., after `write_tags` on audiobooks, always call `abs_rescan`).
+**Fixing a mis-identified TV show:** `list_media(category="shows")` → if the item's sources include `"torrent"`, `remove_torrent(torrent_id)` (keeps data) → `move_media` to a clean `Show Name (Year)` folder → `jellyfin_rescan`. Jellyfin treats the renamed path as a new item and re-matches from the clean name, dropping the stale wrong-id entry on scan.
+
+All tool descriptions are in `main.go:registerTools` — keep them specific enough that Claude can pick the right tool from a natural-language request and knows when to chain calls (e.g., after `write_tags` on audiobooks, always call `abs_rescan`; after `move_media` on shows, call `jellyfin_rescan`).
 
 **Only `TGT_DOWNLOADPATH` is required.** Transmission, Jellyfin, and Audiobookshelf env vars are optional — missing ones just reduce what `list_media` returns and disable `abs_rescan`.
 

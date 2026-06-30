@@ -183,6 +183,42 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"files whose tags were just changed. No-op if Audiobookshelf isn't " +
 			"configured. Call this after write_tags on audiobook files.",
 	}, s.absRescan)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "move_media",
+		Description: "Move or rename a file or directory within the download path. " +
+			"Source must exist; destination must not (parent dirs are created " +
+			"automatically). Use this to fix TV-show folders that Jellyfin " +
+			"mis-identifies: Jellyfin matches shows by folder name, so rename the " +
+			"top-level folder to a clean 'Show Name (Year)', stripping release junk " +
+			"(quality, codec, release group) and translating transliterated or " +
+			"Russian titles to their canonical English name (e.g. " +
+			"'Proslushka.S01.2002...' -> 'The Wire (2002)'). Optionally create " +
+			"'Season NN/' subfolders by moving episode files (Jellyfin also detects " +
+			"SxxExx from filenames in a flat folder, so renaming the top folder is " +
+			"usually enough).\n" +
+			"IMPORTANT: if the item's list_media sources include 'torrent', call " +
+			"remove_torrent on its torrent_id FIRST, otherwise renaming breaks " +
+			"Transmission seeding. After moving, call jellyfin_rescan so Jellyfin " +
+			"re-identifies from the new name.",
+	}, s.moveMedia)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "remove_torrent",
+		Description: "Remove a torrent from Transmission by its id (the torrent_id " +
+			"from list_media). By default (delete_data=false) it only stops " +
+			"Transmission from tracking the torrent and KEEPS the files on disk — " +
+			"call this before move_media to rename a folder that is still seeding. " +
+			"Set delete_data=true ONLY when you intend to erase the downloaded " +
+			"files. Errors if Transmission isn't configured or no torrent matches.",
+	}, s.removeTorrent)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "jellyfin_rescan",
+		Description: "Trigger a Jellyfin library refresh so it re-scans and " +
+			"re-identifies items whose folders were just renamed. No-op if Jellyfin " +
+			"isn't configured. Call this after move_media on shows/movies.",
+	}, s.jellyfinRescan)
 }
 
 // formatError builds an error-bearing CallToolResult so the model sees the message.

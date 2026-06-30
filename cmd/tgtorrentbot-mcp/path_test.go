@@ -55,6 +55,63 @@ func TestResolvePath(t *testing.T) {
 	}
 }
 
+func TestResolveDestPath(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "shows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		in      string
+		wantErr bool
+		wantRel string
+	}{
+		{"non-existent under existing dir", "shows/The Wire (2002)", false, "shows/The Wire (2002)"},
+		{"nested non-existent parents", "shows/The Wire (2002)/Season 01/ep.mkv", false, "shows/The Wire (2002)/Season 01/ep.mkv"},
+		{"empty", "", true, ""},
+		{"traversal", "../escape", true, ""},
+		{"absolute outside root", "/tmp/escape-xyz", true, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveDestPath(root, tt.in)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err=%v wantErr=%v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			rel, _ := filepath.Rel(root, got)
+			if strings.ReplaceAll(rel, "\\", "/") != tt.wantRel {
+				t.Errorf("resolveDestPath(%q) rel = %q; want %q", tt.in, rel, tt.wantRel)
+			}
+		})
+	}
+}
+
+func TestResolveDestPathSymlinkParentEscape(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A symlinked dir inside root pointing outside: a destination beneath it
+	// must be rejected even though the leaf doesn't exist yet.
+	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	if _, err := resolveDestPath(root, "link/new-file"); err == nil {
+		t.Error("expected error for destination under escaping symlink")
+	}
+}
+
 func TestResolvePathSymlinks(t *testing.T) {
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
