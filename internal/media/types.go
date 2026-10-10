@@ -24,6 +24,7 @@ type UnifiedItem struct {
 	PercentDone      *float64 `json:"percentDone,omitempty"`
 	TotalSize        int64    `json:"totalSize"`
 	AddedDate        *int     `json:"addedDate,omitempty"`
+	ModTime          *int64   `json:"mtime,omitempty"` // newest filesystem mtime, unix seconds
 	IsIncomplete     bool     `json:"isIncomplete,omitempty"`
 	RateDownload     *int     `json:"rateDownload,omitempty"`
 	Eta              *int     `json:"eta,omitempty"`

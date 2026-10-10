@@ -3,6 +3,7 @@ package media
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestMergeItems_AllThreeSources(t *testing.T) {
@@ -262,5 +263,30 @@ func TestNormalizedKey(t *testing.T) {
 	k3 := normalizedKey("  My Movie  ", "  movies  ")
 	if k1 != k3 {
 		t.Errorf("expected trimmed key to match: %q vs %q", k1, k3)
+	}
+}
+
+func TestMergeItems_ModTimeKeepsNewest(t *testing.T) {
+	older := time.Unix(1_000, 0)
+	newer := time.Unix(2_000, 0)
+	fsItems := map[string][]FsItem{
+		"shows": {{Name: "Show", ModTime: older}},
+	}
+	incomplete := []FsItem{{Name: "Show", ModTime: newer, IsIncomplete: true}}
+
+	result := MergeItems(nil, fsItems, incomplete, nil, nil)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result))
+	}
+	if result[0].ModTime == nil || *result[0].ModTime != 2_000 {
+		t.Errorf("expected mtime 2000, got %v", result[0].ModTime)
+	}
+}
+
+func TestMergeItems_NoModTimeWithoutFilesystem(t *testing.T) {
+	torrents := []TorrentInfo{{ID: 1, Name: "T", Category: "movies"}}
+	result := MergeItems(torrents, nil, nil, nil, nil)
+	if result[0].ModTime != nil {
+		t.Errorf("expected nil mtime for torrent-only item, got %v", *result[0].ModTime)
 	}
 }

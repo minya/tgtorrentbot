@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // FsItem represents a media item found on the filesystem.
@@ -11,6 +12,7 @@ type FsItem struct {
 	Name         string
 	Size         int64
 	IsIncomplete bool
+	ModTime      time.Time // mtime of the top-level entry
 }
 
 // FilesystemScanner scans download and incomplete directories for media items.
@@ -44,6 +46,10 @@ func scanDir(dir string, incomplete bool) ([]FsItem, error) {
 	var items []FsItem
 	for _, entry := range entries {
 		var size int64
+		var modTime time.Time
+		if info, err := entry.Info(); err == nil {
+			modTime = info.ModTime()
+		}
 		if entry.IsDir() {
 			fullPath := filepath.Join(dir, entry.Name())
 			size, err = dirSize(fullPath)
@@ -62,6 +68,7 @@ func scanDir(dir string, incomplete bool) ([]FsItem, error) {
 			Name:         entry.Name(),
 			Size:         size,
 			IsIncomplete: incomplete,
+			ModTime:      modTime,
 		})
 	}
 	return items, nil

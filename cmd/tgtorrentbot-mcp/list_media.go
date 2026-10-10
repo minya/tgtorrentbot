@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"io/fs"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	mcplib "github.com/minya/tgtorrentbot/internal/media"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -13,9 +15,20 @@ import (
 
 var knownCategories = []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
 
+// maxListedFiles caps the total number of files returned by a recursive
+// list_media call so an unfiltered request can't produce a giant response.
+const maxListedFiles = 5000
+
 type listMediaInput struct {
-	Category string `json:"category,omitempty" jsonschema:"optional category filter: movies, shows, music, musicvideos, audiobooks, or others"`
-	Query    string `json:"query,omitempty" jsonschema:"optional case-insensitive substring to match against item names"`
+	Category  string `json:"category,omitempty" jsonschema:"optional category filter: movies, shows, music, musicvideos, audiobooks, or others"`
+	Query     string `json:"query,omitempty" jsonschema:"optional case-insensitive substring to match against item names"`
+	Recursive bool   `json:"recursive,omitempty" jsonschema:"when true, also list every file inside each item's directory (e.g. individual episodes of a show) under 'files'; combine with category/query to keep the output small"`
+}
+
+type listMediaFile struct {
+	Path    string `json:"path"` // same form as the item's path; usable as-is in move_media/read_tags
+	Size    int64  `json:"size"`
+	ModTime string `json:"mtime"`
 }
 
 type listMediaItem struct {
@@ -27,10 +40,16 @@ type listMediaItem struct {
 	TorrentID    *int     `json:"torrent_id,omitempty"`
 	PercentDone  *float64 `json:"percent_done,omitempty"`
 	IsIncomplete bool     `json:"is_incomplete,omitempty"`
+	// AddedDate is when Transmission added the torrent; ModTime is the newest
+	// filesystem mtime of the item's top-level entry. Both RFC 3339 UTC.
+	AddedDate string          `json:"added_date,omitempty"`
+	ModTime   string          `json:"mtime,omitempty"`
+	Files     []listMediaFile `json:"files,omitempty"`
 }
 
 type listMediaOutput struct {
-	Items []listMediaItem `json:"items"`
+	Items          []listMediaItem `json:"items"`
+	FilesTruncated bool            `json:"files_truncated,omitempty"`
 }
 
 func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listMediaInput) (*mcp.CallToolResult, listMediaOutput, error) {
@@ -52,6 +71,7 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 				PercentDone: t.PercentDone * 100,
 				Category:    category,
 				TotalSize:   t.TotalSize,
+				AddedDate:   t.AddedDate,
 			})
 		}
 	}
@@ -88,7 +108,7 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 		if slices.Contains(item.Sources, "filesystem") {
 			path = filepath.Join(s.config.DownloadPath, item.Category, item.Name)
 		}
-		out.Items = append(out.Items, listMediaItem{
+		li := listMediaItem{
 			Name:         item.Name,
 			Category:     item.Category,
 			Path:         path,
@@ -97,7 +117,14 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 			TorrentID:    item.TorrentID,
 			PercentDone:  item.PercentDone,
 			IsIncomplete: item.IsIncomplete,
-		})
+		}
+		if item.AddedDate != nil && *item.AddedDate > 0 {
+			li.AddedDate = formatUnix(int64(*item.AddedDate))
+		}
+		if item.ModTime != nil {
+			li.ModTime = formatUnix(*item.ModTime)
+		}
+		out.Items = append(out.Items, li)
 	}
 
 	sort.SliceStable(out.Items, func(i, j int) bool {
@@ -107,9 +134,55 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 		return strings.ToLower(out.Items[i].Name) < strings.ToLower(out.Items[j].Name)
 	})
 
+	if in.Recursive {
+		budget := maxListedFiles
+		for i := range out.Items {
+			if out.Items[i].Path == "" {
+				continue
+			}
+			files, truncated := listFiles(out.Items[i].Path, &budget)
+			out.Items[i].Files = files
+			if truncated {
+				out.FilesTruncated = true
+				break
+			}
+		}
+	}
+
 	// Serialize the items into the text content too: MCP clients that ignore
 	// structured_content (e.g. claude.ai mobile) otherwise see only the count.
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: mustJSON(out)}},
 	}, out, nil
+}
+
+// listFiles walks root and returns its regular files (root itself when it is a
+// single file), decrementing *budget per file. It stops and reports
+// truncated=true when the budget runs out.
+func listFiles(root string, budget *int) (files []listMediaFile, truncated bool) {
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !d.Type().IsRegular() {
+			return nil
+		}
+		if *budget <= 0 {
+			truncated = true
+			return filepath.SkipAll
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		files = append(files, listMediaFile{
+			Path:    p,
+			Size:    info.Size(),
+			ModTime: formatUnix(info.ModTime().Unix()),
+		})
+		*budget--
+		return nil
+	})
+	return files, truncated
+}
+
+func formatUnix(sec int64) string {
+	return time.Unix(sec, 0).UTC().Format(time.RFC3339)
 }

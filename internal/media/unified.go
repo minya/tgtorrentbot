@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 )
 
 // IncompleteCategory is a virtual category for files left in the incomplete
@@ -80,6 +81,7 @@ func MergeItems(
 			if fi.Size > e.item.TotalSize {
 				e.item.TotalSize = fi.Size
 			}
+			e.item.noteModTime(fi.ModTime)
 		}
 	}
 
@@ -106,6 +108,7 @@ func MergeItems(
 			if fi.Size > matched.item.TotalSize {
 				matched.item.TotalSize = fi.Size
 			}
+			matched.item.noteModTime(fi.ModTime)
 		} else {
 			// No torrent and no completed directory owns this incomplete
 			// folder — it's orphaned leftover data. Surface it under the
@@ -117,6 +120,7 @@ func MergeItems(
 			if fi.Size > e.item.TotalSize {
 				e.item.TotalSize = fi.Size
 			}
+			e.item.noteModTime(fi.ModTime)
 		}
 	}
 
@@ -159,6 +163,17 @@ func MergeItems(
 		result = append(result, e.item)
 	}
 	return result
+}
+
+// noteModTime records t as the item's mtime if it is newer than what's there.
+func (u *UnifiedItem) noteModTime(t time.Time) {
+	if t.IsZero() {
+		return
+	}
+	sec := t.Unix()
+	if u.ModTime == nil || sec > *u.ModTime {
+		u.ModTime = &sec
+	}
 }
 
 func appendUnique(slice []string, val string) []string {

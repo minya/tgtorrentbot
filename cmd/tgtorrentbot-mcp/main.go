@@ -14,10 +14,17 @@ import (
 	"github.com/odwrtw/transmission"
 )
 
+// torrentClient is the subset of *transmission.Client the tools use; an
+// interface so tests can stub Transmission.
+type torrentClient interface {
+	GetTorrents() ([]*transmission.Torrent, error)
+	RemoveTorrents(torrents []*transmission.Torrent, removeData bool) error
+}
+
 // server holds shared dependencies used by tool handlers and OAuth endpoints.
 type server struct {
 	config       Config
-	trans        *transmission.Client
+	trans        torrentClient
 	jf           *mcplib.JellyfinClient
 	abs          *mcplib.AudiobookshelfClient
 	scan         *mcplib.FilesystemScanner
@@ -146,7 +153,13 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"filesystem, Jellyfin, and Audiobookshelf. Use this to find the path of " +
 			"an item before reading or writing its tags. Supports optional category " +
 			"filter (movies, shows, music, musicvideos, audiobooks, others) and a " +
-			"case-insensitive substring query on the item name.",
+			"case-insensitive substring query on the item name. Each item carries " +
+			"added_date (when Transmission added it; torrents only) and mtime (newest " +
+			"filesystem modification time; on-disk items only), both RFC 3339 UTC — " +
+			"use them to find recently added items; torrent_id is NOT a recency " +
+			"signal. Set recursive=true to also list every file inside each item " +
+			"(e.g. the episodes of a show) with path/size/mtime; narrow with " +
+			"category/query, since output is capped (files_truncated=true when hit).",
 	}, s.listMedia)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
@@ -197,18 +210,21 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"'Season NN/' subfolders by moving episode files (Jellyfin also detects " +
 			"SxxExx from filenames in a flat folder, so renaming the top folder is " +
 			"usually enough).\n" +
-			"IMPORTANT: if the item's list_media sources include 'torrent', call " +
-			"remove_torrent on its torrent_id FIRST, otherwise renaming breaks " +
-			"Transmission seeding. After moving, call jellyfin_rescan so Jellyfin " +
-			"re-identifies from the new name.",
+			"If the item's list_media sources include 'torrent', pass its " +
+			"torrent_id: the torrent is removed from Transmission (files kept) " +
+			"before the move, so Transmission doesn't error on the vanished path. " +
+			"A torrent_id that no longer exists is not an error — the move still " +
+			"happens. Omit torrent_id for filesystem-only items. After moving, " +
+			"call jellyfin_rescan so Jellyfin re-identifies from the new name.",
 	}, s.moveMedia)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "remove_torrent",
 		Description: "Remove a torrent from Transmission by its id (the torrent_id " +
 			"from list_media). By default (delete_data=false) it only stops " +
-			"Transmission from tracking the torrent and KEEPS the files on disk — " +
-			"call this before move_media to rename a folder that is still seeding. " +
+			"Transmission from tracking the torrent and KEEPS the files on disk " +
+			"(no need to call this before move_media — pass torrent_id to " +
+			"move_media instead). " +
 			"Set delete_data=true ONLY when you intend to erase the downloaded " +
 			"files. Errors if Transmission isn't configured or no torrent matches.",
 	}, s.removeTorrent)
