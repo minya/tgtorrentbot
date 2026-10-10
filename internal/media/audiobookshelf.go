@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minya/logger"
@@ -20,6 +22,9 @@ type AudiobookshelfClient struct {
 	url    string
 	apiKey string
 	client *http.Client
+
+	mu            sync.Mutex
+	bookLibraryID string // cached by BookLibraryID
 }
 
 func NewAudiobookshelfClient(url, apiKey string) *AudiobookshelfClient {
@@ -35,8 +40,9 @@ type absLibrariesResponse struct {
 }
 
 type absLibrary struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	MediaType string `json:"mediaType"` // "book" or "podcast"
 }
 
 type absLibraryItemsResponse struct {
@@ -170,4 +176,78 @@ func (c *AudiobookshelfClient) RefreshLibrary() {
 		}
 		logger.Info("Triggered Audiobookshelf library scan for %s", lib.Name)
 	}
+}
+
+// Configured reports whether both the URL and API key are set.
+func (c *AudiobookshelfClient) Configured() bool {
+	return c.url != "" && c.apiKey != ""
+}
+
+// BookLibraryID returns the id of the single library whose mediaType is
+// "book", looking it up via GET /api/libraries on first use and caching it.
+// It errors when there is no book library or more than one.
+func (c *AudiobookshelfClient) BookLibraryID() (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.bookLibraryID != "" {
+		return c.bookLibraryID, nil
+	}
+
+	resp, err := c.doRequest(http.MethodGet, "/api/libraries")
+	if err != nil {
+		return "", fmt.Errorf("requesting libraries: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("audiobookshelf libraries returned status %d", resp.StatusCode)
+	}
+	var libResp absLibrariesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&libResp); err != nil {
+		return "", fmt.Errorf("decoding libraries response: %w", err)
+	}
+
+	var books []absLibrary
+	for _, lib := range libResp.Libraries {
+		if lib.MediaType == "book" {
+			books = append(books, lib)
+		}
+	}
+	switch len(books) {
+	case 0:
+		return "", fmt.Errorf("no audiobook (mediaType=book) library found")
+	case 1:
+		c.bookLibraryID = books[0].ID
+		return c.bookLibraryID, nil
+	default:
+		names := make([]string, len(books))
+		for i, b := range books {
+			names[i] = fmt.Sprintf("%s (%s)", b.Name, b.ID)
+		}
+		return "", fmt.Errorf("multiple audiobook libraries found, pick one explicitly: %s", strings.Join(names, ", "))
+	}
+}
+
+// RemoveLibraryIssues deletes every item in the library that Audiobookshelf
+// flags as missing or invalid. Files on disk are not touched. It returns the
+// HTTP status; non-2xx statuses are also reported as an error.
+func (c *AudiobookshelfClient) RemoveLibraryIssues(libraryID string) (int, error) {
+	return c.doDelete(fmt.Sprintf("/api/libraries/%s/issues", url.PathEscape(libraryID)))
+}
+
+// RemoveItem deletes a single library item by id. Without ?hard=1 ABS only
+// drops the database entry; files on disk are not touched.
+func (c *AudiobookshelfClient) RemoveItem(itemID string) (int, error) {
+	return c.doDelete(fmt.Sprintf("/api/items/%s", url.PathEscape(itemID)))
+}
+
+func (c *AudiobookshelfClient) doDelete(path string) (int, error) {
+	resp, err := c.doRequest(http.MethodDelete, path)
+	if err != nil {
+		return 0, fmt.Errorf("DELETE %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return resp.StatusCode, fmt.Errorf("DELETE %s returned status %d", path, resp.StatusCode)
+	}
+	return resp.StatusCode, nil
 }

@@ -20,6 +20,9 @@ type Config struct {
 	JellyfinAPIKey       string
 	AudiobookshelfURL    string
 	AudiobookshelfAPIKey string
+	// AudiobookshelfLibraryID, when set, is the default library for
+	// abs_remove_issues; otherwise the single book-type library is looked up.
+	AudiobookshelfLibraryID string
 	// AuthToken, when non-empty, switches the server to HTTP transport on :8080
 	// and requires OAuth 2.1. The token doubles as the shared secret the user
 	// types into the /authorize login form. Empty means stdio.
@@ -67,17 +70,18 @@ func loadConfig() (Config, error) {
 	}
 
 	return Config{
-		DownloadPath:         dl,
-		IncompletePath:       inc,
-		TransmissionAddr:     os.Getenv("TGT_RPC_ADDR"),
-		TransmissionUser:     os.Getenv("TGT_RPC_USER"),
-		TransmissionPassword: os.Getenv("TGT_RPC_PASSWORD"),
-		JellyfinURL:          os.Getenv("TGT_JELLYFIN_URL"),
-		JellyfinAPIKey:       os.Getenv("TGT_JELLYFIN_API_KEY"),
-		AudiobookshelfURL:    os.Getenv("TGT_AUDIOBOOKSHELF_URL"),
-		AudiobookshelfAPIKey: os.Getenv("TGT_AUDIOBOOKSHELF_API_KEY"),
-		AuthToken:            authToken,
-		PublicBaseURL:        publicURL,
-		JWTSecret:            jwtSecret,
+		DownloadPath:            dl,
+		IncompletePath:          inc,
+		TransmissionAddr:        os.Getenv("TGT_RPC_ADDR"),
+		TransmissionUser:        os.Getenv("TGT_RPC_USER"),
+		TransmissionPassword:    os.Getenv("TGT_RPC_PASSWORD"),
+		JellyfinURL:             os.Getenv("TGT_JELLYFIN_URL"),
+		JellyfinAPIKey:          os.Getenv("TGT_JELLYFIN_API_KEY"),
+		AudiobookshelfURL:       os.Getenv("TGT_AUDIOBOOKSHELF_URL"),
+		AudiobookshelfAPIKey:    os.Getenv("TGT_AUDIOBOOKSHELF_API_KEY"),
+		AudiobookshelfLibraryID: os.Getenv("TGT_AUDIOBOOKSHELF_LIBRARY_ID"),
+		AuthToken:               authToken,
+		PublicBaseURL:           publicURL,
+		JWTSecret:               jwtSecret,
 	}, nil
 }

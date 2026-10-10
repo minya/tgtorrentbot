@@ -198,6 +198,26 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 	}, s.absRescan)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "abs_remove_issues",
+		Description: "Remove every Audiobookshelf library item flagged with issues " +
+			"(isMissing/isInvalid — shown as 'items with issues' in ABS). ABS does " +
+			"not drop items whose files were moved or deleted on disk; it only flags " +
+			"them on rescan, so call this after move_media on audiobooks followed by " +
+			"abs_rescan (and once the rescan has finished) to clear the stale " +
+			"entries. Only database entries are removed; files on disk are never " +
+			"touched. library_id is optional (defaults to the configured or the " +
+			"single audiobook library).",
+	}, s.absRemoveIssues)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "abs_remove_item",
+		Description: "Remove a single Audiobookshelf library item by its id (e.g. " +
+			"'li_...'). Only the ABS database entry is removed; files on disk are " +
+			"never touched. Prefer abs_remove_issues for clearing items whose files " +
+			"went missing.",
+	}, s.absRemoveItem)
+
+	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "move_media",
 		Description: "Move or rename a file or directory within the download path. " +
 			"Source must exist; destination must not (parent dirs are created " +
