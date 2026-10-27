@@ -64,6 +64,12 @@
             gap: 12px;
         }
         .category-card {
+            display: block;
+            width: 100%;
+            border: none;
+            font: inherit;
+            color: inherit;
+            text-align: left;
             background: var(--tg-theme-secondary-bg-color, #f5f5f5);
             border-radius: 12px;
             padding: 16px;
@@ -75,11 +81,13 @@
             transform: scale(0.97);
         }
         .category-card-name {
+            display: block;
             font-weight: 500;
             font-size: 16px;
             margin-bottom: 4px;
         }
         .category-card-count {
+            display: block;
             font-size: 14px;
             color: var(--tg-theme-hint-color, #999);
         }
@@ -205,6 +213,10 @@
             align-items: flex-start;
             gap: 8px;
         }
+        .more-wrap {
+            position: relative;
+            flex-shrink: 0;
+        }
         .more-btn {
             background: none;
             border: none;
@@ -215,7 +227,6 @@
             border-radius: 4px;
             flex-shrink: 0;
             line-height: 1;
-            position: relative;
         }
         .more-btn:hover {
             background: var(--tg-theme-secondary-bg-color, #f5f5f5);
@@ -570,6 +581,16 @@
             animation-duration: 0.01ms !important;
             transition-duration: 0.01ms !important;
         }
+
+        /* --- Keyboard focus ---
+           Last in the sheet so it wins over the `outline: none` on inputs. */
+        :focus-visible {
+            outline: 2px solid var(--tg-theme-button-color, #3390ec);
+            outline-offset: 2px;
+        }
+        .popup-menu-item:focus-visible {
+            outline-offset: -2px;
+        }
     </style>
 </head>
 <body>
@@ -592,34 +613,34 @@
         <div>
             <div class="section-header">Categories</div>
             <div class="category-grid">
-                <div class="category-card" onclick="showCategory('movies')">
-                    <div class="category-card-name">Movies</div>
-                    <div class="category-card-count skeleton" id="count-movies">—</div>
-                </div>
-                <div class="category-card" onclick="showCategory('shows')">
-                    <div class="category-card-name">TV Shows</div>
-                    <div class="category-card-count skeleton" id="count-shows">—</div>
-                </div>
-                <div class="category-card" onclick="showCategory('music')">
-                    <div class="category-card-name">Music</div>
-                    <div class="category-card-count skeleton" id="count-music">—</div>
-                </div>
-                <div class="category-card" onclick="showCategory('musicvideos')">
-                    <div class="category-card-name">Music Videos</div>
-                    <div class="category-card-count skeleton" id="count-musicvideos">—</div>
-                </div>
-                <div class="category-card" onclick="showCategory('audiobooks')">
-                    <div class="category-card-name">Audiobooks</div>
-                    <div class="category-card-count skeleton" id="count-audiobooks">—</div>
-                </div>
-                <div class="category-card" onclick="showCategory('others')">
-                    <div class="category-card-name">Other</div>
-                    <div class="category-card-count skeleton" id="count-others">—</div>
-                </div>
-                <div class="category-card" id="card-incomplete" style="display: none;" onclick="showCategory('incomplete')">
-                    <div class="category-card-name">Incomplete</div>
-                    <div class="category-card-count skeleton" id="count-incomplete">—</div>
-                </div>
+                <button type="button" class="category-card" data-category="movies" onclick="showCategory('movies')">
+                    <span class="category-card-name">Movies</span>
+                    <span class="category-card-count skeleton" id="count-movies">—</span>
+                </button>
+                <button type="button" class="category-card" data-category="shows" onclick="showCategory('shows')">
+                    <span class="category-card-name">TV Shows</span>
+                    <span class="category-card-count skeleton" id="count-shows">—</span>
+                </button>
+                <button type="button" class="category-card" data-category="music" onclick="showCategory('music')">
+                    <span class="category-card-name">Music</span>
+                    <span class="category-card-count skeleton" id="count-music">—</span>
+                </button>
+                <button type="button" class="category-card" data-category="musicvideos" onclick="showCategory('musicvideos')">
+                    <span class="category-card-name">Music Videos</span>
+                    <span class="category-card-count skeleton" id="count-musicvideos">—</span>
+                </button>
+                <button type="button" class="category-card" data-category="audiobooks" onclick="showCategory('audiobooks')">
+                    <span class="category-card-name">Audiobooks</span>
+                    <span class="category-card-count skeleton" id="count-audiobooks">—</span>
+                </button>
+                <button type="button" class="category-card" data-category="others" onclick="showCategory('others')">
+                    <span class="category-card-name">Other</span>
+                    <span class="category-card-count skeleton" id="count-others">—</span>
+                </button>
+                <button type="button" class="category-card" data-category="incomplete" id="card-incomplete" style="display: none;" onclick="showCategory('incomplete')">
+                    <span class="category-card-name">Incomplete</span>
+                    <span class="category-card-count skeleton" id="count-incomplete">—</span>
+                </button>
             </div>
         </div>
     </div>
@@ -835,7 +856,7 @@
             if (activeItems.length > 0) {
                 activeSection.style.display = 'block';
                 activeBadge.textContent = activeItems.length;
-                activeList.innerHTML = activeItems.map(item => renderItem(item, true)).join('');
+                renderItemList(activeList, activeItems.map(item => renderItem(item, true)).join(''));
             } else {
                 activeSection.style.display = 'none';
             }
@@ -915,14 +936,14 @@
             if (hasTorrent || hasFs) {
                 let menuItems = '';
                 if (hasTorrent) {
-                    menuItems += `<button class="popup-menu-item" onclick="event.stopPropagation(); removeItemTorrent('${escapeAttr(itemId)}', this)">Remove torrent</button>`;
+                    menuItems += `<button type="button" role="menuitem" class="popup-menu-item" onclick="event.stopPropagation(); removeItemTorrent('${escapeAttr(itemId)}', this)">Remove torrent</button>`;
                 }
-                menuItems += `<button class="popup-menu-item popup-menu-item--danger" onclick="event.stopPropagation(); removeItemData('${escapeAttr(itemId)}', this)">Remove data</button>`;
-                menuHtml = `<div class="more-btn" onclick="togglePopupMenu(event, this)" role="button" tabindex="0" aria-label="More actions">&#8942;<div class="popup-menu">${menuItems}</div></div>`;
+                menuItems += `<button type="button" role="menuitem" class="popup-menu-item popup-menu-item--danger" onclick="event.stopPropagation(); removeItemData('${escapeAttr(itemId)}', this)">Remove data</button>`;
+                menuHtml = `<div class="more-wrap"><button type="button" class="more-btn" onclick="togglePopupMenu(event, this)" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">&#8942;</button><div class="popup-menu" role="menu">${menuItems}</div></div>`;
             }
 
             return `
-                <div class="torrent-item${busyItemIds.has(itemId) ? ' is-busy' : ''}" data-id="${item.torrentId || ''}">
+                <div class="torrent-item${busyItemIds.has(itemId) ? ' is-busy' : ''}" data-id="${item.torrentId || ''}" data-item-id="${escapeAttr(itemId)}">
                     <div class="torrent-header">
                         <div class="torrent-name">${escapeHtml(item.name)}</div>
                         ${menuHtml}
@@ -953,6 +974,7 @@
 
             renderCategoryItems(cat);
             startRefresh();
+            view.querySelector('.back-btn').focus();
         }
 
         function resetSortChipsDOM() {
@@ -997,7 +1019,30 @@
                 return;
             }
 
-            container.innerHTML = items.map(item => renderItem(item, false)).join('');
+            renderItemList(container, items.map(item => renderItem(item, false)).join(''));
+        }
+
+        // Item lists are re-rendered via innerHTML on every WebSocket update.
+        // Carry an open ⋮ menu and keyboard focus over to the new DOM so they
+        // aren't silently dropped mid-interaction.
+        function renderItemList(container, html) {
+            const focused = container.contains(document.activeElement) ? document.activeElement : null;
+            const openMenu = container.querySelector('.popup-menu.open');
+            const focusedItemId = focused?.closest('.torrent-item')?.dataset.itemId;
+            const openItemId = openMenu?.closest('.torrent-item')?.dataset.itemId;
+            const focusedMenuIndex = focused?.classList.contains('popup-menu-item')
+                ? [...focused.parentElement.children].indexOf(focused) : -1;
+
+            container.innerHTML = html;
+
+            const findItem = id => [...container.querySelectorAll('.torrent-item')].find(el => el.dataset.itemId === id);
+            const reopened = openItemId && findItem(openItemId)?.querySelector('.more-btn');
+            if (reopened) openPopupMenu(reopened);
+            const item = focusedItemId && findItem(focusedItemId);
+            if (item) {
+                const menuItems = item.querySelectorAll('.popup-menu.open .popup-menu-item');
+                (menuItems[focusedMenuIndex] || item.querySelector('.more-btn'))?.focus();
+            }
         }
 
         async function refreshCategoryView(cat) {
@@ -1019,6 +1064,7 @@
 
         function goBack() {
             if (currentView === 'category') {
+                const cat = currentCategory;
                 currentView = 'main';
                 currentCategory = null;
 
@@ -1029,6 +1075,8 @@
 
                 loadMainScreen();
                 startRefresh();
+                // Return focus to the card the user came from.
+                document.querySelector(`.category-card[data-category="${cat}"]`)?.focus();
             }
         }
 
@@ -1160,9 +1208,21 @@
             }
         }
 
+        // --- Overlay focus handling ---
+        // While an overlay is open, the content behind it is made inert so Tab
+        // can't wander there; on close, focus goes back to whatever opened it.
+        let searchOpener = null;
+        let modalOpener = null;
+
+        function setInert(ids, inert) {
+            ids.forEach(id => { document.getElementById(id).inert = inert; });
+        }
+
         // --- Search ---
         function showSearchOverlay() {
             const overlay = document.getElementById('search-overlay');
+            searchOpener = document.activeElement;
+            setInert(['main-screen', 'category-view', 'add-btn'], true);
             overlay.style.display = 'flex';
             overlay.offsetHeight;
             overlay.classList.add('search-overlay--visible');
@@ -1174,6 +1234,9 @@
         function hideSearchOverlay() {
             const overlay = document.getElementById('search-overlay');
             overlay.classList.remove('search-overlay--visible');
+            setInert(['main-screen', 'category-view', 'add-btn'], false);
+            if (searchOpener?.isConnected) searchOpener.focus();
+            searchOpener = null;
             setTimeout(() => {
                 overlay.style.display = 'none';
                 document.getElementById('search-results').innerHTML = '';
@@ -1231,12 +1294,24 @@
                 return;
             }
             pendingDownloadUrl = downloadUrl;
-            document.getElementById('category-modal').classList.add('show');
+            modalOpener = document.activeElement;
+            setInert(['search-overlay'], true);
+            const modal = document.getElementById('category-modal');
+            modal.classList.add('show');
+            modal.querySelector('.category-btn').focus();
         }
 
         function hideCategoryModal() {
-            document.getElementById('category-modal').classList.remove('show');
+            const modal = document.getElementById('category-modal');
+            if (!modal.classList.contains('show')) return;
+            modal.classList.remove('show');
             pendingDownloadUrl = null;
+            setInert(['search-overlay'], false);
+            // After a successful add the search overlay is already closing;
+            // don't pull focus back into it.
+            const searchVisible = document.getElementById('search-overlay').classList.contains('search-overlay--visible');
+            if (searchVisible && modalOpener?.isConnected) modalOpener.focus();
+            modalOpener = null;
         }
 
         async function downloadWithCategory(category, btn) {
@@ -1302,20 +1377,68 @@
 
         function togglePopupMenu(event, btn) {
             event.stopPropagation();
-            const menu = btn.querySelector('.popup-menu');
+            const menu = btn.nextElementSibling;
             const wasOpen = menu.classList.contains('open');
             closeAllPopupMenus();
             if (!wasOpen) {
-                menu.classList.add('open');
+                openPopupMenu(btn);
+                // detail === 0 means the click came from Enter/Space, not a pointer.
+                if (event.detail === 0) menu.querySelector('.popup-menu-item').focus();
             }
         }
 
+        function openPopupMenu(btn) {
+            btn.nextElementSibling.classList.add('open');
+            btn.setAttribute('aria-expanded', 'true');
+        }
+
         function closeAllPopupMenus() {
-            document.querySelectorAll('.popup-menu.open').forEach(m => m.classList.remove('open'));
+            document.querySelectorAll('.popup-menu.open').forEach(m => {
+                const focusInside = m.contains(document.activeElement);
+                m.classList.remove('open');
+                m.previousElementSibling.setAttribute('aria-expanded', 'false');
+                // A hidden menu item can't hold focus; hand it back to the ⋮ button.
+                if (focusInside) m.previousElementSibling.focus();
+            });
         }
 
         document.addEventListener('click', function() {
             closeAllPopupMenus();
+        });
+
+        // Close the ⋮ menu when keyboard focus moves out of it.
+        document.addEventListener('focusin', (e) => {
+            const openMenu = document.querySelector('.popup-menu.open');
+            if (openMenu && !openMenu.parentElement.contains(e.target)) closeAllPopupMenus();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            // Arrow keys move between ⋮ menu items.
+            if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && document.activeElement?.classList.contains('popup-menu-item')) {
+                const items = [...document.activeElement.parentElement.children];
+                const step = e.key === 'ArrowDown' ? 1 : -1;
+                const next = (items.indexOf(document.activeElement) + step + items.length) % items.length;
+                items[next].focus();
+                e.preventDefault();
+                return;
+            }
+
+            if (e.key !== 'Escape') return;
+            // Escape closes the innermost open layer.
+            const openMenu = document.querySelector('.popup-menu.open');
+            if (openMenu) {
+                closeAllPopupMenus();
+                openMenu.previousElementSibling.focus();
+            } else if (document.getElementById('category-modal').classList.contains('show')) {
+                hideCategoryModal();
+            } else if (document.getElementById('search-overlay').classList.contains('search-overlay--visible')) {
+                hideSearchOverlay();
+            } else if (currentView === 'category') {
+                goBack();
+            } else {
+                return;
+            }
+            e.preventDefault();
         });
 
         // Items with a remove request in flight. Kept outside the DOM because
