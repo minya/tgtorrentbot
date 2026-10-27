@@ -303,6 +303,83 @@
         .loading {
             text-align: center;
             padding: 40px 20px;
+            color: var(--tg-theme-hint-color, #999);
+        }
+        .loading::before {
+            content: '';
+            display: block;
+            width: 28px;
+            height: 28px;
+            margin: 0 auto 12px;
+            border: 3px solid var(--tg-theme-hint-color, #999);
+            border-top-color: var(--tg-theme-button-color, #3390ec);
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: spin 0.8s linear infinite;
+        }
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            vertical-align: -2px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .skeleton {
+            display: inline-block;
+            width: 56px;
+            height: 1em;
+            border-radius: 4px;
+            background: var(--tg-theme-hint-color, #999);
+            color: transparent;
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.15; }
+            50% { opacity: 0.35; }
+        }
+        .is-busy {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .is-busy .torrent-name::after {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-left: 8px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            vertical-align: -1px;
+            animation: spin 0.8s linear infinite;
+        }
+        .load-error {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 12px;
+            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+            color: #e53935;
+        }
+        .load-error.visible {
+            display: flex;
+        }
+        .load-error button {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 8px;
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #fff);
+            font-size: 14px;
+            cursor: pointer;
         }
         .error {
             text-align: center;
@@ -473,7 +550,11 @@
             font-size: 14px;
             cursor: pointer;
         }
-        .category-btn:hover {
+        .category-btn:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+        .category-btn:hover:not(:disabled) {
             background: var(--tg-theme-button-color, #3390ec);
             color: var(--tg-theme-button-text-color, #fff);
         }
@@ -494,6 +575,11 @@
 <body>
     <!-- Main screen -->
     <div id="main-screen" class="main-screen">
+        <div id="load-error" class="load-error" role="alert">
+            <span>Failed to load items</span>
+            <button onclick="loadMainScreen()">Retry</button>
+        </div>
+
         <!-- Active downloads section -->
         <div id="active-section" class="active-downloads-section">
             <div class="section-header">
@@ -508,31 +594,31 @@
             <div class="category-grid">
                 <div class="category-card" onclick="showCategory('movies')">
                     <div class="category-card-name">Movies</div>
-                    <div class="category-card-count" id="count-movies">—</div>
+                    <div class="category-card-count skeleton" id="count-movies">—</div>
                 </div>
                 <div class="category-card" onclick="showCategory('shows')">
                     <div class="category-card-name">TV Shows</div>
-                    <div class="category-card-count" id="count-shows">—</div>
+                    <div class="category-card-count skeleton" id="count-shows">—</div>
                 </div>
                 <div class="category-card" onclick="showCategory('music')">
                     <div class="category-card-name">Music</div>
-                    <div class="category-card-count" id="count-music">—</div>
+                    <div class="category-card-count skeleton" id="count-music">—</div>
                 </div>
                 <div class="category-card" onclick="showCategory('musicvideos')">
                     <div class="category-card-name">Music Videos</div>
-                    <div class="category-card-count" id="count-musicvideos">—</div>
+                    <div class="category-card-count skeleton" id="count-musicvideos">—</div>
                 </div>
                 <div class="category-card" onclick="showCategory('audiobooks')">
                     <div class="category-card-name">Audiobooks</div>
-                    <div class="category-card-count" id="count-audiobooks">—</div>
+                    <div class="category-card-count skeleton" id="count-audiobooks">—</div>
                 </div>
                 <div class="category-card" onclick="showCategory('others')">
                     <div class="category-card-name">Other</div>
-                    <div class="category-card-count" id="count-others">—</div>
+                    <div class="category-card-count skeleton" id="count-others">—</div>
                 </div>
                 <div class="category-card" id="card-incomplete" style="display: none;" onclick="showCategory('incomplete')">
                     <div class="category-card-name">Incomplete</div>
-                    <div class="category-card-count" id="count-incomplete">—</div>
+                    <div class="category-card-count skeleton" id="count-incomplete">—</div>
                 </div>
             </div>
         </div>
@@ -571,12 +657,12 @@
     <div id="category-modal" class="modal">
         <div class="modal-content">
             <div class="modal-title">Select Category</div>
-            <button class="category-btn" onclick="downloadWithCategory('movies')">Movies</button>
-            <button class="category-btn" onclick="downloadWithCategory('shows')">TV Shows</button>
-            <button class="category-btn" onclick="downloadWithCategory('music')">Music</button>
-            <button class="category-btn" onclick="downloadWithCategory('musicvideos')">Music Videos</button>
-            <button class="category-btn" onclick="downloadWithCategory('audiobooks')">Audiobooks</button>
-            <button class="category-btn" onclick="downloadWithCategory('others')">Other</button>
+            <button class="category-btn" onclick="downloadWithCategory('movies', this)">Movies</button>
+            <button class="category-btn" onclick="downloadWithCategory('shows', this)">TV Shows</button>
+            <button class="category-btn" onclick="downloadWithCategory('music', this)">Music</button>
+            <button class="category-btn" onclick="downloadWithCategory('musicvideos', this)">Music Videos</button>
+            <button class="category-btn" onclick="downloadWithCategory('audiobooks', this)">Audiobooks</button>
+            <button class="category-btn" onclick="downloadWithCategory('others', this)">Other</button>
         </div>
     </div>
 
@@ -677,23 +763,52 @@
         }
 
         let allItems = [];
+        // False until the first /api/items response arrives, so views can
+        // show a loading state instead of an empty one.
+        let itemsLoaded = false;
 
         // --- Main screen ---
         async function loadMainScreen() {
+            const loadError = document.getElementById('load-error');
+            if (!itemsLoaded) {
+                loadError.classList.remove('visible');
+                setCountsLoading(true);
+            }
             try {
                 const response = await doFetch('/api/items');
                 if (!response.ok) {
-                    console.error('Failed to load items:', response.status);
-                    return;
+                    throw new Error('HTTP ' + response.status);
                 }
                 allItems = await response.json();
+                itemsLoaded = true;
                 renderMainScreen();
+                if (currentView === 'category' && currentCategory) {
+                    renderCategoryItems(currentCategory);
+                }
             } catch (err) {
                 console.error('Failed to load main screen:', err);
+                // Background refreshes keep showing the last good data; only
+                // surface the error when there is nothing to show yet.
+                if (!itemsLoaded) {
+                    setCountsLoading(false);
+                    loadError.classList.add('visible');
+                    if (currentView === 'category' && currentCategory) {
+                        document.getElementById('category-torrent-list').innerHTML =
+                            '<div class="error">Failed to load items</div>';
+                    }
+                }
             }
         }
 
+        function setCountsLoading(loading) {
+            document.querySelectorAll('.category-card-count').forEach(el => {
+                el.classList.toggle('skeleton', loading);
+            });
+        }
+
         function renderMainScreen() {
+            document.getElementById('load-error').classList.remove('visible');
+            setCountsLoading(false);
             // Compute category counts
             const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0, incomplete: 0 };
             for (const item of allItems) {
@@ -807,7 +922,7 @@
             }
 
             return `
-                <div class="torrent-item" data-id="${item.torrentId || ''}">
+                <div class="torrent-item${busyItemIds.has(itemId) ? ' is-busy' : ''}" data-id="${item.torrentId || ''}">
                     <div class="torrent-header">
                         <div class="torrent-name">${escapeHtml(item.name)}</div>
                         ${menuHtml}
@@ -855,6 +970,10 @@
 
         function renderCategoryItems(cat) {
             const container = document.getElementById('category-torrent-list');
+            if (!itemsLoaded) {
+                container.innerHTML = '<div class="loading">Loading…</div>';
+                return;
+            }
             let items = allItems.filter(item => item.category === cat);
 
             // Apply filter
@@ -890,6 +1009,7 @@
                     return;
                 }
                 allItems = await response.json();
+                itemsLoaded = true;
                 renderCategoryItems(cat);
             } catch (err) {
                 document.getElementById('category-torrent-list').innerHTML =
@@ -1119,14 +1239,23 @@
             pendingDownloadUrl = null;
         }
 
-        async function downloadWithCategory(category) {
+        async function downloadWithCategory(category, btn) {
             if (!pendingDownloadUrl) {
                 tg.showAlert('No download URL selected');
                 return;
             }
 
             const downloadUrl = pendingDownloadUrl;
-            hideCategoryModal();
+            // Keep the modal open with the tapped button spinning until the
+            // server answers — fetching the .torrent can take a few seconds.
+            const buttons = document.querySelectorAll('#category-modal .category-btn');
+            buttons.forEach(b => b.disabled = true);
+            const originalLabel = btn ? btn.innerHTML : '';
+            if (btn) btn.innerHTML = `<span class="spinner"></span> ${originalLabel}`;
+            const restoreButtons = () => {
+                buttons.forEach(b => b.disabled = false);
+                if (btn) btn.innerHTML = originalLabel;
+            };
 
             try {
                 const response = await doFetch('/api/torrents/download', {
@@ -1151,6 +1280,9 @@
                 }
             } catch (err) {
                 tg.showAlert('Failed to add torrent: ' + err.message);
+            } finally {
+                restoreButtons();
+                hideCategoryModal();
             }
         }
 
@@ -1186,15 +1318,24 @@
             closeAllPopupMenus();
         });
 
-        function refreshAfterRemove(btn) {
+        // Items with a remove request in flight. Kept outside the DOM because
+        // WebSocket updates re-render lists and would drop a plain class.
+        const busyItemIds = new Set();
+
+        function setItemBusy(itemId, btn, busy) {
+            if (busy) busyItemIds.add(itemId); else busyItemIds.delete(itemId);
             const item = btn.closest('.torrent-item');
-            if (item) item.style.opacity = '0.5';
-            setTimeout(() => {
+            if (item) item.classList.toggle('is-busy', busy);
+        }
+
+        function refreshAfterRemove(itemId) {
+            setTimeout(async () => {
                 if (currentView === 'main') {
-                    loadMainScreen();
+                    await loadMainScreen();
                 } else if (currentView === 'category' && currentCategory) {
-                    refreshCategoryView(currentCategory);
+                    await refreshCategoryView(currentCategory);
                 }
+                busyItemIds.delete(itemId);
             }, 300);
         }
 
@@ -1202,15 +1343,18 @@
             closeAllPopupMenus();
             tg.showConfirm('Remove torrent? Files will be kept.', async function(confirmed) {
                 if (!confirmed) return;
+                setItemBusy(itemId, btn, true);
                 try {
                     const response = await doFetch('/api/items/' + encodeURIComponent(itemId) + '/torrent', { method: 'DELETE' });
                     if (response.ok) {
-                        refreshAfterRemove(btn);
+                        refreshAfterRemove(itemId);
                     } else {
                         const data = await response.json().catch(() => ({}));
+                        setItemBusy(itemId, btn, false);
                         tg.showAlert(data.error || 'Failed to remove torrent');
                     }
                 } catch (err) {
+                    setItemBusy(itemId, btn, false);
                     tg.showAlert('Failed to remove torrent');
                 }
             });
@@ -1220,15 +1364,18 @@
             closeAllPopupMenus();
             tg.showConfirm('Delete all files? This cannot be undone.', async function(confirmed) {
                 if (!confirmed) return;
+                setItemBusy(itemId, btn, true);
                 try {
                     const response = await doFetch('/api/items/' + encodeURIComponent(itemId), { method: 'DELETE' });
                     if (response.ok) {
-                        refreshAfterRemove(btn);
+                        refreshAfterRemove(itemId);
                     } else {
                         const data = await response.json().catch(() => ({}));
+                        setItemBusy(itemId, btn, false);
                         tg.showAlert(data.error || 'Failed to remove data');
                     }
                 } catch (err) {
+                    setItemBusy(itemId, btn, false);
                     tg.showAlert('Failed to remove data');
                 }
             });
