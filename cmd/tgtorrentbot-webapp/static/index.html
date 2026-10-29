@@ -1412,6 +1412,62 @@
             if (openMenu && !openMenu.parentElement.contains(e.target)) closeAllPopupMenus();
         });
 
+        // --- Arrow-key navigation ---
+        // Arrows move focus within a group of related controls; Tab still
+        // steps through every control. `entry` is a text input just above a
+        // list: ArrowDown from it enters the list, ArrowUp from the first
+        // item returns to it.
+        const arrowGroups = [
+            { items: '.category-grid .category-card', grid: '.category-grid' },
+            { items: '.sort-chips .sort-chip', horizontal: true },
+            { items: '#category-modal .category-btn' },
+            { items: '#active-list .more-btn' },
+            { items: '#category-torrent-list .more-btn', entry: '#category-filter' },
+            { items: '#search-results .download-btn', entry: '#search-input' },
+        ];
+
+        function handleArrowNav(e) {
+            if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return false;
+            const active = document.activeElement;
+            if (!active) return false;
+
+            for (const group of arrowGroups) {
+                const items = [...document.querySelectorAll(group.items)].filter(el => el.getClientRects().length > 0);
+                if (items.length === 0) continue;
+
+                if (group.entry && active.matches(group.entry)) {
+                    if (e.key !== 'ArrowDown') return false;
+                    items[0].focus();
+                    return true;
+                }
+
+                const idx = items.indexOf(active);
+                if (idx === -1) continue;
+
+                let step = 0;
+                if (group.grid) {
+                    const cols = getComputedStyle(document.querySelector(group.grid)).gridTemplateColumns.split(' ').length;
+                    step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key] || 0;
+                } else if (group.horizontal) {
+                    step = { ArrowLeft: -1, ArrowRight: 1 }[e.key] || 0;
+                } else {
+                    step = { ArrowUp: -1, ArrowDown: 1 }[e.key] || 0;
+                }
+
+                let next;
+                if (e.key === 'Home') next = items[0];
+                else if (e.key === 'End') next = items[items.length - 1];
+                else if (step) next = items[idx + step];
+                else return false;
+
+                if (!next && step < 0 && idx === 0 && group.entry) next = document.querySelector(group.entry);
+                // At an edge: swallow the key so the page doesn't scroll instead.
+                next?.focus();
+                return true;
+            }
+            return false;
+        }
+
         document.addEventListener('keydown', (e) => {
             // Arrow keys move between ⋮ menu items.
             if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && document.activeElement?.classList.contains('popup-menu-item')) {
@@ -1419,6 +1475,11 @@
                 const step = e.key === 'ArrowDown' ? 1 : -1;
                 const next = (items.indexOf(document.activeElement) + step + items.length) % items.length;
                 items[next].focus();
+                e.preventDefault();
+                return;
+            }
+
+            if (handleArrowNav(e)) {
                 e.preventDefault();
                 return;
             }
