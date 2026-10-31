@@ -118,11 +118,11 @@ This repo uses a `cmd/` layout for multiple binaries:
 - `FileIDLookup` - Pointer to shared `internal.FileIDLookup` used by the file-upload and magnet-link flows to map long strings to short UUIDs for Telegram callback data (see Download-by-File Flow, Download-by-Magnet Flow)
 
 **cmd/tgtorrentbot/update_check.go** - Background routine that:
-- Polls Transmission every minute for torrent completion
+- Polls Transmission every minute for torrent completion, always (from start-up, without pausing), so torrents added from the webapp or outside the bot are observed; a successful bot command triggers an extra immediate check
 - Compares current state with previous state
-- Sends Telegram notification when torrent completes (PercentDone 0→1)
+- Sends Telegram notification when torrent completes: PercentDone goes below 1 → 1 between checks, or a torrent not seen before is complete with Transmission `doneDate` at or after the previous poll (catches restarts, webapp adds and torrents that complete between two polls)
+- Completions that happen while the bot is down are not notified (the first check counts from process start)
 - Sends completion notification only; does not move files between directories
-- Pauses when all torrents are complete
 - Uses chatID stored in torrent labels to notify correct user
 
 ### Command Pattern
@@ -200,7 +200,7 @@ Labels are set when adding a torrent (`commands/download.go:85-95`) and read by:
 The completion checker uses Transmission labels to track which chat initiated each download:
 - When adding torrent, chatID and category are stored in labels (`commands/download.go:85`)
 - Completion routine reads labels to determine where to send notification
-- Compares `PercentDone` between checks to detect 0→1 transitions
+- Compares `PercentDone` between checks to detect transitions to 1, and uses `doneDate` for torrents first seen already complete (`newlyCompleted` in `update_check.go`)
 - Sends Telegram notification to the chat stored in label[0]
 
 ## Key Implementation Details
@@ -354,6 +354,6 @@ Key external packages:
 ## Notes
 
 - UI text is in Russian (search for `// TODO: translate` comments)
-- Completion checker polls every 1 minute when active
+- Completion checker polls every 1 minute
 - Search returns max 10 results sorted by seeders
 - Plain text messages without slash are treated as search queries, unless they start with `magnet:?` (routed to magnet download)
