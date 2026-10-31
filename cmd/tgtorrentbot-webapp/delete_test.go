@@ -1,0 +1,141 @@
+package main
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"sync/atomic"
+	"testing"
+
+	"github.com/minya/tgtorrentbot/internal/media"
+	"github.com/odwrtw/transmission"
+)
+
+// newDeleteTestApp returns an App whose Transmission RPC serves torrentsJSON
+// for torrent-get and records torrent-remove calls, plus its download and
+// incomplete roots.
+func newDeleteTestApp(t *testing.T, torrentsJSON string) (app *App, root, inc string, removed *atomic.Bool) {
+	t.Helper()
+	removed = &atomic.Bool{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var req struct{ Method string }
+		_ = json.Unmarshal(b, &req)
+		if req.Method == "torrent-remove" {
+			removed.Store(true)
+			w.Write([]byte(`{"result":"success","arguments":{}}`))
+			return
+		}
+		w.Write([]byte(`{"result":"success","arguments":{"torrents":` + torrentsJSON + `}}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	root = t.TempDir()
+	inc = filepath.Join(root, "incomplete")
+	tc, err := transmission.New(transmission.Config{Address: ts.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app = &App{
+		config:               Config{DownloadPath: root, IncompletePath: inc},
+		transmissionClient:   tc,
+		jellyfinClient:       media.NewJellyfinClient("", ""),
+		audiobookshelfClient: media.NewAudiobookshelfClient("", ""),
+	}
+	return app, root, inc, removed
+}
+
+func mustWriteFile(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func deleteItem(app *App, userID int64, category, name string) *httptest.ResponseRecorder {
+	id := base64.URLEncoding.EncodeToString([]byte(category + ":" + name))
+	rec := httptest.NewRecorder()
+	app.handleItemDelete(userID, rec, httptest.NewRequest(http.MethodDelete, "/api/items/"+id, nil))
+	return rec
+}
+
+func exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+// An in-progress download lives in the incomplete dir but is shown under its
+// real category; "Remove data" must delete it there.
+func TestRemoveDataDeletesInProgressDownload(t *testing.T) {
+	app, root, inc, removed := newDeleteTestApp(t,
+		`[{"id":7,"name":"Foo","labels":["42","movies"],"percentDone":0.4}]`)
+	mustWriteFile(t, filepath.Join(inc, "Foo", "part.mkv"))
+
+	rec := deleteItem(app, 42, "movies", "Foo")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if !removed.Load() {
+		t.Error("torrent was not removed")
+	}
+	if exists(filepath.Join(inc, "Foo")) {
+		t.Error("in-progress data still exists in the incomplete dir")
+	}
+	if !exists(root) {
+		t.Error("download root was removed")
+	}
+}
+
+// A completed item lives under {DownloadPath}/{category}; that path must still
+// be deleted, and a same-named folder of the incomplete dir with it.
+func TestRemoveDataDeletesCompletedAndIncompleteCopies(t *testing.T) {
+	app, root, inc, _ := newDeleteTestApp(t, `[]`)
+	mustWriteFile(t, filepath.Join(root, "movies", "Bar", "movie.mkv"))
+	mustWriteFile(t, filepath.Join(inc, "Bar", "leftover.part"))
+
+	rec := deleteItem(app, 42, "movies", "Bar")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if exists(filepath.Join(root, "movies", "Bar")) {
+		t.Error("completed data still exists")
+	}
+	if exists(filepath.Join(inc, "Bar")) {
+		t.Error("incomplete copy still exists")
+	}
+	if !exists(filepath.Join(root, "movies")) {
+		t.Error("category dir was removed")
+	}
+}
+
+// The virtual incomplete category maps only to the incomplete dir.
+func TestRemoveDataIncompleteCategory(t *testing.T) {
+	app, _, inc, _ := newDeleteTestApp(t, `[]`)
+	mustWriteFile(t, filepath.Join(inc, "Orphan", "x.part"))
+
+	rec := deleteItem(app, 42, media.IncompleteCategory, "Orphan")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if exists(filepath.Join(inc, "Orphan")) {
+		t.Error("orphaned incomplete data still exists")
+	}
+}
+
+func TestRemoveDataNotFound(t *testing.T) {
+	app, _, _, _ := newDeleteTestApp(t, `[]`)
+	rec := deleteItem(app, 42, "movies", "Nothing")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}

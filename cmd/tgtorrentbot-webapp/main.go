@@ -643,34 +643,43 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		logger.Info("Removed torrent %d: %s [%s] for user %d", torrent.ID, name, category, userID)
 	}
 
-	// Delete files from filesystem. Orphaned "incomplete" items live in the
-	// incomplete directory, not under {DownloadPath}/{category}.
-	base := filepath.Join(app.config.DownloadPath, category)
+	// Delete files from filesystem. An item of a real category may have data
+	// in two places: {DownloadPath}/{category}/{name} once complete, and
+	// {IncompletePath}/{name} while still downloading (MergeItems shows both
+	// under the real category). Orphaned items of the virtual "incomplete"
+	// category live only in the incomplete directory.
+	bases := []string{filepath.Join(app.config.DownloadPath, category), app.config.IncompletePath}
 	if category == media.IncompleteCategory {
-		base = app.config.IncompletePath
+		bases = []string{app.config.IncompletePath}
 	}
-	dir := filepath.Join(base, name)
-	dir = filepath.Clean(dir)
-	absBase, _ := filepath.Abs(base)
-	absDir, _ := filepath.Abs(dir)
-	if !strings.HasPrefix(absDir, absBase+string(filepath.Separator)) {
-		http.Error(w, `{"error": "invalid item path"}`, http.StatusBadRequest)
-		return
-	}
-
-	if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
-		if torrent == nil {
-			http.Error(w, `{"error": "item not found"}`, http.StatusNotFound)
+	found := false
+	for _, base := range bases {
+		if base == "" {
+			continue
+		}
+		dir := filepath.Clean(filepath.Join(base, name))
+		absBase, _ := filepath.Abs(base)
+		absDir, _ := filepath.Abs(dir)
+		if !strings.HasPrefix(absDir, absBase+string(filepath.Separator)) {
+			http.Error(w, `{"error": "invalid item path"}`, http.StatusBadRequest)
 			return
 		}
-		// Torrent was removed but no directory on disk — still a success.
-	} else if err := os.RemoveAll(dir); err != nil {
-		logger.Error(err, "Failed to remove directory %s", dir)
-		http.Error(w, `{"error": "failed to remove data"}`, http.StatusInternalServerError)
-		return
-	} else {
-		logger.Info("Removed data directory: %s [%s] for user %d", name, category, userID)
+		if _, statErr := os.Lstat(dir); os.IsNotExist(statErr) {
+			continue
+		}
+		found = true
+		if err := os.RemoveAll(dir); err != nil {
+			logger.Error(err, "Failed to remove directory %s", dir)
+			http.Error(w, `{"error": "failed to remove data"}`, http.StatusInternalServerError)
+			return
+		}
+		logger.Info("Removed data: %s for user %d", dir, userID)
 	}
+	if !found && torrent == nil {
+		http.Error(w, `{"error": "item not found"}`, http.StatusNotFound)
+		return
+	}
+	// A torrent that was removed with no data on disk is still a success.
 
 	app.jellyfinClient.RefreshLibrary()
 	app.audiobookshelfClient.RefreshLibrary()
