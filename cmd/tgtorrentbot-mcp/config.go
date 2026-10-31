@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -32,8 +33,9 @@ type Config struct {
 	// issuer and audience, and prefixes every endpoint advertised in metadata.
 	PublicBaseURL string
 	// JWTSecret signs every token we issue (access, refresh, client_id).
-	// Derived from AuthToken via SHA-256 when unset so single-secret
-	// deployments Just Work; override to rotate without touching AuthToken.
+	// It always depends on AuthToken, and also on TGT_MCP_JWT_SECRET when
+	// set, so rotating either env var invalidates every outstanding token
+	// (see deriveJWTSecret).
 	JWTSecret []byte
 }
 
@@ -61,12 +63,7 @@ func loadConfig() (Config, error) {
 
 	var jwtSecret []byte
 	if authToken != "" {
-		if v := os.Getenv("TGT_MCP_JWT_SECRET"); v != "" {
-			jwtSecret = []byte(v)
-		} else {
-			h := sha256.Sum256([]byte("tgtorrentbot-mcp/jwt\x00" + authToken))
-			jwtSecret = h[:]
-		}
+		jwtSecret = deriveJWTSecret(authToken, os.Getenv("TGT_MCP_JWT_SECRET"))
 	}
 
 	return Config{
@@ -84,4 +81,24 @@ func loadConfig() (Config, error) {
 		PublicBaseURL:           publicURL,
 		JWTSecret:               jwtSecret,
 	}, nil
+}
+
+// jwtSecretLabel domain-separates the JWT signing key from other uses of the
+// login secret.
+const jwtSecretLabel = "tgtorrentbot-mcp/jwt\x00"
+
+// deriveJWTSecret returns the JWT signing key. Without an explicit JWT secret
+// it is SHA-256(label || authToken); with one it is
+// HMAC-SHA256(key=jwtSecret, label || authToken). Either way it depends on the
+// login secret, so rotating TGT_MCP_TOKEN after a leak revokes every token
+// even when TGT_MCP_JWT_SECRET is set, and rotating TGT_MCP_JWT_SECRET
+// revokes them without changing the login secret.
+func deriveJWTSecret(authToken, jwtSecret string) []byte {
+	if jwtSecret == "" {
+		h := sha256.Sum256([]byte(jwtSecretLabel + authToken))
+		return h[:]
+	}
+	mac := hmac.New(sha256.New, []byte(jwtSecret))
+	mac.Write([]byte(jwtSecretLabel + authToken))
+	return mac.Sum(nil)
 }
