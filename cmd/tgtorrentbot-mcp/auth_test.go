@@ -26,9 +26,10 @@ func testServer(t *testing.T, base string) *server {
 		JWTSecret:     []byte("test-secret-at-least-32-bytes-long!!"),
 	}
 	return &server{
-		config:       cfg,
-		codeStore:    newCodeStore(),
-		loginLimiter: newRateLimiter(100, time.Minute),
+		config:             cfg,
+		codeStore:          newCodeStore(),
+		loginLimiter:       newRateLimiter(100, time.Minute),
+		failedLoginLimiter: newRateLimiter(100, time.Minute),
 	}
 }
 

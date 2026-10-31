@@ -66,9 +66,10 @@ func (s *codeStore) sweepLocked() {
 	}
 }
 
-// rateLimiter is a laughably simple per-IP sliding window for /authorize POSTs.
-// Good enough to slow down a human brute-forcing the login form; real DoS
-// protection is Cloudflare's job.
+// rateLimiter is a sliding-window counter per key. It guards the login
+// form, whose shared secret is the only factor: loginLimiter caps attempts per
+// client IP and failedLoginLimiter caps failed attempts across all clients,
+// so no amount of IP rotation buys more guesses.
 type rateLimiter struct {
 	mu     sync.Mutex
 	hits   map[string][]time.Time
@@ -76,15 +77,17 @@ type rateLimiter struct {
 	window time.Duration
 }
 
+// rateLimiterSweepAt is the number of keys above which allow drops every key
+// whose hits all fell out of the window, so the map cannot grow without bound.
+const rateLimiterSweepAt = 1024
+
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 	return &rateLimiter{hits: make(map[string][]time.Time), limit: limit, window: window}
 }
 
-func (rl *rateLimiter) allow(key string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	now := time.Now()
-	cutoff := now.Add(-rl.window)
+// recent returns the hits of key still inside the window, dropping the key
+// when none are left. rl.mu must be held.
+func (rl *rateLimiter) recentLocked(key string, cutoff time.Time) []time.Time {
 	hits := rl.hits[key]
 	kept := hits[:0]
 	for _, t := range hits {
@@ -92,23 +95,59 @@ func (rl *rateLimiter) allow(key string) bool {
 			kept = append(kept, t)
 		}
 	}
+	if len(kept) == 0 {
+		delete(rl.hits, key)
+		return nil
+	}
+	rl.hits[key] = kept
+	return kept
+}
+
+// allow records a hit for key and reports whether it is within the limit.
+// A hit over the limit is not recorded.
+func (rl *rateLimiter) allow(key string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+	if len(rl.hits) > rateLimiterSweepAt {
+		for k := range rl.hits {
+			rl.recentLocked(k, cutoff)
+		}
+	}
+	kept := rl.recentLocked(key, cutoff)
 	if len(kept) >= rl.limit {
-		rl.hits[key] = kept
 		return false
 	}
-	kept = append(kept, now)
-	rl.hits[key] = kept
+	rl.hits[key] = append(kept, now)
 	return true
 }
 
-// clientIP extracts a best-effort identifier; we're behind Cloudflare so trust
-// the tunnel-provided X-Forwarded-For first, fall back to RemoteAddr.
+// exceeded reports whether key has used up its limit, without recording a hit.
+func (rl *rateLimiter) exceeded(key string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return len(rl.recentLocked(key, time.Now().Add(-rl.window))) >= rl.limit
+}
+
+// size returns the number of keys tracked (for tests).
+func (rl *rateLimiter) size() int {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return len(rl.hits)
+}
+
+// failedLoginKey is the single key failedLoginLimiter counts under.
+const failedLoginKey = "all"
+
+// clientIP identifies the client for per-IP rate limiting. Behind Cloudflare
+// the client address is CF-Connecting-IP, which Cloudflare's edge sets itself
+// (overwriting any client-sent value). X-Forwarded-For is never used: its
+// leftmost entry is whatever the client sent. Without CF-Connecting-IP (direct
+// access on the internal network) the TCP peer address is used.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
+	if ip := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); ip != "" {
+		return ip
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -239,7 +278,7 @@ func (s *server) handleAuthorizePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.loginLimiter.allow(clientIP(r)) {
+	if s.failedLoginLimiter.exceeded(failedLoginKey) || !s.loginLimiter.allow(clientIP(r)) {
 		data.Error = "Too many attempts. Try again in a minute."
 		renderAuthorizeForm(w, http.StatusTooManyRequests, data)
 		return
@@ -247,6 +286,7 @@ func (s *server) handleAuthorizePost(w http.ResponseWriter, r *http.Request) {
 
 	secret := r.PostForm.Get("secret")
 	if subtle.ConstantTimeCompare([]byte(secret), []byte(s.config.AuthToken)) != 1 {
+		s.failedLoginLimiter.allow(failedLoginKey)
 		data.Error = "Incorrect secret."
 		renderAuthorizeForm(w, http.StatusUnauthorized, data)
 		return

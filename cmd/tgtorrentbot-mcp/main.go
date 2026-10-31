@@ -23,13 +23,16 @@ type torrentClient interface {
 
 // server holds shared dependencies used by tool handlers and OAuth endpoints.
 type server struct {
-	config       Config
-	trans        torrentClient
-	jf           *mcplib.JellyfinClient
-	abs          *mcplib.AudiobookshelfClient
-	scan         *mcplib.FilesystemScanner
-	codeStore    *codeStore
-	loginLimiter *rateLimiter
+	config    Config
+	trans     torrentClient
+	jf        *mcplib.JellyfinClient
+	abs       *mcplib.AudiobookshelfClient
+	scan      *mcplib.FilesystemScanner
+	codeStore *codeStore
+	// loginLimiter caps login attempts per client IP; failedLoginLimiter
+	// caps failed logins across all clients (see rateLimiter).
+	loginLimiter       *rateLimiter
+	failedLoginLimiter *rateLimiter
 }
 
 func main() {
@@ -50,9 +53,10 @@ func main() {
 	}
 
 	srv := &server{
-		config:       cfg,
-		codeStore:    newCodeStore(),
-		loginLimiter: newRateLimiter(10, time.Minute),
+		config:             cfg,
+		codeStore:          newCodeStore(),
+		loginLimiter:       newRateLimiter(10, time.Minute),
+		failedLoginLimiter: newRateLimiter(20, time.Minute),
 	}
 	if cfg.TransmissionAddr != "" {
 		t, err := transmission.New(transmission.Config{
