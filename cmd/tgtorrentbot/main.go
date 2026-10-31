@@ -69,9 +69,8 @@ func main() {
 
 	handler := NewUpdatesHandler(env, notify)
 
-
 	webhookParams := telegram.SetWebhookParams{
-		URL:         settings.WebHookURL,
+		URL: settings.WebHookURL,
 	}
 
 	err = api.SetWebhook(context.Background(), webhookParams)

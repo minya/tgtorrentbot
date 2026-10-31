@@ -16,26 +16,26 @@ func setEnvVars(t *testing.T, vars map[string]string) {
 func setRequiredEnvVars(t *testing.T) {
 	t.Helper()
 	setEnvVars(t, map[string]string{
-		"TGT_BOTTOKEN":       "test-token",
-		"TGT_DOWNLOADPATH":   "/downloads",
-		"TGT_ALLOWED_USERS":  "111",
+		"TGT_BOTTOKEN":      "test-token",
+		"TGT_DOWNLOADPATH":  "/downloads",
+		"TGT_ALLOWED_USERS": "111",
 	})
 }
 
 func TestLoadConfig_AllFields(t *testing.T) {
 	setEnvVars(t, map[string]string{
-		"TGT_BOTTOKEN":            "test-bot-token",
-		"TGT_RPC_ADDR":            "http://localhost:9091/rpc",
-		"TGT_RPC_USER":            "admin",
-		"TGT_RPC_PASSWORD":        "secret",
-		"TGT_RUTRACKER_USERNAME":  "ru_user",
-		"TGT_RUTRACKER_PASSWORD":  "ru_pass",
-		"TGT_DOWNLOADPATH":        "/downloads",
-		"TGT_LOGLEVEL":            "debug",
-		"TGT_JELLYFIN_URL":        "http://jellyfin:8096",
-		"TGT_JELLYFIN_API_KEY":    "jf-api-key-123",
-		"TGT_INCOMPLETE_PATH":     "/downloads/incomplete",
-		"TGT_ALLOWED_USERS":       "123,456",
+		"TGT_BOTTOKEN":           "test-bot-token",
+		"TGT_RPC_ADDR":           "http://localhost:9091/rpc",
+		"TGT_RPC_USER":           "admin",
+		"TGT_RPC_PASSWORD":       "secret",
+		"TGT_RUTRACKER_USERNAME": "ru_user",
+		"TGT_RUTRACKER_PASSWORD": "ru_pass",
+		"TGT_DOWNLOADPATH":       "/downloads",
+		"TGT_LOGLEVEL":           "debug",
+		"TGT_JELLYFIN_URL":       "http://jellyfin:8096",
+		"TGT_JELLYFIN_API_KEY":   "jf-api-key-123",
+		"TGT_INCOMPLETE_PATH":    "/downloads/incomplete",
+		"TGT_ALLOWED_USERS":      "123,456",
 	})
 
 	cfg, err := loadConfig()
@@ -101,7 +101,7 @@ func TestLoadConfig_IncompletePathEmptyWhenNoDownloadPath(t *testing.T) {
 func TestLoadConfig_JellyfinOptional(t *testing.T) {
 	setRequiredEnvVars(t)
 	setEnvVars(t, map[string]string{
-		"TGT_JELLYFIN_URL":    "",
+		"TGT_JELLYFIN_URL":     "",
 		"TGT_JELLYFIN_API_KEY": "",
 	})
 

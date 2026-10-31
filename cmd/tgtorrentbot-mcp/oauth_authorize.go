@@ -70,10 +70,10 @@ func (s *codeStore) sweepLocked() {
 // Good enough to slow down a human brute-forcing the login form; real DoS
 // protection is Cloudflare's job.
 type rateLimiter struct {
-	mu      sync.Mutex
-	hits    map[string][]time.Time
-	limit   int
-	window  time.Duration
+	mu     sync.Mutex
+	hits   map[string][]time.Time
+	limit  int
+	window time.Duration
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {

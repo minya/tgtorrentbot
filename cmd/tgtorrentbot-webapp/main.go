@@ -220,7 +220,7 @@ func main() {
 
 	http.HandleFunc("/api/ws", app.handleWS)
 	http.HandleFunc("/api/torrents", app.makeHandler([]string{http.MethodGet}, app.handleTorrents))
-http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPost}, app.handleDownloadTorrent))
+	http.HandleFunc("/api/torrents/download", app.makeHandler([]string{http.MethodPost}, app.handleDownloadTorrent))
 	http.HandleFunc("/api/search", app.makeHandler([]string{http.MethodGet}, app.handleSearch))
 	http.HandleFunc("/api/items", app.makeHandler([]string{http.MethodGet}, app.handleUnifiedItems))
 	http.HandleFunc("/api/items/", app.makeHandler([]string{http.MethodDelete}, app.handleItemDelete))
@@ -298,7 +298,6 @@ func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Requ
 		logger.Error(err, "Failed to encode torrents response")
 	}
 }
-
 
 func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
@@ -676,4 +675,3 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		logger.Error(err, "Failed to encode response")
 	}
 }
-

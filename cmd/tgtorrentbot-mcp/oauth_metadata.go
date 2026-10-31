@@ -22,8 +22,8 @@ type authServerMetadata struct {
 // protectedResourceMetadata is RFC 9728: tells MCP clients which AS to use.
 // For us the AS is the same origin, so this basically loops back.
 type protectedResourceMetadata struct {
-	Resource             string   `json:"resource"`
-	AuthorizationServers []string `json:"authorization_servers"`
+	Resource               string   `json:"resource"`
+	AuthorizationServers   []string `json:"authorization_servers"`
 	BearerMethodsSupported []string `json:"bearer_methods_supported"`
 }
 
