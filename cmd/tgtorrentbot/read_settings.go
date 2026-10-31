@@ -78,6 +78,7 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.RutrackerConfig.Password = os.Getenv("TGT_RUTRACKER_PASSWORD")
 	settings.LogLevel = os.Getenv("TGT_LOGLEVEL")
 	settings.WebAppURL = os.Getenv("TGT_WEBAPP_URL")
+	settings.WebhookSecret = os.Getenv("TGT_WEBHOOK_SECRET")
 
 	var problems []string
 	if settings.BotToken == "" {
@@ -116,6 +117,10 @@ func readSettingsFromEnv() (Settings, error) {
 		settings.AllowedUsers = allowedUsers
 	}
 
+	if settings.WebhookSecret != "" && !validWebhookSecret(settings.WebhookSecret) {
+		problems = append(problems, "TGT_WEBHOOK_SECRET must be 1-256 characters of A-Z, a-z, 0-9, _ and -")
+	}
+
 	if len(problems) > 0 {
 		return settings, fmt.Errorf("environment config problems: %v", problems)
 	}
@@ -146,6 +151,9 @@ func parseAllowedUsers(s string) ([]int64, error) {
 func validateSettings(s Settings) error {
 	if len(s.AllowedUsers) == 0 {
 		return fmt.Errorf("allowedUsers must not be empty")
+	}
+	if s.WebhookSecret != "" && !validWebhookSecret(s.WebhookSecret) {
+		return fmt.Errorf("webhookSecret must be 1-256 characters of A-Z, a-z, 0-9, _ and -")
 	}
 	return nil
 }

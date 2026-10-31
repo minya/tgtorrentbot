@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -69,8 +68,13 @@ func main() {
 
 	handler := NewUpdatesHandler(env, notify)
 
+	webhookSecret := settings.WebhookSecret
+	if webhookSecret == "" {
+		webhookSecret = deriveWebhookSecret(settings.BotToken)
+	}
 	webhookParams := telegram.SetWebhookParams{
-		URL: settings.WebHookURL,
+		URL:         settings.WebHookURL,
+		SecretToken: webhookSecret,
 	}
 
 	err = api.SetWebhook(context.Background(), webhookParams)
@@ -97,29 +101,12 @@ func main() {
 		}
 	}
 
-	startListen(80, handler.HandleUpdate)
+	startListen(80, webhookSecret, handler.HandleUpdate)
 }
 
-func startListen(port int, handleUpdate func(context.Context, *telegram.Update) error) {
+func startListen(port int, webhookSecret string, handleUpdate func(context.Context, *telegram.Update) error) {
 	logger.Info("Bot started")
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		var update telegram.Update
-		err := json.NewDecoder(r.Body).Decode(&update)
-
-		if err != nil {
-			logger.Error(err, "Failed to parse update from request")
-			return
-		}
-
-		// Respond 200 immediately so Telegram doesn't retry the update.
-		w.WriteHeader(http.StatusOK)
-
-		go func() {
-			if err := handleUpdate(context.Background(), &update); err != nil {
-				logger.Error(err, "Failed to handle update from request")
-			}
-		}()
-	})
+	http.Handle("/", newWebhookHandler(webhookSecret, handleUpdate))
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		ReadHeaderTimeout: 10 * time.Second,

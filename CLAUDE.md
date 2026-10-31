@@ -62,6 +62,7 @@ The bot can be configured via environment variables or a JSON settings file. Set
 ### Optional environment variables:
 - `TGT_LOGLEVEL` - Log level (e.g., "info", "debug")
 - `TGT_WEBAPP_URL` - URL for the Telegram Mini Web App (enables web app menu button)
+- `TGT_WEBHOOK_SECRET` - Bot only, optional. The `secret_token` registered with `setWebhook`; Telegram sends it in `X-Telegram-Bot-Api-Secret-Token` and the bot rejects webhook requests without it (401). Defaults to a value derived from the bot token, so it only needs setting to rotate it independently. 1-256 chars of `A-Za-z0-9_-`. Settings-file key: `webhookSecret`
 - `TGT_JELLYFIN_URL` - Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it
 - `TGT_JELLYFIN_API_KEY` - Jellyfin API key (generated from Jellyfin admin dashboard)
 - `TGT_AUDIOBOOKSHELF_URL` - Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp works without it
@@ -100,7 +101,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - Sets up Telegram API with webhook
 - Configures Telegram chat menu button for web app (if `WebAppURL` is set)
 - Starts completion check routine (monitors torrent progress)
-- Starts HTTP server on port 80 to receive webhook updates
+- Starts HTTP server on port 80 to receive webhook updates, authenticated by the webhook `secret_token` (`cmd/tgtorrentbot/webhook.go`, served via `telegram.WebhookHandler`)
 
 **cmd/tgtorrentbot/handler.go** - `UpdatesHandler` processes incoming Telegram updates:
 - Routes messages/callbacks to appropriate command factories

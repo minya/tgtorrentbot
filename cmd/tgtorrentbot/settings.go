@@ -13,6 +13,9 @@ type Settings struct {
 	LogLevel        string                  `json:"logLevel"`
 	WebAppURL       string                  `json:"webAppURL"`
 	AllowedUsers    []int64                 `json:"allowedUsers"`
+	// WebhookSecret is the secret_token Telegram sends with every webhook
+	// request. Optional: derived from BotToken when empty.
+	WebhookSecret string `json:"webhookSecret"`
 }
 
 type TransmissionRPCSettings struct {
