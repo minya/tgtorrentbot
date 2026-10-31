@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -57,7 +59,14 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return formatError("creating destination parent%s: %v", torrentRemovedSuffix(out), err), moveMediaOutput{}, nil
 	}
-	if err := os.Rename(src, dst); err != nil {
+	// The Lstat above is only a fast pre-check: the destination can appear
+	// while the torrent is being removed. renameNoReplace refuses to replace
+	// it atomically, unlike os.Rename, which silently overwrites a file or an
+	// empty directory.
+	if err := renameNoReplace(src, dst); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return formatError("destination %q already exists; refusing to overwrite (nothing was moved)%s", in.Destination, torrentRemovedSuffix(out)), moveMediaOutput{}, nil
+		}
 		return formatError("moving %q to %q: %v (cross-device moves are not supported)%s", in.Source, in.Destination, err, torrentRemovedSuffix(out)), moveMediaOutput{}, nil
 	}
 	out.Moved = true

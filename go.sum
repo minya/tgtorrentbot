@@ -20,8 +20,6 @@ github.com/minya/logger v0.0.0-20250510174529-7368e68ff9d7 h1:Zf5GS4VK8xm240GV5o
 github.com/minya/logger v0.0.0-20250510174529-7368e68ff9d7/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
 github.com/minya/rutracker v0.0.0-20260305221146-1753e307f312 h1:UQ+2wSsEPY2Xg8Nfsde8g/6Jk0ev5/ywqJd2FFo+QYo=
 github.com/minya/rutracker v0.0.0-20260305221146-1753e307f312/go.mod h1:wMHgilPAQ2DOo15JEFwfvk07Tz1KkHzz1YoxtnWMQpc=
-github.com/minya/telegram v0.0.0-20260414160208-8128f0a27a53 h1:nL2884wkZur6KYwiGrThrX62zAh2HGcc7gno2fYhrMA=
-github.com/minya/telegram v0.0.0-20260414160208-8128f0a27a53/go.mod h1:qiGIPPZ98XMbRQoqYt1ueCKd6Z5suU4DCHmwmt9SerY=
 github.com/minya/telegram v0.0.0-20261029135902-11f2473dfb08 h1:qn75cUCpHA5gt01hALpjq5oKtnBCwCzdAW0a2X2wP6w=
 github.com/minya/telegram v0.0.0-20261029135902-11f2473dfb08/go.mod h1:dPk23XEKcdIsSThPOMnNp8bn03//m+V7viyq5IqYYFo=
 github.com/modelcontextprotocol/go-sdk v1.5.0 h1:CHU0FIX9kpueNkxuYtfYQn1Z0slhFzBZuq+x6IiblIU=

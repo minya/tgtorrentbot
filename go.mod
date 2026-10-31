@@ -11,6 +11,7 @@ require (
 	github.com/minya/telegram v0.0.0-20261029135902-11f2473dfb08
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759
+	golang.org/x/sys v0.43.0
 	golang.org/x/text v0.33.0
 )
 
@@ -25,5 +26,4 @@ require (
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
 )
