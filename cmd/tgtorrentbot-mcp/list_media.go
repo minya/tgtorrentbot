@@ -9,18 +9,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minya/tgtorrentbot/internal/category"
 	mcplib "github.com/minya/tgtorrentbot/internal/media"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-var knownCategories = []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
+// knownCategories are the category directories list_media scans, derived from
+// internal/category (the single source of truth).
+var knownCategories = category.Names()
 
 // maxListedFiles caps the total number of files returned by a recursive
 // list_media call so an unfiltered request can't produce a giant response.
 const maxListedFiles = 5000
 
 type listMediaInput struct {
-	Category  string `json:"category,omitempty" jsonschema:"optional category filter: movies, shows, music, musicvideos, audiobooks, or others"`
+	Category  string `json:"category,omitempty" jsonschema:"optional category filter; one of the categories named in the tool description"`
 	Query     string `json:"query,omitempty" jsonschema:"optional case-insensitive substring to match against item names"`
 	Recursive bool   `json:"recursive,omitempty" jsonschema:"when true, also list every file inside each item's directory (e.g. individual episodes of a show) under 'files'; combine with category/query to keep the output small"`
 }

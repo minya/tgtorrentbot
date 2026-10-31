@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Torrents</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="categories.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -612,31 +613,7 @@
         <!-- Categories section -->
         <div>
             <div class="section-header">Categories</div>
-            <div class="category-grid">
-                <button type="button" class="category-card" data-category="movies" onclick="showCategory('movies')">
-                    <span class="category-card-name">Movies</span>
-                    <span class="category-card-count skeleton" id="count-movies">—</span>
-                </button>
-                <button type="button" class="category-card" data-category="shows" onclick="showCategory('shows')">
-                    <span class="category-card-name">TV Shows</span>
-                    <span class="category-card-count skeleton" id="count-shows">—</span>
-                </button>
-                <button type="button" class="category-card" data-category="music" onclick="showCategory('music')">
-                    <span class="category-card-name">Music</span>
-                    <span class="category-card-count skeleton" id="count-music">—</span>
-                </button>
-                <button type="button" class="category-card" data-category="musicvideos" onclick="showCategory('musicvideos')">
-                    <span class="category-card-name">Music Videos</span>
-                    <span class="category-card-count skeleton" id="count-musicvideos">—</span>
-                </button>
-                <button type="button" class="category-card" data-category="audiobooks" onclick="showCategory('audiobooks')">
-                    <span class="category-card-name">Audiobooks</span>
-                    <span class="category-card-count skeleton" id="count-audiobooks">—</span>
-                </button>
-                <button type="button" class="category-card" data-category="others" onclick="showCategory('others')">
-                    <span class="category-card-name">Other</span>
-                    <span class="category-card-count skeleton" id="count-others">—</span>
-                </button>
+            <div class="category-grid" id="category-grid">
                 <button type="button" class="category-card" data-category="incomplete" id="card-incomplete" style="display: none;" onclick="showCategory('incomplete')">
                     <span class="category-card-name">Incomplete</span>
                     <span class="category-card-count skeleton" id="count-incomplete">—</span>
@@ -678,12 +655,6 @@
     <div id="category-modal" class="modal">
         <div class="modal-content">
             <div class="modal-title">Select Category</div>
-            <button class="category-btn" onclick="downloadWithCategory('movies', this)">Movies</button>
-            <button class="category-btn" onclick="downloadWithCategory('shows', this)">TV Shows</button>
-            <button class="category-btn" onclick="downloadWithCategory('music', this)">Music</button>
-            <button class="category-btn" onclick="downloadWithCategory('musicvideos', this)">Music Videos</button>
-            <button class="category-btn" onclick="downloadWithCategory('audiobooks', this)">Audiobooks</button>
-            <button class="category-btn" onclick="downloadWithCategory('others', this)">Other</button>
         </div>
     </div>
 
@@ -723,15 +694,42 @@
             }
         });
 
-        const categoryNames = {
-            movies: 'Movies',
-            shows: 'TV Shows',
-            music: 'Music',
-            musicvideos: 'Music Videos',
-            audiobooks: 'Audiobooks',
-            others: 'Other',
-            incomplete: 'Incomplete',
-        };
+        // Download categories come from the server (/categories.js, generated
+        // from internal/category). "incomplete" is the one frontend-only entry:
+        // a virtual bucket for orphaned leftover data, never a download target.
+        const CATEGORIES = window.CATEGORIES || [];
+        const categoryNames = Object.fromEntries(CATEGORIES.map(c => [c.key, c.name]));
+        categoryNames.incomplete = 'Incomplete';
+
+        // Build the category grid cards (before the static "Incomplete" card)
+        // and the download modal's buttons from CATEGORIES.
+        (function buildCategoryControls() {
+            const grid = document.getElementById('category-grid');
+            const incompleteCard = document.getElementById('card-incomplete');
+            const modalButtons = document.querySelector('#category-modal .modal-content');
+            for (const { key, name } of CATEGORIES) {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'category-card';
+                card.dataset.category = key;
+                card.addEventListener('click', () => showCategory(key));
+                const nameEl = document.createElement('span');
+                nameEl.className = 'category-card-name';
+                nameEl.textContent = name;
+                const countEl = document.createElement('span');
+                countEl.className = 'category-card-count skeleton';
+                countEl.id = 'count-' + key;
+                countEl.textContent = '—';
+                card.append(nameEl, countEl);
+                grid.insertBefore(card, incompleteCard);
+
+                const btn = document.createElement('button');
+                btn.className = 'category-btn';
+                btn.textContent = name;
+                btn.addEventListener('click', () => downloadWithCategory(key, btn));
+                modalButtons.appendChild(btn);
+            }
+        })();
 
         let currentView = 'main'; // 'main' or 'category'
         let currentCategory = null;
@@ -831,7 +829,8 @@
             document.getElementById('load-error').classList.remove('visible');
             setCountsLoading(false);
             // Compute category counts
-            const counts = { movies: 0, shows: 0, music: 0, musicvideos: 0, audiobooks: 0, others: 0, incomplete: 0 };
+            const counts = Object.fromEntries(CATEGORIES.map(c => [c.key, 0]));
+            counts.incomplete = 0;
             for (const item of allItems) {
                 const cat = item.category in counts ? item.category : 'others';
                 counts[cat]++;

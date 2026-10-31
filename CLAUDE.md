@@ -84,6 +84,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - `environment/` — Shared Env struct
 - `internal/` — Internal helpers not exported outside this module
   - `internal/file_id_lookup.go` — `FileIDLookup` used by the file-upload and magnet-link flows
+  - `internal/category/` — dependency-free download category list (`All()`, `Names()`, `Parse()`, `DisplayName()`), the single source of truth for every binary and the webapp frontend
   - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries.
 - `Dockerfile.bot` — Docker build for the bot
 - `Dockerfile.webapp` — Docker build for the web app (static assets are embedded, no separate COPY step)
@@ -166,7 +167,7 @@ The parser uses regex to extract topic ID, URL, title, size, and seeders from Ru
 
 ### Category System
 
-Downloads are organized by category (`commands/category.go`):
+Downloads are organized by category (`internal/category/category.go`, the single source of truth; `commands/category.go` re-exports it for the bot):
 - `movies` - Фильмы (Films)
 - `shows` - Сериалы (TV Shows)
 - `music` - Музыка (Music)
@@ -176,11 +177,12 @@ Downloads are organized by category (`commands/category.go`):
 
 Categories determine the download subdirectory: `{DownloadPath}/{category}/`
 
-**When adding/removing a category, update ALL of these locations:**
-1. `commands/category.go` — constant, `AllCategories()`, `DisplayName()`
-2. `cmd/tgtorrentbot-webapp/main.go` — `validCategories` slice
-3. `cmd/tgtorrentbot-webapp/static/index.html` — `categoryNames` JS object, `counts` JS object, category grid cards, category modal buttons
-4. `docker-compose.yaml` — jellyfin volumes (each category needs a `/media/{category}` mount)
+Everything else derives from `internal/category`: the bot's category keyboards, the webapp's `validCategories`, the MCP server's `knownCategories` and `list_media` description, and the webapp frontend, which loads the list from `/categories.js` (served unauthenticated by `cmd/tgtorrentbot-webapp/categories.go`) and builds its category grid cards, `categoryNames`, `counts` and download-modal buttons from it. The virtual `incomplete` category is the one frontend-only entry and is never in the list.
+
+**When adding/removing a category, update these locations:**
+1. `internal/category/category.go` — constant, `All()`, `DisplayName()`
+2. `docker-compose.yaml` — a `/media/{category}` volume on jellyfin and a `/data/{category}` volume on dufs (`TestComposeMountsCoverAllCategories` in `internal/category` fails when one is missing)
+3. `README.md` — the category → directory table
 
 ### Torrent Labels Convention
 

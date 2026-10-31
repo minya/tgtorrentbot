@@ -21,6 +21,7 @@ import (
 
 	"github.com/minya/logger"
 	"github.com/minya/rutracker"
+	"github.com/minya/tgtorrentbot/internal/category"
 	"github.com/minya/tgtorrentbot/internal/media"
 	"github.com/odwrtw/transmission"
 )
@@ -31,8 +32,10 @@ var staticFiles embed.FS
 // relativeDownloadRe matches the relative URL format returned by the rutracker library's Find().
 var relativeDownloadRe = regexp.MustCompile(`^dl\.php\?t=\d+$`)
 
-// validCategories is the single source of truth for valid download categories.
-var validCategories = []string{"movies", "shows", "music", "musicvideos", "audiobooks", "others"}
+// validCategories lists the download categories, derived from internal/category
+// (the single source of truth). The virtual media.IncompleteCategory is
+// deliberately absent: nothing can be downloaded into it.
+var validCategories = category.Names()
 
 type Config struct {
 	BotToken             string
@@ -230,6 +233,7 @@ func main() {
 		logger.Error(err, "Failed to create sub filesystem")
 		os.Exit(1)
 	}
+	http.HandleFunc("/categories.js", handleCategoriesJS)
 	http.Handle("/", http.FileServer(http.FS(subFS)))
 
 	port := os.Getenv("PORT")

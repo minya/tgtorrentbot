@@ -1,68 +1,32 @@
 package commands
 
-// Category represents a torrent download category
-type Category string
+import "github.com/minya/tgtorrentbot/internal/category"
+
+// Category represents a torrent download category. The list itself lives in
+// internal/category, the single source of truth shared with the webapp and
+// the MCP server.
+type Category = category.Category
 
 const (
-	CategoryMovies      Category = "movies"
-	CategoryShows       Category = "shows"
-	CategoryMusic       Category = "music"
-	CategoryMusicVideos Category = "musicvideos"
-	CategoryAudiobooks  Category = "audiobooks"
-	CategoryOthers      Category = "others"
+	CategoryMovies      = category.Movies
+	CategoryShows       = category.Shows
+	CategoryMusic       = category.Music
+	CategoryMusicVideos = category.MusicVideos
+	CategoryAudiobooks  = category.Audiobooks
+	CategoryOthers      = category.Others
 )
 
 // AllCategories returns all available categories
 func AllCategories() []Category {
-	return []Category{
-		CategoryMovies,
-		CategoryShows,
-		CategoryMusic,
-		CategoryMusicVideos,
-		CategoryAudiobooks,
-		CategoryOthers,
-	}
+	return category.All()
 }
 
-// DisplayName returns the human-readable name for the category
-func (c Category) DisplayName() string {
-	switch c {
-	case CategoryMovies:
-		return "Movies"
-	case CategoryShows:
-		return "TV Shows"
-	case CategoryMusic:
-		return "Music"
-	case CategoryMusicVideos:
-		return "Music Videos"
-	case CategoryAudiobooks:
-		return "Audiobooks"
-	case CategoryOthers:
-		return "Other"
-	default:
-		return string(c)
-	}
-}
-
-// String returns the string representation of the category
-func (c Category) String() string {
-	return string(c)
-}
-
-// IsValid checks if a category string is valid
+// IsValidCategory checks if a category string is valid
 func IsValidCategory(s string) bool {
-	for _, cat := range AllCategories() {
-		if string(cat) == s {
-			return true
-		}
-	}
-	return false
+	return category.IsValid(s)
 }
 
 // ParseCategory converts a string to a Category
 func ParseCategory(s string) (Category, bool) {
-	if IsValidCategory(s) {
-		return Category(s), true
-	}
-	return "", false
+	return category.Parse(s)
 }

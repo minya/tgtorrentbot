@@ -152,7 +152,7 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 		Description: "List media items across Transmission torrents, the download " +
 			"filesystem, Jellyfin, and Audiobookshelf. Use this to find the path of " +
 			"an item before reading or writing its tags. Supports optional category " +
-			"filter (movies, shows, music, musicvideos, audiobooks, others) and a " +
+			"filter (" + strings.Join(knownCategories, ", ") + ") and a " +
 			"case-insensitive substring query on the item name. Each item carries " +
 			"added_date (when Transmission added it; torrents only) and mtime (newest " +
 			"filesystem modification time; on-disk items only), both RFC 3339 UTC — " +
