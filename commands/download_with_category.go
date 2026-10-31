@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"time"
@@ -46,8 +47,8 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 	return false, nil
 }
 
-func (cmd *DownloadWithCategoryCommand) Handle(upd *telegram.Update) error {
-	AnswerCallbackQuery(upd, cmd.TgApi)
+func (cmd *DownloadWithCategoryCommand) Handle(ctx context.Context, upd *telegram.Update) error {
+	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
 	cfg := cmd.RutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
 	if err != nil {
@@ -65,6 +66,6 @@ func (cmd *DownloadWithCategoryCommand) Handle(upd *telegram.Update) error {
 		Env: cmd.Env,
 	}
 
-	chatID := upd.CallbackQuery.Message.Chat.Id
-	return downloadCmd.addTorrentAndReply(torrentBytes, chatID, cmd.Category)
+	chatID := upd.CallbackQuery.Message.Chat.ID
+	return downloadCmd.addTorrentAndReply(ctx, torrentBytes, chatID, cmd.Category)
 }

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"regexp"
 	"strconv"
 
@@ -39,7 +40,7 @@ func (factory *RemoveTorrentCommandFactory) Accepts(upd *telegram.Update) (bool,
 	return false, nil
 }
 
-func (cmd *RemoveTorrentCommand) Handle(upd *telegram.Update) error {
+func (cmd *RemoveTorrentCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	allTorrents, err := cmd.TransmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Error getting torrents")
@@ -57,10 +58,10 @@ func (cmd *RemoveTorrentCommand) Handle(upd *telegram.Update) error {
 		logger.Error(err, "Error removing torrents")
 		return err
 	}
-	chatID := upd.Message.Chat.Id
-	cmd.TgApi.SendMessage(telegram.ReplyMessage{
+	chatID := upd.Message.Chat.ID
+	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
 		Text:   "Removed.",
-		ChatId: chatID,
+		ChatID: chatID,
 	})
 	return nil
 }

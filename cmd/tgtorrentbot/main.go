@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -50,13 +51,13 @@ func main() {
 		logger.Fatal(err, "Can't create transmission client")
 	}
 
-	api := telegram.NewApi(settings.BotToken)
-	notify := CreateCompletedCheckRoutine(transmissionClient, &api)
+	api := telegram.NewAPI(settings.BotToken)
+	notify := CreateCompletedCheckRoutine(transmissionClient, api)
 	var fileIDLookup internal.FileIDLookup
 
 	env := environment.Env{
 		TransmissionClient: transmissionClient,
-		TgApi:              &api,
+		TgApi:              api,
 		DownloadPath:       settings.DownloadPath,
 		RutrackerConfig:    &settings.RutrackerConfig,
 		WebAppURL:          settings.WebAppURL,
@@ -70,10 +71,10 @@ func main() {
 
 
 	webhookParams := telegram.SetWebhookParams{
-		Url:         settings.WebHookURL,
+		URL:         settings.WebHookURL,
 	}
 
-	err = api.SetWebhook(&webhookParams)
+	err = api.SetWebhook(context.Background(), webhookParams)
 	if err != nil {
 		logger.Fatal(err, "Failed to set webhook")
 	}
@@ -85,11 +86,11 @@ func main() {
 				Type: "web_app",
 				Text: "Open",
 				WebApp: &telegram.WebAppInfo{
-					Url: settings.WebAppURL,
+					URL: settings.WebAppURL,
 				},
 			},
 		}
-		err = api.SetChatMenuButton(&menuButtonParams)
+		err = api.SetChatMenuButton(context.Background(), menuButtonParams)
 		if err != nil {
 			logger.Error(err, "Failed to set chat menu button")
 		} else {
@@ -100,7 +101,7 @@ func main() {
 	startListen(80, handler.HandleUpdate)
 }
 
-func startListen(port int, handleUpdate func(*telegram.Update) error) {
+func startListen(port int, handleUpdate func(context.Context, *telegram.Update) error) {
 	logger.Info("Bot started")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var update telegram.Update
@@ -115,7 +116,7 @@ func startListen(port int, handleUpdate func(*telegram.Update) error) {
 		w.WriteHeader(http.StatusOK)
 
 		go func() {
-			if err := handleUpdate(&update); err != nil {
+			if err := handleUpdate(context.Background(), &update); err != nil {
 				logger.Error(err, "Failed to handle update from request")
 			}
 		}()

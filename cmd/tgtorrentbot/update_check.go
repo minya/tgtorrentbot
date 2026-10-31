@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"github.com/odwrtw/transmission"
 )
 
-func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *telegram.Api) func() {
+func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *telegram.API) func() {
 	chanNotify := make(chan int, 1)
 
 	updateFn := func() {
@@ -63,7 +64,7 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 
 func updateCheckRoutine(
 	transmissionClient *transmission.Client,
-	api *telegram.Api,
+	api *telegram.API,
 	state transmission.TorrentMap,
 ) (transmission.TorrentMap, error) {
 	torrents, err := transmissionClient.GetTorrentMap()
@@ -89,8 +90,8 @@ func updateCheckRoutine(
 			logger.Info("[UpdatesChecker] Found completed torrent: %s", torrent.Name)
 
 			category := getTorrentCategory(torrent)
-			api.SendMessage(telegram.ReplyMessage{
-				ChatId: chatID,
+			api.SendMessage(context.Background(), telegram.SendMessageParams{
+				ChatID: chatID,
 				Text:   fmt.Sprintf("Completed: %v [%s]", torrent.Name, category),
 			})
 		}

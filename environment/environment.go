@@ -9,7 +9,7 @@ import (
 
 type Env struct {
 	TransmissionClient *transmission.Client
-	TgApi              *telegram.Api
+	TgApi              *telegram.API
 	DownloadPath       string
 	RutrackerConfig    *rutracker.Config
 	WebAppURL          string
@@ -19,7 +19,7 @@ type Env struct {
 
 func Environment(
 	transmissionClient *transmission.Client,
-	tgApi *telegram.Api,
+	tgApi *telegram.API,
 	downloadPath string,
 	rutrackerConfig *rutracker.Config,
 ) *Env {

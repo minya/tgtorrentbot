@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -34,9 +35,9 @@ func (f *ListCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
 	return false, nil
 }
 
-func (cmd *ListCommand) Handle(upd *telegram.Update) error {
-	chatID := upd.Message.Chat.Id
-	return sendTorrentsList(cmd.Env, chatID, 0)
+func (cmd *ListCommand) Handle(ctx context.Context, upd *telegram.Update) error {
+	chatID := upd.Message.Chat.ID
+	return sendTorrentsList(ctx, cmd.Env, chatID, 0)
 }
 
 // ListPageCommand handles pagination callbacks for /list
@@ -62,44 +63,44 @@ func (f *ListPageCommandFactory) Accepts(upd *telegram.Update) (bool, Command) {
 	return false, nil
 }
 
-func (cmd *ListPageCommand) Handle(upd *telegram.Update) error {
-	AnswerCallbackQuery(upd, cmd.TgApi)
-	chatID := upd.CallbackQuery.Message.Chat.Id
-	messageID := upd.CallbackQuery.Message.MessageId
-	return editTorrentsList(cmd.Env, chatID, messageID, cmd.Page)
+func (cmd *ListPageCommand) Handle(ctx context.Context, upd *telegram.Update) error {
+	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
+	chatID := upd.CallbackQuery.Message.Chat.ID
+	messageID := upd.CallbackQuery.Message.MessageID
+	return editTorrentsList(ctx, cmd.Env, chatID, messageID, cmd.Page)
 }
 
 // sendTorrentsList sends a new message with the torrent list (for initial /list command)
-func sendTorrentsList(env environment.Env, chatID int64, page int) error {
+func sendTorrentsList(ctx context.Context, env environment.Env, chatID int64, page int) error {
 	text, keyboard, err := prepareTorrentsList(env, page)
 	if err != nil {
-		env.TgApi.SendMessage(telegram.ReplyMessage{
+		env.TgApi.SendMessage(ctx, telegram.SendMessageParams{
 			Text:   "Error",
-			ChatId: chatID,
+			ChatID: chatID,
 		})
 		return err
 	}
 
-	msg := telegram.ReplyMessage{
+	msg := telegram.SendMessageParams{
 		Text:   text,
-		ChatId: chatID,
+		ChatID: chatID,
 	}
 	if keyboard != nil {
 		msg.ReplyMarkup = keyboard
 	}
 
-	env.TgApi.SendMessage(msg)
+	env.TgApi.SendMessage(ctx, msg)
 	return nil
 }
 
 // editTorrentsList edits an existing message with the torrent list (for pagination)
-func editTorrentsList(env environment.Env, chatID int64, messageID int64, page int) error {
+func editTorrentsList(ctx context.Context, env environment.Env, chatID int64, messageID int64, page int) error {
 	text, keyboard, err := prepareTorrentsList(env, page)
 	if err != nil {
 		return err
 	}
 
-	params := &telegram.EditMessageTextParams{
+	params := telegram.EditMessageTextParams{
 		ChatID:    chatID,
 		MessageID: messageID,
 		Text:      text,
@@ -108,7 +109,7 @@ func editTorrentsList(env environment.Env, chatID int64, messageID int64, page i
 		params.ReplyMarkup = keyboard
 	}
 
-	env.TgApi.EditMessageText(params)
+	env.TgApi.EditMessageText(ctx, params)
 	return nil
 }
 
@@ -200,7 +201,7 @@ func buildPaginationKeyboard(page, totalPages int, webAppURL string) *telegram.I
 		rows = append(rows, []telegram.InlineKeyboardButton{
 			{
 				Text:   "Open app",
-				WebApp: &telegram.WebAppInfo{Url: webAppURL},
+				WebApp: &telegram.WebAppInfo{URL: webAppURL},
 			},
 		})
 	}

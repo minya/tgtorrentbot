@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"context"
+
 	"github.com/minya/telegram"
 )
 
@@ -9,13 +11,13 @@ type CommandFactory interface {
 }
 
 type Command interface {
-	Handle(upd *telegram.Update) error
+	Handle(ctx context.Context, upd *telegram.Update) error
 }
 
-func AnswerCallbackQuery(upd *telegram.Update, api *telegram.Api) {
+func AnswerCallbackQuery(ctx context.Context, upd *telegram.Update, api *telegram.API) {
 	if upd.CallbackQuery != nil {
-		api.AnswerCallbackQuery(&telegram.AnswerCallbackQueryParams{
-			CallbackQueryID: upd.CallbackQuery.Id,
+		api.AnswerCallbackQuery(ctx, telegram.AnswerCallbackQueryParams{
+			CallbackQueryID: upd.CallbackQuery.ID,
 			Text:            "Processing...",
 			ShowAlert:       false,
 		})

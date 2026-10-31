@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/minya/logger"
@@ -30,13 +31,13 @@ func (factory *DownloadByFileCommandFactory) Accepts(upd *telegram.Update) (bool
 	return false, nil
 }
 
-func (cmd *DownloadByFileCommand) Handle(upd *telegram.Update) error {
+func (cmd *DownloadByFileCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	memFileID := cmd.FileIDLookup.Add(cmd.Doc.FileID)
 
-	chatID := upd.Message.Chat.Id
+	chatID := upd.Message.Chat.ID
 	keyboard := buildCategoryKeyboard(memFileID)
-	err := cmd.TgApi.SendMessage(telegram.ReplyMessage{
-		ChatId:      chatID,
+	_, err := cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		ChatID:      chatID,
 		Text:        "Select category:",
 		ReplyMarkup: keyboard,
 	})

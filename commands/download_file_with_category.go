@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -54,34 +55,35 @@ type expiredFileButtonCommand struct {
 	environment.Env
 }
 
-func (cmd *expiredFileButtonCommand) Handle(upd *telegram.Update) error {
-	AnswerCallbackQuery(upd, cmd.TgApi)
-	chatID := upd.CallbackQuery.Message.Chat.Id
+func (cmd *expiredFileButtonCommand) Handle(ctx context.Context, upd *telegram.Update) error {
+	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
+	chatID := upd.CallbackQuery.Message.Chat.ID
 	logger.Warn("File ID lookup expired or missing for callback %q", upd.CallbackQuery.Data)
-	return cmd.TgApi.SendMessage(telegram.ReplyMessage{
-		ChatId: chatID,
+	_, err := cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		ChatID: chatID,
 		Text:   "Кнопка устарела. Пожалуйста, загрузите файл заново.",
 	})
+	return err
 }
 
-func (cmd *DownloadFileWithCategoryCommand) Handle(upd *telegram.Update) error {
+func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	api := cmd.TgApi
-	AnswerCallbackQuery(upd, api)
-	file, err := api.GetFile(cmd.FileID)
-	chatID := upd.CallbackQuery.Message.Chat.Id
+	AnswerCallbackQuery(ctx, upd, api)
+	file, err := api.GetFile(ctx, cmd.FileID)
+	chatID := upd.CallbackQuery.Message.Chat.ID
 	if err != nil {
 		logger.Error(err, "Error getting file")
-		api.SendMessage(telegram.ReplyMessage{
-			ChatId: chatID,
+		api.SendMessage(ctx, telegram.SendMessageParams{
+			ChatID: chatID,
 			Text:   "Error",
 		})
 		return err
 	}
-	content, err := api.DownloadFile(file)
+	content, err := api.DownloadFile(ctx, file)
 	if err != nil {
 		logger.Error(err, "Error downloading file")
-		api.SendMessage(telegram.ReplyMessage{
-			ChatId: chatID,
+		api.SendMessage(ctx, telegram.SendMessageParams{
+			ChatID: chatID,
 			Text:   fmt.Sprintf("Download error: %v", err),
 		})
 		return err
@@ -91,5 +93,5 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(upd *telegram.Update) error {
 		Env: cmd.Env,
 	}
 
-	return downloadCmd.addTorrentAndReply(content, chatID, cmd.Category)
+	return downloadCmd.addTorrentAndReply(ctx, content, chatID, cmd.Category)
 }

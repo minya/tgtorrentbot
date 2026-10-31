@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"regexp"
@@ -37,12 +38,12 @@ func (factory *DownloadCommandFactory) Accepts(upd *telegram.Update) (bool, Comm
 	return false, nil
 }
 
-func (cmd *DownloadCommand) Handle(upd *telegram.Update) error {
-	AnswerCallbackQuery(upd, cmd.TgApi)
+func (cmd *DownloadCommand) Handle(ctx context.Context, upd *telegram.Update) error {
+	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
 
 	keyboard := cmd.buildCategoryKeyboard()
-	cmd.TgApi.SendMessage(telegram.ReplyMessage{
-		ChatId:      upd.CallbackQuery.Message.Chat.Id,
+	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		ChatID:      upd.CallbackQuery.Message.Chat.ID,
 		Text:        "Select category:",
 		ReplyMarkup: keyboard,
 	})
@@ -65,7 +66,7 @@ func (cmd *DownloadCommand) buildCategoryKeyboard() telegram.InlineKeyboardMarku
 	}
 }
 
-func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, category Category) error {
+func (cmd *DownloadCommand) addTorrentAndReply(ctx context.Context, content []byte, chatID int64, category Category) error {
 	torrentBase64 := base64.StdEncoding.EncodeToString(content)
 	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
 
@@ -80,10 +81,10 @@ func (cmd *DownloadCommand) addTorrentAndReply(content []byte, chatID int64, cat
 		return err
 	}
 
-	return cmd.finalizeTorrent(torrent, chatID, category)
+	return cmd.finalizeTorrent(ctx, torrent, chatID, category)
 }
 
-func (cmd *DownloadCommand) addMagnetAndReply(magnetURI string, chatID int64, category Category) error {
+func (cmd *DownloadCommand) addMagnetAndReply(ctx context.Context, magnetURI string, chatID int64, category Category) error {
 	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
 
 	logger.Debug("Adding magnet with category %s to directory %s", category.String(), downloadDir)
@@ -97,10 +98,10 @@ func (cmd *DownloadCommand) addMagnetAndReply(magnetURI string, chatID int64, ca
 		return err
 	}
 
-	return cmd.finalizeTorrent(torrent, chatID, category)
+	return cmd.finalizeTorrent(ctx, torrent, chatID, category)
 }
 
-func (cmd *DownloadCommand) finalizeTorrent(torrent *transmission.Torrent, chatID int64, category Category) error {
+func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transmission.Torrent, chatID int64, category Category) error {
 	labels := []string{fmt.Sprintf("%v", chatID), category.String()}
 	logger.Debug("Torrent added with ID %v, setting labels to %v", torrent.ID, labels)
 
@@ -111,8 +112,8 @@ func (cmd *DownloadCommand) finalizeTorrent(torrent *transmission.Torrent, chatI
 
 	logger.Debug("Torrent %v labels set successfully", torrent.ID)
 
-	cmd.TgApi.SendMessage(telegram.ReplyMessage{
-		ChatId: chatID,
+	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		ChatID: chatID,
 		Text:   fmt.Sprintf("Added: %v [%s]", torrent.ID, category.DisplayName()),
 	})
 	return nil

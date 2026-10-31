@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -57,7 +58,7 @@ func min(a int, b int) int {
 	return b
 }
 
-func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
+func (cmd *SearchCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
 	cfg := cmd.RutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
@@ -74,10 +75,10 @@ func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
 	logger.Info("found: %v results\n", len(found))
 	logger.Debug("found: %v\n", found)
 
-	chatID := upd.Message.Chat.Id
+	chatID := upd.Message.Chat.ID
 	if len(found) == 0 {
-		cmd.TgApi.SendMessage(telegram.ReplyMessage{
-			ChatId: chatID,
+		cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+			ChatID: chatID,
 			Text:   "Nothing found",
 		})
 		return nil
@@ -88,8 +89,8 @@ func (cmd *SearchCommand) Handle(upd *telegram.Update) error {
 	})
 
 	for _, f := range found[:min(10, len(found))] {
-		cmd.TgApi.SendMessage(telegram.ReplyMessage{
-			ChatId: chatID,
+		cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+			ChatID: chatID,
 			Text:   fmt.Sprintf("%v\r\n\r\nSize:%v%v\r\nSeeders: %v", f.Title, f.Size.Size, f.Size.Unit, f.Seeders),
 			ReplyMarkup: &telegram.InlineKeyboardMarkup{
 				InlineKeyboard: [][]telegram.InlineKeyboardButton{

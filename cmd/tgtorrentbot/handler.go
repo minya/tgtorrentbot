@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"slices"
 
 	"github.com/minya/logger"
@@ -45,25 +46,25 @@ func extractUser(upd *telegram.Update) *telegram.User {
 	return nil
 }
 
-func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
+func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.Update) error {
 	logger.Debug("Received update: %+v", upd)
 	user := extractUser(upd)
 	if user == nil {
 		logger.Warn("Ignoring update with no user info")
 		return nil
 	}
-	if !slices.Contains(handler.AllowedUsers, user.Id) {
+	if !slices.Contains(handler.AllowedUsers, user.ID) {
 		logger.Warn("Unauthorized access attempt: id=%d username=%s name=%s %s",
-			user.Id, user.UserName, user.FirstName, user.LastName)
+			user.ID, user.Username, user.FirstName, user.LastName)
 		return nil
 	}
-	logger.Debug("Authorized user: id=%d username=%s", user.Id, user.UserName)
+	logger.Debug("Authorized user: id=%d username=%s", user.ID, user.Username)
 
 	for _, factory := range handler.commandsList {
 		accepts, cmd := factory.Accepts(upd)
 		if accepts {
 			logger.Debug("Command accepted: %T", cmd)
-			handleErr := cmd.Handle(upd)
+			handleErr := cmd.Handle(ctx, upd)
 			if handleErr == nil {
 				handler.notify()
 			}
@@ -73,16 +74,16 @@ func (handler *UpdatesHandler) HandleUpdate(upd *telegram.Update) error {
 
 	var replyChatID int64
 	switch {
-	case upd.Message != nil && upd.Message.MessageId != 0:
-		replyChatID = upd.Message.Chat.Id
+	case upd.Message != nil && upd.Message.MessageID != 0:
+		replyChatID = upd.Message.Chat.ID
 	case upd.CallbackQuery != nil && upd.CallbackQuery.Message != nil:
-		replyChatID = upd.CallbackQuery.Message.Chat.Id
+		replyChatID = upd.CallbackQuery.Message.Chat.ID
 	default:
 		return nil
 	}
 
-	handler.TgApi.SendMessage(telegram.ReplyMessage{
-		ChatId: replyChatID,
+	handler.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		ChatID: replyChatID,
 		Text:   "Expected a command, search query, or torrent file",
 	})
 	return nil

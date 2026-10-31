@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -35,13 +36,13 @@ func (factory *DownloadByMagnetCommandFactory) Accepts(upd *telegram.Update) (bo
 	}
 }
 
-func (cmd *DownloadByMagnetCommand) Handle(upd *telegram.Update) error {
+func (cmd *DownloadByMagnetCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	memID := cmd.FileIDLookup.Add(cmd.MagnetURI)
 
-	chatID := upd.Message.Chat.Id
+	chatID := upd.Message.Chat.ID
 	keyboard := buildMagnetCategoryKeyboard(memID)
-	if err := cmd.TgApi.SendMessage(telegram.ReplyMessage{
-		ChatId:      chatID,
+	if _, err := cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		ChatID:      chatID,
 		Text:        "Select category:",
 		ReplyMarkup: keyboard,
 	}); err != nil {

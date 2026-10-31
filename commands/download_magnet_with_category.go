@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"regexp"
 	"strings"
 
@@ -48,10 +49,10 @@ func (factory *DownloadMagnetWithCategoryCommandFactory) Accepts(upd *telegram.U
 	}
 }
 
-func (cmd *DownloadMagnetWithCategoryCommand) Handle(upd *telegram.Update) error {
-	AnswerCallbackQuery(upd, cmd.TgApi)
+func (cmd *DownloadMagnetWithCategoryCommand) Handle(ctx context.Context, upd *telegram.Update) error {
+	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
 
 	downloadCmd := &DownloadCommand{Env: cmd.Env}
-	chatID := upd.CallbackQuery.Message.Chat.Id
-	return downloadCmd.addMagnetAndReply(cmd.MagnetURI, chatID, cmd.Category)
+	chatID := upd.CallbackQuery.Message.Chat.ID
+	return downloadCmd.addMagnetAndReply(ctx, cmd.MagnetURI, chatID, cmd.Category)
 }
