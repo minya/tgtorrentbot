@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +45,7 @@ type readTagsOutput struct {
 type writeTagsInput struct {
 	Path        string            `json:"path" jsonschema:"path to an audio file or a directory, relative to the download path or absolute under it"`
 	Recursive   bool              `json:"recursive,omitempty" jsonschema:"when path is a directory, recurse into subdirectories (default false)"`
-	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (e.g. 'cp1251'), re-decode ALL text and comment frames from this codepage to UTF-8 before applying overrides"`
+	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (e.g. 'cp1251'), re-decode text and comment frames from this codepage to UTF-8 before applying overrides; only values that look like cp1251 mojibake are rewritten"`
 	Tags        map[string]string `json:"tags,omitempty" jsonschema:"optional explicit tag overrides; keys: title, artist, album, album_artist, composer, year, genre, track, disc, comment"`
 }
 
@@ -211,7 +213,96 @@ func applyTags(path string, decoder *encoding.Decoder, overrides map[string]stri
 	if !changed {
 		return false, nil
 	}
-	return true, tag.Save()
+	return true, saveTag(tag, path)
+}
+
+// saveTag writes tag followed by the audio of the file at path to a fresh
+// temp file in the same directory and renames it over path.
+//
+// It replaces id3v2's Tag.Save, which writes through the fixed name
+// "<file>-id3v2" opened without O_TRUNC/O_EXCL and following symlinks: a
+// stale temp of that name left trailing garbage in the mp3, and a symlink of
+// that name made the save write outside TGT_DOWNLOADPATH. Here the temp name
+// is random and created exclusively (os.CreateTemp), the data is fsynced
+// before the rename, and the original file mode is kept.
+func saveTag(tag *id3v2.Tag, path string) (err error) {
+	orig, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer orig.Close()
+	st, err := orig.Stat()
+	if err != nil {
+		return err
+	}
+	if !st.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", path)
+	}
+	audioStart, err := id3TagSize(orig)
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tmp.Close()
+			os.Remove(tmp.Name())
+		}
+	}()
+
+	if _, err = tag.WriteTo(tmp); err != nil {
+		return err
+	}
+	if _, err = orig.Seek(audioStart, io.SeekStart); err != nil {
+		return err
+	}
+	if _, err = io.Copy(tmp, orig); err != nil {
+		return err
+	}
+	if err = tmp.Chmod(st.Mode().Perm()); err != nil {
+		return err
+	}
+	if err = tmp.Sync(); err != nil {
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	// Persist the rename itself; a failure here does not undo the save.
+	if d, derr := os.Open(dir); derr == nil {
+		_ = d.Sync()
+		d.Close()
+	}
+	return nil
+}
+
+// id3TagSize returns the size of the ID3v2 tag at the start of f (header
+// plus frames), i.e. the offset where the audio starts, computed the same way
+// id3v2 does when parsing: 10 + the synchsafe size of an "ID3" header, or 0
+// when the file has no ID3v2 tag.
+func id3TagSize(f *os.File) (int64, error) {
+	var hdr [10]byte
+	n, err := f.ReadAt(hdr[:], 0)
+	if n < len(hdr) {
+		if err == io.EOF || err == nil {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if string(hdr[:3]) != "ID3" {
+		return 0, nil
+	}
+	raw := binary.BigEndian.Uint32(hdr[6:])
+	size := int64(raw&0x7f) | int64(raw>>8&0x7f)<<7 | int64(raw>>16&0x7f)<<14 | int64(raw>>24&0x7f)<<21
+	return 10 + size, nil
 }
 
 // setOverride applies a single explicit override, returning whether it changed
@@ -305,6 +396,10 @@ func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 		for _, f := range frames {
 			switch frame := f.(type) {
 			case id3v2.TextFrame:
+				if !looksLikeCP1251Mojibake(frame.Text) {
+					newFrames = append(newFrames, frame)
+					continue
+				}
 				fixed, err := reinterpretAsCP1251(frame.Text, decoder)
 				if err == nil && fixed != frame.Text {
 					frame.Text = fixed
@@ -313,8 +408,14 @@ func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 				}
 				newFrames = append(newFrames, frame)
 			case id3v2.CommentFrame:
-				fixedDesc, derr := reinterpretAsCP1251(frame.Description, decoder)
-				fixedText, terr := reinterpretAsCP1251(frame.Text, decoder)
+				fixedDesc, fixedText := frame.Description, frame.Text
+				var derr, terr error
+				if looksLikeCP1251Mojibake(frame.Description) {
+					fixedDesc, derr = reinterpretAsCP1251(frame.Description, decoder)
+				}
+				if looksLikeCP1251Mojibake(frame.Text) {
+					fixedText, terr = reinterpretAsCP1251(frame.Text, decoder)
+				}
 				if derr == nil && terr == nil && (fixedDesc != frame.Description || fixedText != frame.Text) {
 					frame.Description = fixedDesc
 					frame.Text = fixedText
@@ -339,6 +440,29 @@ func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 	}
 
 	return len(rewrites) > 0
+}
+
+// looksLikeCP1251Mojibake reports whether s looks like cp1251 bytes that
+// were decoded as Latin-1, so re-decoding it as cp1251 is safe. Such text
+// (Cyrillic words read as Latin-1) consists of runs of U+00C0–U+00FF letters
+// (cp1251 А–я), plus U+00A8/U+00B8 (Ё/ё), and outnumbers ASCII letters,
+// while correct Western text (Café, Déjà Vu, Beyoncé) has a few accented
+// letters among many ASCII ones. Any rune above U+00FF means the text is not
+// Latin-1-decoded at all. fix_encoding only rewrites values that pass this
+// check, so frames that are already correct survive.
+func looksLikeCP1251Mojibake(s string) bool {
+	high, ascii := 0, 0
+	for _, r := range s {
+		switch {
+		case r > 0xFF:
+			return false
+		case r >= 0xC0 || r == 0xA8 || r == 0xB8:
+			high++
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z':
+			ascii++
+		}
+	}
+	return high >= 2 && high > ascii
 }
 
 // reinterpretAsCP1251 takes a string that was decoded as Latin-1 (or similar)
@@ -406,7 +530,9 @@ func collectAudioFiles(root string, recursive bool) ([]string, error) {
 			if err != nil {
 				return err
 			}
-			if d.IsDir() {
+			// Regular files only: a symlinked .mp3 may point outside
+			// TGT_DOWNLOADPATH, and WalkDir does not follow it as a dir.
+			if !d.Type().IsRegular() {
 				return nil
 			}
 			if audioExtensions[strings.ToLower(filepath.Ext(p))] {
@@ -422,7 +548,8 @@ func collectAudioFiles(root string, recursive bool) ([]string, error) {
 		return nil, err
 	}
 	for _, e := range entries {
-		if e.IsDir() {
+		// Regular files only (see the recursive branch).
+		if !e.Type().IsRegular() {
 			continue
 		}
 		full := filepath.Join(root, e.Name())

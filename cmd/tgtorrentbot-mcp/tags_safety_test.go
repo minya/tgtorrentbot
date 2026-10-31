@@ -1,0 +1,267 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/bogem/id3v2/v2"
+)
+
+// audioPayload is recognisable "audio" placed after the tag, so tests can
+// check it survives a save byte for byte.
+var audioPayload = bytes.Repeat([]byte("AUDIO-0123456789"), 64)
+
+// seedMP3 writes an ID3v2.4 tag built by build, followed by audioPayload.
+func seedMP3(t *testing.T, path string, mode os.FileMode, build func(tag *id3v2.Tag)) {
+	t.Helper()
+	tag := id3v2.NewEmptyTag()
+	tag.SetVersion(4)
+	tag.SetDefaultEncoding(id3v2.EncodingUTF8)
+	build(tag)
+	var buf bytes.Buffer
+	if _, err := tag.WriteTo(&buf); err != nil {
+		t.Fatal(err)
+	}
+	buf.Write(audioPayload)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func openTag(t *testing.T, path string) *id3v2.Tag {
+	t.Helper()
+	tag, err := id3v2.Open(path, id3v2.Options{Parse: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { tag.Close() })
+	return tag
+}
+
+// assertAudioIntact checks that path ends with exactly audioPayload right
+// after its tag.
+func assertAudioIntact(t *testing.T, path string) {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	start, err := id3TagSize(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data[start:], audioPayload) {
+		t.Fatalf("audio after the tag changed: %d bytes, want %d", len(data)-int(start), len(audioPayload))
+	}
+}
+
+func writeOne(t *testing.T, srv *server, in writeTagsInput) writeTagsOutput {
+	t.Helper()
+	res, out, err := srv.writeTags(context.Background(), nil, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("writeTags error result: %+v", res.Content)
+	}
+	for _, f := range out.Files {
+		if f.Error != "" {
+			t.Fatalf("file %s: %s", f.Path, f.Error)
+		}
+	}
+	return out
+}
+
+// F5: a stale "<file>-id3v2" left by an interrupted id3v2 Save must not end
+// up appended to the mp3.
+func TestWriteTagsIgnoresStaleID3v2Temp(t *testing.T) {
+	root := t.TempDir()
+	mp3 := filepath.Join(root, "a.mp3")
+	seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) { tag.SetTitle("old") })
+	stale := mp3 + "-id3v2"
+	if err := os.WriteFile(stale, bytes.Repeat([]byte{0xEE}, 64<<10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	writeOne(t, &server{config: Config{DownloadPath: root}}, writeTagsInput{Path: "a.mp3", Tags: map[string]string{"title": "new"}})
+
+	if got := openTag(t, mp3).Title(); got != "new" {
+		t.Fatalf("title = %q, want new", got)
+	}
+	assertAudioIntact(t, mp3)
+}
+
+// F5: a symlink at "<file>-id3v2" must not redirect the write outside the root.
+func TestWriteTagsDoesNotFollowSymlinkedTemp(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "victim.txt")
+	if err := os.WriteFile(outside, []byte("PRECIOUS"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mp3 := filepath.Join(root, "b.mp3")
+	seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) { tag.SetTitle("old") })
+	if err := os.Symlink(outside, mp3+"-id3v2"); err != nil {
+		t.Fatal(err)
+	}
+
+	writeOne(t, &server{config: Config{DownloadPath: root}}, writeTagsInput{Path: "b.mp3", Tags: map[string]string{"title": "new"}})
+
+	if data, _ := os.ReadFile(outside); string(data) != "PRECIOUS" {
+		t.Fatalf("file outside the root was overwritten: %q", data)
+	}
+	if fi, err := os.Lstat(mp3); err != nil || !fi.Mode().IsRegular() {
+		t.Fatalf("b.mp3 is no longer a regular file: %v %v", fi, err)
+	}
+	assertAudioIntact(t, mp3)
+}
+
+// F5: saving keeps the file mode and leaves no temp files behind.
+func TestWriteTagsKeepsModeAndLeavesNoTemp(t *testing.T) {
+	root := t.TempDir()
+	mp3 := filepath.Join(root, "c.mp3")
+	seedMP3(t, mp3, 0o640, func(tag *id3v2.Tag) { tag.SetTitle("old") })
+
+	writeOne(t, &server{config: Config{DownloadPath: root}}, writeTagsInput{Path: "c.mp3", Tags: map[string]string{"title": "a much longer title than before, to grow the tag"}})
+
+	fi, err := os.Stat(mp3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o640 {
+		t.Errorf("mode = %v, want 0640", fi.Mode().Perm())
+	}
+	entries, _ := os.ReadDir(root)
+	if len(entries) != 1 {
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("directory holds %v, want only c.mp3", names)
+	}
+	assertAudioIntact(t, mp3)
+}
+
+func TestID3TagSizeWithoutTag(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "raw.mp3")
+	if err := os.WriteFile(p, []byte("not a tag, just audio"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := os.Open(p)
+	defer f.Close()
+	if n, err := id3TagSize(f); err != nil || n != 0 {
+		t.Fatalf("id3TagSize = %d, %v; want 0, nil", n, err)
+	}
+}
+
+// F7: a symlinked .mp3 pointing outside the root is neither read nor written.
+func TestTagToolsSkipSymlinkedMP3(t *testing.T) {
+	root := t.TempDir()
+	outsideDir := t.TempDir()
+	secret := filepath.Join(outsideDir, "secret.mp3")
+	seedMP3(t, secret, 0o644, func(tag *id3v2.Tag) { tag.SetTitle("SECRET-OUTSIDE") })
+	secretBefore, _ := os.ReadFile(secret)
+
+	alb := filepath.Join(root, "music", "alb")
+	seedMP3(t, filepath.Join(alb, "ok.mp3"), 0o644, func(tag *id3v2.Tag) { tag.SetTitle("inside") })
+	evil := filepath.Join(alb, "evil.mp3")
+	if err := os.Symlink(secret, evil); err != nil {
+		t.Fatal(err)
+	}
+	srv := &server{config: Config{DownloadPath: root}}
+
+	for _, in := range []readTagsInput{{Path: "music", Recursive: true}, {Path: "music/alb"}} {
+		_, out, err := srv.readTags(context.Background(), nil, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range out.Files {
+			if f.Title == "SECRET-OUTSIDE" || strings.Contains(f.Path, "evil") {
+				t.Fatalf("read_tags %+v returned the symlinked file outside the root: %+v", in, f)
+			}
+		}
+		if len(out.Files) != 1 {
+			t.Fatalf("read_tags %+v returned %d files, want 1", in, len(out.Files))
+		}
+	}
+
+	writeOne(t, srv, writeTagsInput{Path: "music", Recursive: true, Tags: map[string]string{"album": "X"}})
+	if fi, err := os.Lstat(evil); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("evil.mp3 is no longer the symlink: %v %v", fi, err)
+	}
+	if after, _ := os.ReadFile(secret); !bytes.Equal(after, secretBefore) {
+		t.Fatal("file outside the root changed")
+	}
+}
+
+// F8: fix_encoding repairs mojibake frames and leaves correct ones alone,
+// even within the same tag.
+func TestFixEncodingKeepsCorrectFrames(t *testing.T) {
+	root := t.TempDir()
+	mp3 := filepath.Join(root, "mixed.mp3")
+	seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) {
+		tag.SetTitle("Déjà Vu")
+		tag.SetArtist("Beyoncé")
+		tag.SetAlbum("Café del Mar")
+		tag.AddTextFrame(tag.CommonID("Composer"), id3v2.EncodingISO, "Ïðèâåò Ìèð")
+		tag.AddCommentFrame(id3v2.CommentFrame{Encoding: id3v2.EncodingUTF8, Language: "eng", Text: "Señor"})
+	})
+
+	writeOne(t, &server{config: Config{DownloadPath: root}}, writeTagsInput{Path: "mixed.mp3", FixEncoding: "cp1251"})
+
+	tag := openTag(t, mp3)
+	for name, got := range map[string]string{
+		"title":  tag.Title(),
+		"artist": tag.Artist(),
+		"album":  tag.Album(),
+	} {
+		want := map[string]string{"title": "Déjà Vu", "artist": "Beyoncé", "album": "Café del Mar"}[name]
+		if got != want {
+			t.Errorf("%s = %q, want %q (correct text was rewritten)", name, got, want)
+		}
+	}
+	if got := tag.GetTextFrame(tag.CommonID("Composer")).Text; got != "Привет Мир" {
+		t.Errorf("composer = %q, want %q (mojibake not repaired)", got, "Привет Мир")
+	}
+	if frames := tag.GetFrames(tag.CommonID("Comments")); len(frames) != 1 || frames[0].(id3v2.CommentFrame).Text != "Señor" {
+		t.Errorf("comment changed: %+v", frames)
+	}
+	assertAudioIntact(t, mp3)
+}
+
+func TestLooksLikeCP1251Mojibake(t *testing.T) {
+	for s, want := range map[string]bool{
+		"Ïðèâåò":             true,
+		"Ïðèâåò World":       true,
+		"Ãðóïïà Êèíî":        true,
+		"¨ëêà":               true, // Ёлка
+		"Café del Mar":       false,
+		"Beyoncé":            false,
+		"Déjà Vu":            false,
+		"Été à Évian":        false,
+		"Ação":               false,
+		"Hello":              false,
+		"Привет":             false,
+		"":                   false,
+		"ÏðèâåòĀ":            false,
+		"Motörhead - Ace of": false,
+	} {
+		if got := looksLikeCP1251Mojibake(s); got != want {
+			t.Errorf("looksLikeCP1251Mojibake(%q) = %v, want %v", s, got, want)
+		}
+	}
+}

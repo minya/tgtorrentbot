@@ -181,9 +181,11 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 		Name: "write_tags",
 		Description: "Write ID3 tags to an audio file or every audio file under a " +
 			"directory. Two modes, combinable (applied in order fix → explicit):\n" +
-			"  1. fix_encoding: re-decode ALL text frames and comment frames from " +
+			"  1. fix_encoding: re-decode text frames and comment frames from " +
 			"the given codepage (e.g. 'cp1251') to UTF-8 — use this when read_tags " +
-			"reports mojibake.\n" +
+			"reports mojibake. Only values that themselves look like cp1251 read " +
+			"as Latin-1 are rewritten; correct text (including accented Latin " +
+			"such as 'Café') is left as is, so it is safe on mixed directories.\n" +
 			"  2. tags: apply explicit overrides. Keys: title, artist, album, " +
 			"album_artist, composer, year, genre, track, disc, comment.\n" +
 			"For multi-CD audiobooks with missing or wrong track/disc numbers: call " +
