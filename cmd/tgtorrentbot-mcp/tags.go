@@ -44,7 +44,7 @@ type readTagsOutput struct {
 type writeTagsInput struct {
 	Path        string            `json:"path" jsonschema:"path to an audio file or a directory, relative to the download path or absolute under it"`
 	Recursive   bool              `json:"recursive,omitempty" jsonschema:"when path is a directory, recurse into subdirectories (default false)"`
-	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (e.g. 'cp1251'), re-decode text and comment frames from this codepage to UTF-8 before applying overrides; only values that look like cp1251 mojibake are rewritten"`
+	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (e.g. 'cp1251'), re-decode text (T***, TXXX), comment and lyrics (USLT) frames from this codepage to UTF-8 before applying overrides; only values that look like cp1251 mojibake are rewritten"`
 	Tags        map[string]string `json:"tags,omitempty" jsonschema:"optional explicit tag overrides; keys: title, artist, album, album_artist, composer, year, genre, track, disc, comment"`
 }
 
@@ -379,9 +379,11 @@ func setOverride(tag *id3v2.Tag, key, val string) bool {
 	return false
 }
 
-// fixAllEncoding iterates every text frame (T*** except TXXX) and every COMM
-// frame, re-decodes the text values through decoder, and rewrites the frames
-// with UTF-8 encoding. Returns whether any frame was changed.
+// fixAllEncoding iterates every text-bearing frame: text frames (T***),
+// user-defined text (TXXX), comments (COMM) and unsynchronised lyrics (USLT).
+// It re-decodes the values that look like mojibake through decoder and
+// rewrites those frames with UTF-8 encoding. Returns whether any frame was
+// changed. Binary frames (APIC, PRIV, ...) are left alone.
 func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 	type rewrite struct {
 		id     string
@@ -407,17 +409,19 @@ func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 				}
 				newFrames = append(newFrames, frame)
 			case id3v2.CommentFrame:
-				fixedDesc, fixedText := frame.Description, frame.Text
-				var derr, terr error
-				if looksLikeCP1251Mojibake(frame.Description) {
-					fixedDesc, derr = reinterpretAsCP1251(frame.Description, decoder)
+				if fixFields(decoder, &frame.Description, &frame.Text) {
+					frame.Encoding = id3v2.EncodingUTF8
+					anyChanged = true
 				}
-				if looksLikeCP1251Mojibake(frame.Text) {
-					fixedText, terr = reinterpretAsCP1251(frame.Text, decoder)
+				newFrames = append(newFrames, frame)
+			case id3v2.UserDefinedTextFrame: // TXXX: album artist, series, narrator...
+				if fixFields(decoder, &frame.Description, &frame.Value) {
+					frame.Encoding = id3v2.EncodingUTF8
+					anyChanged = true
 				}
-				if derr == nil && terr == nil && (fixedDesc != frame.Description || fixedText != frame.Text) {
-					frame.Description = fixedDesc
-					frame.Text = fixedText
+				newFrames = append(newFrames, frame)
+			case id3v2.UnsynchronisedLyricsFrame: // USLT
+				if fixFields(decoder, &frame.ContentDescriptor, &frame.Lyrics) {
 					frame.Encoding = id3v2.EncodingUTF8
 					anyChanged = true
 				}
@@ -439,6 +443,32 @@ func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 	}
 
 	return len(rewrites) > 0
+}
+
+// fixFields re-decodes, in place, each of fields that looks like mojibake.
+// It changes nothing unless every re-decode succeeds, and reports whether a
+// value changed.
+func fixFields(decoder *encoding.Decoder, fields ...*string) bool {
+	fixed := make([]string, len(fields))
+	changed := false
+	for i, f := range fields {
+		fixed[i] = *f
+		if !looksLikeCP1251Mojibake(*f) {
+			continue
+		}
+		v, err := reinterpretAsCP1251(*f, decoder)
+		if err != nil {
+			return false
+		}
+		fixed[i] = v
+		changed = changed || v != *f
+	}
+	if changed {
+		for i, f := range fields {
+			*f = fixed[i]
+		}
+	}
+	return changed
 }
 
 // looksLikeCP1251Mojibake reports whether s looks like cp1251 bytes that

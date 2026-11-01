@@ -265,3 +265,39 @@ func TestLooksLikeCP1251Mojibake(t *testing.T) {
 		}
 	}
 }
+
+// F31: fix_encoding also repairs TXXX (user-defined text) and USLT (lyrics)
+// frames, leaving correct ones alone.
+func TestFixEncodingRepairsTXXXAndUSLT(t *testing.T) {
+	root := t.TempDir()
+	mp3 := filepath.Join(root, "txxx.mp3")
+	seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) {
+		tag.SetTitle("Ïðèâåò")
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{Encoding: id3v2.EncodingISO, Description: "ALBUMARTIST", Value: "Òîëñòîé"})
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{Encoding: id3v2.EncodingUTF8, Description: "NARRATOR", Value: "Beyoncé"})
+		tag.AddUnsynchronisedLyricsFrame(id3v2.UnsynchronisedLyricsFrame{Encoding: id3v2.EncodingISO, Language: "rus", ContentDescriptor: "", Lyrics: "Ïðèâåò ìèð"})
+	})
+
+	writeOne(t, &server{config: Config{DownloadPath: root}}, writeTagsInput{Path: "txxx.mp3", FixEncoding: "cp1251"})
+
+	tag := openTag(t, mp3)
+	got := map[string]string{}
+	for _, f := range tag.GetFrames(tag.CommonID("User defined text information frame")) {
+		u := f.(id3v2.UserDefinedTextFrame)
+		got[u.Description] = u.Value
+	}
+	if got["ALBUMARTIST"] != "Толстой" {
+		t.Errorf("TXXX:ALBUMARTIST = %q, want Толстой", got["ALBUMARTIST"])
+	}
+	if got["NARRATOR"] != "Beyoncé" {
+		t.Errorf("TXXX:NARRATOR = %q, want Beyoncé (correct text rewritten)", got["NARRATOR"])
+	}
+	lyr := tag.GetFrames(tag.CommonID("Unsynchronised lyrics/text transcription"))
+	if len(lyr) != 1 || lyr[0].(id3v2.UnsynchronisedLyricsFrame).Lyrics != "Привет мир" {
+		t.Errorf("USLT = %+v, want Привет мир", lyr)
+	}
+	if tag.Title() != "Привет" {
+		t.Errorf("title = %q", tag.Title())
+	}
+	assertAudioIntact(t, mp3)
+}
