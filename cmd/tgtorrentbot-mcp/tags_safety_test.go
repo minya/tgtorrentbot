@@ -301,3 +301,60 @@ func TestFixEncodingRepairsTXXXAndUSLT(t *testing.T) {
 	}
 	assertAudioIntact(t, mp3)
 }
+
+// F33: an ID3v2.3 tag keeps its version and gets UTF-16 frames, never UTF-8
+// (encoding byte 3), which v2.3 does not define.
+func TestWriteTagsV23UsesUTF16(t *testing.T) {
+	root := t.TempDir()
+	mp3 := filepath.Join(root, "v23.mp3")
+	seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) {
+		tag.SetVersion(3)
+		tag.AddTextFrame(tag.CommonID("Title"), id3v2.EncodingISO, "Âîéíà è ìèð")
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{Encoding: id3v2.EncodingISO, Description: "ALBUMARTIST", Value: "Òîëñòîé"})
+	})
+
+	writeOne(t, &server{config: Config{DownloadPath: root}}, writeTagsInput{
+		Path: "v23.mp3", FixEncoding: "cp1251", Tags: map[string]string{"album": "Война и мир", "comment": "Аудиокнига"},
+	})
+
+	tag := openTag(t, mp3)
+	if tag.Version() != 3 {
+		t.Fatalf("version = %d, want 3", tag.Version())
+	}
+	for _, id := range []string{"TIT2", "TALB", "TXXX", "COMM"} {
+		frames := tag.GetFrames(id)
+		if len(frames) == 0 {
+			t.Errorf("%s missing", id)
+		}
+		for _, f := range frames {
+			var enc id3v2.Encoding
+			switch fr := f.(type) {
+			case id3v2.TextFrame:
+				enc = fr.Encoding
+			case id3v2.UserDefinedTextFrame:
+				enc = fr.Encoding
+			case id3v2.CommentFrame:
+				enc = fr.Encoding
+			}
+			if enc.Equals(id3v2.EncodingUTF8) {
+				t.Errorf("%s written as UTF-8 into a v2.3 tag", id)
+			}
+		}
+	}
+	if tag.Title() != "Война и мир" || tag.Album() != "Война и мир" {
+		t.Errorf("title=%q album=%q", tag.Title(), tag.Album())
+	}
+	assertAudioIntact(t, mp3)
+}
+
+// A v2.4 tag still gets UTF-8.
+func TestWriteTagsV24UsesUTF8(t *testing.T) {
+	root := t.TempDir()
+	mp3 := filepath.Join(root, "v24.mp3")
+	seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) { tag.SetTitle("x") })
+	writeOne(t, &server{config: Config{DownloadPath: root}}, writeTagsInput{Path: "v24.mp3", Tags: map[string]string{"title": "Привет"}})
+	tag := openTag(t, mp3)
+	if f := tag.GetTextFrame("TIT2"); !f.Encoding.Equals(id3v2.EncodingUTF8) || f.Text != "Привет" {
+		t.Fatalf("TIT2 = %+v, want UTF-8 Привет", f)
+	}
+}

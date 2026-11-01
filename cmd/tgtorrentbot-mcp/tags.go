@@ -44,7 +44,7 @@ type readTagsOutput struct {
 type writeTagsInput struct {
 	Path        string            `json:"path" jsonschema:"path to an audio file or a directory, relative to the download path or absolute under it"`
 	Recursive   bool              `json:"recursive,omitempty" jsonschema:"when path is a directory, recurse into subdirectories (default false)"`
-	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (e.g. 'cp1251'), re-decode text (T***, TXXX), comment and lyrics (USLT) frames from this codepage to UTF-8 before applying overrides; only values that look like cp1251 mojibake are rewritten"`
+	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (e.g. 'cp1251'), re-decode text (T***, TXXX), comment and lyrics (USLT) frames from this codepage to Unicode before applying overrides; only values that look like cp1251 mojibake are rewritten"`
 	Tags        map[string]string `json:"tags,omitempty" jsonschema:"optional explicit tag overrides; keys: title, artist, album, album_artist, composer, year, genre, track, disc, comment"`
 }
 
@@ -193,7 +193,7 @@ func applyTags(path string, decoder *encoding.Decoder, overrides map[string]stri
 	defer tag.Close()
 
 	// id3v2/v2 locks frame encoding at Set* time, so this must come before any Set*.
-	tag.SetDefaultEncoding(id3v2.EncodingUTF8)
+	tag.SetDefaultEncoding(unicodeEncoding(tag))
 
 	changed := false
 
@@ -382,7 +382,7 @@ func setOverride(tag *id3v2.Tag, key, val string) bool {
 // fixAllEncoding iterates every text-bearing frame: text frames (T***),
 // user-defined text (TXXX), comments (COMM) and unsynchronised lyrics (USLT).
 // It re-decodes the values that look like mojibake through decoder and
-// rewrites those frames with UTF-8 encoding. Returns whether any frame was
+// rewrites those frames in the tag's default encoding (unicodeEncoding). Returns whether any frame was
 // changed. Binary frames (APIC, PRIV, ...) are left alone.
 func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 	type rewrite struct {
@@ -404,25 +404,25 @@ func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 				fixed, err := reinterpretAsCP1251(frame.Text, decoder)
 				if err == nil && fixed != frame.Text {
 					frame.Text = fixed
-					frame.Encoding = id3v2.EncodingUTF8
+					frame.Encoding = tag.DefaultEncoding()
 					anyChanged = true
 				}
 				newFrames = append(newFrames, frame)
 			case id3v2.CommentFrame:
 				if fixFields(decoder, &frame.Description, &frame.Text) {
-					frame.Encoding = id3v2.EncodingUTF8
+					frame.Encoding = tag.DefaultEncoding()
 					anyChanged = true
 				}
 				newFrames = append(newFrames, frame)
 			case id3v2.UserDefinedTextFrame: // TXXX: album artist, series, narrator...
 				if fixFields(decoder, &frame.Description, &frame.Value) {
-					frame.Encoding = id3v2.EncodingUTF8
+					frame.Encoding = tag.DefaultEncoding()
 					anyChanged = true
 				}
 				newFrames = append(newFrames, frame)
 			case id3v2.UnsynchronisedLyricsFrame: // USLT
 				if fixFields(decoder, &frame.ContentDescriptor, &frame.Lyrics) {
-					frame.Encoding = id3v2.EncodingUTF8
+					frame.Encoding = tag.DefaultEncoding()
 					anyChanged = true
 				}
 				newFrames = append(newFrames, frame)
@@ -443,6 +443,17 @@ func fixAllEncoding(tag *id3v2.Tag, decoder *encoding.Decoder) bool {
 	}
 
 	return len(rewrites) > 0
+}
+
+// unicodeEncoding returns the Unicode text encoding the tag's version allows:
+// UTF-8 (encoding byte 3) exists only in ID3v2.4, so a v2.3 tag, as most
+// rutracker MP3s carry, gets UTF-16 with BOM (1). Strict v2.3 readers (WMP,
+// car stereos) ignore UTF-8 frames or show them as Latin-1 mojibake.
+func unicodeEncoding(tag *id3v2.Tag) id3v2.Encoding {
+	if tag.Version() == 4 {
+		return id3v2.EncodingUTF8
+	}
+	return id3v2.EncodingUTF16
 }
 
 // fixFields re-decodes, in place, each of fields that looks like mojibake.
