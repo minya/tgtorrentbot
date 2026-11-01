@@ -11,6 +11,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/minya/logger"
+	"github.com/minya/tgtorrentbot/internal/media"
+	"github.com/odwrtw/transmission"
 )
 
 // wsClient represents a single WebSocket connection.
@@ -196,30 +198,7 @@ func (app *App) pollAndBroadcast(prevPercent map[int]float64) {
 	}
 
 	for _, userID := range app.hub.userIDs() {
-		ut := userTorrents(torrents, userID)
-
-		var updates []TorrentUpdate
-		for _, t := range ut {
-			prev, known := prevPercent[t.ID]
-			isComplete := known && prev < 100 && t.PercentDone >= 100
-
-			if t.PercentDone < 100 || isComplete {
-				updates = append(updates, TorrentUpdate{
-					ID:               t.ID,
-					Name:             t.Name,
-					PercentDone:      t.PercentDone,
-					Category:         t.Category,
-					RateDownload:     t.RateDownload,
-					Eta:              t.Eta,
-					PeersConnected:   t.PeersConnected,
-					PeersSendingToUs: t.PeersSendingToUs,
-					TotalSize:        t.TotalSize,
-					IsComplete:       isComplete,
-				})
-			}
-
-			prevPercent[t.ID] = t.PercentDone
-		}
+		updates := torrentUpdates(userTorrents(torrents, userID), prevPercent)
 
 		var msg WSMessage
 		if len(updates) > 0 {
@@ -237,8 +216,41 @@ func (app *App) pollAndBroadcast(prevPercent map[int]float64) {
 		app.hub.broadcast(userID, data)
 	}
 
-	// Clean up prevPercent for torrents that no longer exist.
-	activeIDs := make(map[int]struct{})
+	prunePercent(prevPercent, torrents)
+}
+
+// torrentUpdates returns the updates to send for one user's torrents: every
+// torrent still downloading, plus those that reached 100% since the previous
+// poll (IsComplete). It records each torrent's progress in prevPercent.
+func torrentUpdates(ut []media.TorrentInfo, prevPercent map[int]float64) []TorrentUpdate {
+	var updates []TorrentUpdate
+	for _, t := range ut {
+		prev, known := prevPercent[t.ID]
+		isComplete := known && prev < 100 && t.PercentDone >= 100
+
+		if t.PercentDone < 100 || isComplete {
+			updates = append(updates, TorrentUpdate{
+				ID:               t.ID,
+				Name:             t.Name,
+				PercentDone:      t.PercentDone,
+				Category:         t.Category,
+				RateDownload:     t.RateDownload,
+				Eta:              t.Eta,
+				PeersConnected:   t.PeersConnected,
+				PeersSendingToUs: t.PeersSendingToUs,
+				TotalSize:        t.TotalSize,
+				IsComplete:       isComplete,
+			})
+		}
+
+		prevPercent[t.ID] = t.PercentDone
+	}
+	return updates
+}
+
+// prunePercent drops prevPercent entries of torrents that no longer exist.
+func prunePercent(prevPercent map[int]float64, torrents []*transmission.Torrent) {
+	activeIDs := make(map[int]struct{}, len(torrents))
 	for _, t := range torrents {
 		activeIDs[t.ID] = struct{}{}
 	}

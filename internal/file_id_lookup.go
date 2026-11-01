@@ -18,6 +18,15 @@ type lookupRecord struct {
 type FileIDLookup struct {
 	mu    sync.Mutex
 	items []lookupRecord
+	// now returns the current time; nil means time.Now (tests override it).
+	now func() time.Time
+}
+
+func (lookup *FileIDLookup) clock() time.Time {
+	if lookup.now != nil {
+		return lookup.now()
+	}
+	return time.Now()
 }
 
 func (lookup *FileIDLookup) Add(value string) string {
@@ -25,7 +34,7 @@ func (lookup *FileIDLookup) Add(value string) string {
 	lookup.mu.Lock()
 	defer lookup.mu.Unlock()
 	lookup.cleanupLocked()
-	lookup.items = append(lookup.items, lookupRecord{id: newID, value: value, timestamp: time.Now().Unix()})
+	lookup.items = append(lookup.items, lookupRecord{id: newID, value: value, timestamp: lookup.clock().Unix()})
 	return newID.String()
 }
 
@@ -45,7 +54,7 @@ func (lookup *FileIDLookup) Get(id string) (string, bool) {
 }
 
 func (lookup *FileIDLookup) cleanupLocked() {
-	cutoff := time.Now().Unix() - expirationDuration
+	cutoff := lookup.clock().Unix() - expirationDuration
 	valid := lookup.items[:0]
 	for _, record := range lookup.items {
 		if record.timestamp >= cutoff {
