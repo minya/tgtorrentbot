@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/odwrtw/transmission"
@@ -57,6 +58,14 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	if _, err := os.Lstat(dst); err == nil {
 		return formatError("destination %q already exists; refusing to overwrite", in.Destination), moveMediaOutput{}, nil
 	}
+	// Everything the rename itself would reject is checked here, before the
+	// torrent is untracked, so a move that cannot happen does not cost it.
+	if isWithin(dst, src) {
+		return formatError("destination %q is inside the source %q; a directory cannot be moved into itself", in.Destination, in.Source), moveMediaOutput{}, nil
+	}
+	if same, ok := sameDevice(src, existingAncestor(dst)); ok && !same {
+		return formatError("source %q and destination %q are on different filesystems; cross-device moves are not supported", in.Source, in.Destination), moveMediaOutput{}, nil
+	}
 
 	out := moveMediaOutput{Source: src, Destination: dst}
 
@@ -72,7 +81,9 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 		out.TorrentNote = note
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	created, err := mkdirAllTracked(filepath.Dir(dst))
+	if err != nil {
+		removeCreated(created)
 		return formatError("creating destination parent%s: %v", torrentRemovedSuffix(out), err), moveMediaOutput{}, nil
 	}
 	// The Lstat above is only a fast pre-check: the destination can appear
@@ -80,10 +91,15 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	// it atomically, unlike os.Rename, which silently overwrites a file or an
 	// empty directory.
 	if err := renameNoReplace(src, dst); err != nil {
+		removeCreated(created)
 		if errors.Is(err, fs.ErrExist) {
 			return formatError("destination %q already exists; refusing to overwrite (nothing was moved)%s", in.Destination, torrentRemovedSuffix(out)), moveMediaOutput{}, nil
 		}
-		return formatError("moving %q to %q: %v (cross-device moves are not supported)%s", in.Source, in.Destination, err, torrentRemovedSuffix(out)), moveMediaOutput{}, nil
+		hint := ""
+		if errors.Is(err, syscall.EXDEV) {
+			hint = " (cross-device moves are not supported)"
+		}
+		return formatError("moving %q to %q: %v%s (nothing was moved)%s", in.Source, in.Destination, err, hint, torrentRemovedSuffix(out)), moveMediaOutput{}, nil
 	}
 	out.Moved = true
 	return &mcp.CallToolResult{
@@ -156,6 +172,48 @@ func anyOverlaps(paths []string, p string) bool {
 func isWithin(p, dir string) bool {
 	rel, err := filepath.Rel(dir, p)
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// existingAncestor returns p or its nearest ancestor that exists.
+func existingAncestor(p string) string {
+	for {
+		if _, err := os.Lstat(p); err == nil {
+			return p
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return p
+		}
+		p = parent
+	}
+}
+
+// mkdirAllTracked is os.MkdirAll that returns the directories it created,
+// deepest first, so a failed move can take them back out.
+func mkdirAllTracked(dir string) ([]string, error) {
+	var missing []string
+	for p := dir; ; p = filepath.Dir(p) {
+		if _, err := os.Lstat(p); err == nil || filepath.Dir(p) == p {
+			break
+		}
+		missing = append(missing, p)
+	}
+	var created []string
+	for i := len(missing) - 1; i >= 0; i-- {
+		if err := os.Mkdir(missing[i], 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
+			return created, err
+		}
+		created = append([]string{missing[i]}, created...)
+	}
+	return created, nil
+}
+
+// removeCreated removes directories mkdirAllTracked made, deepest first; a
+// directory something else has written into since is left alone.
+func removeCreated(created []string) {
+	for _, d := range created {
+		_ = os.Remove(d)
+	}
 }
 
 func torrentRemovedSuffix(out moveMediaOutput) string {
