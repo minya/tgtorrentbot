@@ -10,6 +10,7 @@ import (
 
 	"github.com/minya/logger"
 	mcplib "github.com/minya/tgtorrentbot/internal/media"
+	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/odwrtw/transmission"
 )
@@ -59,11 +60,11 @@ func main() {
 		failedLoginLimiter: newRateLimiter(20, time.Minute),
 	}
 	if cfg.TransmissionAddr != "" {
-		t, err := transmission.New(transmission.Config{
-			Address:  cfg.TransmissionAddr,
-			User:     cfg.TransmissionUser,
-			Password: cfg.TransmissionPassword,
-		})
+		t, err := transmissionrpc.New(
+			cfg.TransmissionAddr,
+			cfg.TransmissionUser,
+			cfg.TransmissionPassword,
+		)
 		if err != nil {
 			logger.Error(err, "Failed to create Transmission client; list_media will return filesystem items only")
 		} else {

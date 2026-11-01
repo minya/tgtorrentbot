@@ -23,6 +23,7 @@ import (
 	"github.com/minya/rutracker"
 	"github.com/minya/tgtorrentbot/internal/category"
 	"github.com/minya/tgtorrentbot/internal/media"
+	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
 	"github.com/odwrtw/transmission"
 )
 
@@ -201,11 +202,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	transmissionClient, err := transmission.New(transmission.Config{
-		Address:  config.TransmissionAddr,
-		User:     config.TransmissionUser,
-		Password: config.TransmissionPassword,
-	})
+	transmissionClient, err := transmissionrpc.New(
+		config.TransmissionAddr,
+		config.TransmissionUser,
+		config.TransmissionPassword,
+	)
 	if err != nil {
 		logger.Error(err, "Failed to create transmission client")
 		os.Exit(1)

@@ -12,7 +12,7 @@ import (
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
 	"github.com/minya/tgtorrentbot/internal"
-	"github.com/odwrtw/transmission"
+	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
 )
 
 func main() {
@@ -40,12 +40,11 @@ func main() {
 		WithCaller: true,
 	})
 
-	conf := transmission.Config{
-		Address:  settings.TransmissionRPC.Address,
-		User:     settings.TransmissionRPC.User,
-		Password: settings.TransmissionRPC.Password,
-	}
-	transmissionClient, err := transmission.New(conf)
+	transmissionClient, err := transmissionrpc.New(
+		settings.TransmissionRPC.Address,
+		settings.TransmissionRPC.User,
+		settings.TransmissionRPC.Password,
+	)
 	if err != nil {
 		logger.Fatal(err, "Can't create transmission client")
 	}

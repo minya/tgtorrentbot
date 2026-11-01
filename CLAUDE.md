@@ -88,6 +88,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - `environment/` — Shared Env struct
 - `internal/` — Internal helpers not exported outside this module
   - `internal/file_id_lookup.go` — `FileIDLookup` used by the file-upload and magnet-link flows
+  - `internal/transmissionrpc/` — `New(address, user, password)` builds the Transmission client every binary uses: 30 s timeout, and a transport that handles the `X-Transmission-Session-Id` 409 dance under a mutex, because `odwrtw/transmission` stores the session id in an unsynchronised field and the client is shared across goroutines. Do not call `transmission.New` directly in production code
   - `internal/category/` — dependency-free download category list (`All()`, `Names()`, `Parse()`, `DisplayName()`), the single source of truth for every binary and the webapp frontend
   - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries.
 - `Dockerfile.bot` — Docker build for the bot
