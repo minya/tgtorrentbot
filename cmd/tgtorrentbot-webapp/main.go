@@ -597,8 +597,10 @@ func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Reject path traversal.
-	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+	// Reject path traversal: the name must be a single path component, and
+	// only "." and ".." themselves traverse ("Wait..." is an ordinary name).
+	// handleRemoveItemData checks the joined path stays under its base too.
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
 		http.Error(w, `{"error": "invalid item name"}`, http.StatusBadRequest)
 		return
 	}

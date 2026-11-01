@@ -211,3 +211,29 @@ func TestRemoveDataFilesystemOnlyIsShared(t *testing.T) {
 		t.Error("filesystem-only data still exists")
 	}
 }
+
+// F40: names with an ellipsis are ordinary names and can be deleted.
+func TestRemoveDataNameWithDots(t *testing.T) {
+	app, root, _, _ := newDeleteTestApp(t, `[]`)
+	mustWriteFile(t, filepath.Join(root, "shows", "Wait... Season 1", "e01.mkv"))
+
+	if rec := deleteItem(app, 42, "shows", "Wait... Season 1"); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if exists(filepath.Join(root, "shows", "Wait... Season 1")) {
+		t.Error("data still exists")
+	}
+}
+
+func TestRemoveDataRejectsTraversalNames(t *testing.T) {
+	app, root, _, _ := newDeleteTestApp(t, `[]`)
+	mustWriteFile(t, filepath.Join(root, "keep.txt"))
+	for _, name := range []string{"..", ".", "../movies", `..\x`, "a/b", ""} {
+		if rec := deleteItem(app, 42, "movies", name); rec.Code != http.StatusBadRequest {
+			t.Errorf("name %q: status = %d, want 400", name, rec.Code)
+		}
+	}
+	if !exists(filepath.Join(root, "keep.txt")) || !exists(root) {
+		t.Fatal("traversal deleted data outside the category")
+	}
+}
