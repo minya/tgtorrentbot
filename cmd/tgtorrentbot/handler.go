@@ -60,6 +60,19 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 	}
 	logger.Debug("Authorized user: id=%d username=%s", user.ID, user.Username)
 
+	// Every callback command replies into the chat of the message carrying
+	// the button. Telegram omits that message for buttons on inline-mode
+	// messages (only inline_message_id is set), so reject those here instead
+	// of letting each command dereference a nil Message.
+	if upd.CallbackQuery != nil && upd.CallbackQuery.Message == nil {
+		logger.Warn("Ignoring callback query %q without a message", upd.CallbackQuery.Data)
+		handler.TgApi.AnswerCallbackQuery(ctx, telegram.AnswerCallbackQueryParams{
+			CallbackQueryID: upd.CallbackQuery.ID,
+			Text:            "This button only works in the bot chat",
+		})
+		return nil
+	}
+
 	for _, factory := range handler.commandsList {
 		accepts, cmd := factory.Accepts(upd)
 		if accepts {

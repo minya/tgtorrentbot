@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
@@ -42,6 +44,13 @@ func validWebhookSecret(s string) bool {
 func newWebhookHandler(secret string, handleUpdate func(context.Context, *telegram.Update) error) http.Handler {
 	return telegram.WebhookHandler(secret, func(ctx context.Context, upd *telegram.Update) error {
 		go func() {
+			// A panic in a command must not take the whole bot down: this
+			// goroutine is not covered by net/http's per-request recovery.
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error(fmt.Errorf("panic: %v\n%s", r, debug.Stack()), "Panic while handling update %d", upd.UpdateID)
+				}
+			}()
 			if err := handleUpdate(context.WithoutCancel(ctx), upd); err != nil {
 				logger.Error(err, "Failed to handle update from request")
 			}
