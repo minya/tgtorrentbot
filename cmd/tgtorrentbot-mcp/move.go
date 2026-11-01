@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/odwrtw/transmission"
@@ -15,7 +16,7 @@ import (
 type moveMediaInput struct {
 	Source      string `json:"source" jsonschema:"path of the file or directory to move, relative to the download path or absolute under it; must exist"`
 	Destination string `json:"destination" jsonschema:"new path, relative to the download path or absolute under it; must not already exist (parent dirs are created automatically)"`
-	TorrentID   *int   `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item being moved (the torrent_id field from list_media); when set, the torrent is removed from Transmission (files kept) before the move. Omit for filesystem-only items"`
+	TorrentID   *int   `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item being moved (the torrent_id field from list_media); when set, the torrent is removed from Transmission (files kept) before the move; refused when that torrent's data is not at the source path. Omit for filesystem-only items"`
 }
 
 type moveMediaOutput struct {
@@ -63,7 +64,7 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	// tracks the path, the move is a plain rename and Transmission can't error
 	// or re-check when the files disappear from under it.
 	if in.TorrentID != nil {
-		removed, note, err := s.untrackTorrent(*in.TorrentID)
+		removed, note, err := s.untrackTorrent(*in.TorrentID, src)
 		if err != nil {
 			return formatError("removing torrent %d before move (nothing was moved): %v", *in.TorrentID, err), moveMediaOutput{}, nil
 		}
@@ -91,9 +92,12 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 }
 
 // untrackTorrent removes a torrent from Transmission while keeping its files.
-// A torrent that is already gone is not an error: it returns removed=false
-// with an explanatory note so the move can proceed.
-func (s *server) untrackTorrent(id int) (removed bool, note string, err error) {
+// It refuses a torrent whose data is not at src (resolved): a wrong id from
+// the caller would otherwise untrack an unrelated torrent and leave the one
+// that owns src to see its files vanish. A torrent that is already gone is
+// not an error: it returns removed=false with an explanatory note so the
+// move can proceed.
+func (s *server) untrackTorrent(id int, src string) (removed bool, note string, err error) {
 	if s.trans == nil {
 		return false, "", fmt.Errorf("Transmission is not configured (set TGT_RPC_ADDR, TGT_RPC_USER, TGT_RPC_PASSWORD); omit torrent_id to move without it")
 	}
@@ -110,10 +114,48 @@ func (s *server) untrackTorrent(id int) (removed bool, note string, err error) {
 	if len(match) == 0 {
 		return false, fmt.Sprintf("no torrent with id %d (already removed?); moved without it", id), nil
 	}
+	for _, t := range match {
+		if paths := s.torrentDataPaths(t); !anyOverlaps(paths, src) {
+			return false, "", fmt.Errorf("torrent %d (%q) does not own %s: its data is at %v; pass the torrent_id list_media reports for this item, or omit it", id, t.Name, src, paths)
+		}
+	}
 	if err := s.trans.RemoveTorrents(match, false); err != nil {
 		return false, "", err
 	}
 	return true, "", nil
+}
+
+// torrentDataPaths returns where a torrent's data can be on disk, resolved:
+// {downloadDir}/{name} once complete, and {incompletePath}/{name} while it
+// downloads. Transmission and this server see the same paths (the compose
+// file mounts the downloads at /downloads everywhere).
+func (s *server) torrentDataPaths(t *transmission.Torrent) []string {
+	if t.Name == "" {
+		return nil
+	}
+	var paths []string
+	if t.DownloadDir != "" {
+		paths = append(paths, evalOrClean(filepath.Join(t.DownloadDir, t.Name)))
+	}
+	return append(paths, evalOrClean(filepath.Join(s.incompletePath(), t.Name)))
+}
+
+// anyOverlaps reports whether p equals one of paths or one contains the
+// other: moving a torrent's folder, one file of it, or a folder holding it
+// all take its data away from Transmission.
+func anyOverlaps(paths []string, p string) bool {
+	for _, q := range paths {
+		if q == p || isWithin(p, q) || isWithin(q, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// isWithin reports whether p lies strictly inside dir.
+func isWithin(p, dir string) bool {
+	rel, err := filepath.Rel(dir, p)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func torrentRemovedSuffix(out moveMediaOutput) string {
@@ -141,11 +183,14 @@ func (s *server) structuralDirs() []string {
 	for _, c := range knownCategories {
 		dirs = append(dirs, evalOrClean(filepath.Join(s.config.DownloadPath, c)))
 	}
-	inc := s.config.IncompletePath
-	if inc == "" {
-		inc = filepath.Join(s.config.DownloadPath, "incomplete")
+	return append(dirs, evalOrClean(s.incompletePath()))
+}
+
+func (s *server) incompletePath() string {
+	if s.config.IncompletePath != "" {
+		return s.config.IncompletePath
 	}
-	return append(dirs, evalOrClean(inc))
+	return filepath.Join(s.config.DownloadPath, "incomplete")
 }
 
 // evalOrClean resolves symlinks in p, or returns it cleaned when it does not

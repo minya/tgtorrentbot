@@ -50,9 +50,14 @@ func setupShow(t *testing.T) (*server, string, string) {
 
 func intPtr(i int) *int { return &i }
 
+// showTorrent is torrent 7, whose data is the setupShow source.
+func showTorrent(root string) *transmission.Torrent {
+	return &transmission.Torrent{ID: 7, Name: "Proslushka.S01.2002", DownloadDir: filepath.Join(root, "shows")}
+}
+
 func TestMoveMediaRemovesTorrentFirst(t *testing.T) {
 	s, root, src := setupShow(t)
-	fake := &fakeTorrents{torrents: []*transmission.Torrent{{ID: 7}, {ID: 8}}, src: src}
+	fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root), {ID: 8}}, src: src}
 	s.trans = fake
 
 	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
@@ -102,9 +107,9 @@ func TestMoveMediaMissingTorrentStillMoves(t *testing.T) {
 }
 
 func TestMoveMediaRemoveFailureAbortsMove(t *testing.T) {
-	s, _, src := setupShow(t)
+	s, root, src := setupShow(t)
 	s.trans = &fakeTorrents{
-		torrents:  []*transmission.Torrent{{ID: 7}},
+		torrents:  []*transmission.Torrent{showTorrent(root)},
 		removeErr: errors.New("rpc down"),
 		src:       src,
 	}
@@ -142,7 +147,7 @@ func TestMoveMediaInvalidDestinationKeepsTorrent(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "shows", "Taken"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fake := &fakeTorrents{torrents: []*transmission.Torrent{{ID: 7}}, src: src}
+	fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root)}, src: src}
 	s.trans = fake
 
 	res, _, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
@@ -155,5 +160,63 @@ func TestMoveMediaInvalidDestinationKeepsTorrent(t *testing.T) {
 	}
 	if len(fake.removed) != 0 {
 		t.Fatalf("torrent must not be removed when the move is rejected, got %v", fake.removed)
+	}
+}
+
+// F28: a torrent_id that belongs to another item is refused before anything
+// is removed or moved.
+func TestMoveMediaRefusesTorrentThatDoesNotOwnSource(t *testing.T) {
+	s, root, src := setupShow(t)
+	other := &transmission.Torrent{ID: 9, Name: "Some Movie (2020)", DownloadDir: filepath.Join(root, "movies")}
+	fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root), other}, src: src}
+	s.trans = fake
+
+	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
+		Source:      "shows/Proslushka.S01.2002",
+		Destination: "shows/The Wire (2002)",
+		TorrentID:   intPtr(9),
+	})
+	if !res.IsError {
+		t.Fatalf("expected an error for a torrent that does not own the source, got %+v", out)
+	}
+	if len(fake.removed) != 0 {
+		t.Fatalf("no torrent may be removed, got %v", fake.removed)
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("source must be untouched: %v", err)
+	}
+}
+
+// An in-progress torrent's data is in the incomplete dir under its name, and
+// moving one file out of a torrent's folder also takes data from it.
+func TestMoveMediaTorrentOwnershipVariants(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		mk           string
+	}{
+		{"incomplete", "incomplete/Proslushka.S01.2002", "incomplete/Proslushka.S01.2002"},
+		{"file inside", "shows/Proslushka.S01.2002/e01.mkv", "shows/Proslushka.S01.2002/e01.mkv"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, root := newMoveServer(t)
+			p := filepath.Join(root, tc.mk)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root)}, src: p}
+			s.trans = fake
+			res, _, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
+				Source: tc.source, Destination: "shows/Moved", TorrentID: intPtr(7),
+			})
+			if res.IsError {
+				t.Fatalf("unexpected error: %v", res.Content)
+			}
+			if len(fake.removed) != 1 {
+				t.Fatalf("torrent 7 must be removed, got %v", fake.removed)
+			}
+		})
 	}
 }

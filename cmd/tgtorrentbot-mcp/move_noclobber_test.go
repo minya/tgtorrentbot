@@ -13,11 +13,12 @@ import (
 // removed, i.e. after move_media's existence pre-check and before the rename,
 // as a concurrent move_media or another writer would.
 type racingTorrents struct {
+	src    string // the source path, which torrent 1 owns
 	create func() error
 }
 
 func (r *racingTorrents) GetTorrents() ([]*transmission.Torrent, error) {
-	return []*transmission.Torrent{{ID: 1}}, nil
+	return []*transmission.Torrent{{ID: 1, Name: filepath.Base(r.src), DownloadDir: filepath.Dir(r.src)}}, nil
 }
 
 func (r *racingTorrents) RemoveTorrents([]*transmission.Torrent, bool) error {
@@ -34,7 +35,7 @@ func TestMoveMediaDoesNotClobberFileAppearingMidMove(t *testing.T) {
 	if err := os.WriteFile(src, []byte("SOURCE"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s.trans = &racingTorrents{create: func() error { return os.WriteFile(dst, []byte("PRECIOUS"), 0o644) }}
+	s.trans = &racingTorrents{src: src, create: func() error { return os.WriteFile(dst, []byte("PRECIOUS"), 0o644) }}
 
 	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
 		Source: "shows/a.mkv", Destination: "shows/b.mkv", TorrentID: intPtr(1),
@@ -58,7 +59,7 @@ func TestMoveMediaDoesNotReplaceEmptyDirAppearingMidMove(t *testing.T) {
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	s.trans = &racingTorrents{create: func() error { return os.Mkdir(dst, 0o755) }}
+	s.trans = &racingTorrents{src: src, create: func() error { return os.Mkdir(dst, 0o755) }}
 
 	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
 		Source: "shows/Old.Name", Destination: "shows/New Name (2002)", TorrentID: intPtr(1),
