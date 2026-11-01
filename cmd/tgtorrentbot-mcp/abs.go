@@ -10,7 +10,8 @@ import (
 type absRescanInput struct{}
 
 type absRescanOutput struct {
-	Triggered bool `json:"triggered"`
+	Triggered bool     `json:"triggered"`
+	Libraries []string `json:"libraries,omitempty"` // ids of the libraries whose scan started
 }
 
 const absNotConfigured = "Audiobookshelf is not configured (set TGT_AUDIOBOOKSHELF_URL and TGT_AUDIOBOOKSHELF_API_KEY)"
@@ -19,10 +20,17 @@ func (s *server) absRescan(ctx context.Context, _ *mcp.CallToolRequest, _ absRes
 	if s.config.AudiobookshelfURL == "" || s.config.AudiobookshelfAPIKey == "" {
 		return formatError(absNotConfigured), absRescanOutput{}, nil
 	}
-	s.abs.RefreshLibrary()
+	scanned, err := s.abs.RefreshLibrary()
+	if err != nil {
+		return formatError("Audiobookshelf rescan failed (scan started for %v): %v", scanned, err), absRescanOutput{Libraries: scanned}, nil
+	}
+	if len(scanned) == 0 {
+		return formatError("Audiobookshelf has no libraries to scan"), absRescanOutput{}, nil
+	}
+	out := absRescanOutput{Triggered: true, Libraries: scanned}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "Audiobookshelf rescan triggered"}},
-	}, absRescanOutput{Triggered: true}, nil
+		Content: []mcp.Content{&mcp.TextContent{Text: mustJSON(out)}},
+	}, out, nil
 }
 
 type absRemoveIssuesInput struct {

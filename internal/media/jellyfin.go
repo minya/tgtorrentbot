@@ -91,31 +91,33 @@ func (c *JellyfinClient) GetItems() ([]JellyfinItem, error) {
 }
 
 // RefreshLibrary triggers a Jellyfin library scan so it picks up file changes.
-func (c *JellyfinClient) RefreshLibrary() {
+// It returns an error for a failed request or an HTTP error status; an
+// unconfigured client returns nil.
+func (c *JellyfinClient) RefreshLibrary() error {
 	if c.url == "" || c.apiKey == "" {
-		return
+		return nil
 	}
 
 	reqURL := fmt.Sprintf("%s/Library/Refresh", c.url)
 	req, err := http.NewRequest(http.MethodPost, reqURL, nil)
 	if err != nil {
 		logger.Error(err, "Failed to create Jellyfin refresh request")
-		return
+		return err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf(`MediaBrowser Token="%s"`, c.apiKey))
 
 	resp, err := c.client.Do(req)
 	if err != nil {
 		logger.Error(err, "Failed to trigger Jellyfin library refresh")
-		return
+		return err
 	}
-	logger.Debug("Jellyfin refresh response status: %v", resp)
 	resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		logger.Warn("Jellyfin library refresh returned status %d", resp.StatusCode)
-		return
+		return fmt.Errorf("library refresh returned status %d", resp.StatusCode)
 	}
 	logger.Info("Triggered Jellyfin library refresh")
+	return nil
 }
 
 func folderNameFromPath(p string) string {

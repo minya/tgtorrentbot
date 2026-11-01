@@ -2,6 +2,7 @@ package media
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -140,42 +141,50 @@ func (c *AudiobookshelfClient) getLibraryItems(libraryID string) ([]Audiobookshe
 	return items, nil
 }
 
-func (c *AudiobookshelfClient) RefreshLibrary() {
+// RefreshLibrary starts a scan of every Audiobookshelf library. It returns
+// the ids whose scan started and an error joining every failure; an
+// unconfigured client returns nothing.
+func (c *AudiobookshelfClient) RefreshLibrary() (scanned []string, err error) {
 	if c.url == "" || c.apiKey == "" {
-		return
+		return nil, nil
 	}
 
 	resp, err := c.doRequest(http.MethodGet, "/api/libraries")
 	if err != nil {
 		logger.Error(err, "Failed to list Audiobookshelf libraries for refresh")
-		return
+		return nil, fmt.Errorf("listing libraries: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		logger.Warn("Audiobookshelf libraries returned status %d during refresh", resp.StatusCode)
-		return
+		return nil, fmt.Errorf("listing libraries: status %d", resp.StatusCode)
 	}
 
 	var libResp absLibrariesResponse
 	if err := json.NewDecoder(resp.Body).Decode(&libResp); err != nil {
 		logger.Error(err, "Failed to decode Audiobookshelf libraries for refresh")
-		return
+		return nil, fmt.Errorf("decoding libraries: %w", err)
 	}
 
+	var errs []error
 	for _, lib := range libResp.Libraries {
 		scanResp, err := c.doRequest(http.MethodPost, fmt.Sprintf("/api/libraries/%s/scan", lib.ID))
 		if err != nil {
 			logger.Error(err, "Failed to trigger Audiobookshelf scan for library %s", lib.ID)
+			errs = append(errs, fmt.Errorf("scanning library %s: %w", lib.ID, err))
 			continue
 		}
 		scanResp.Body.Close()
 		if scanResp.StatusCode >= 400 {
 			logger.Warn("Audiobookshelf scan for library %s returned status %d", lib.ID, scanResp.StatusCode)
+			errs = append(errs, fmt.Errorf("scanning library %s: status %d", lib.ID, scanResp.StatusCode))
 			continue
 		}
 		logger.Info("Triggered Audiobookshelf library scan for %s", lib.Name)
+		scanned = append(scanned, lib.ID)
 	}
+	return scanned, errors.Join(errs...)
 }
 
 // Configured reports whether both the URL and API key are set.

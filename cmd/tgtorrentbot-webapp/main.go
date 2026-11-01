@@ -681,8 +681,9 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	}
 	// A torrent that was removed with no data on disk is still a success.
 
-	app.jellyfinClient.RefreshLibrary()
-	app.audiobookshelfClient.RefreshLibrary()
+	// Best effort: the data is already gone, and both clients log failures.
+	_ = app.jellyfinClient.RefreshLibrary()
+	_, _ = app.audiobookshelfClient.RefreshLibrary()
 
 	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
 		logger.Error(err, "Failed to encode response")
