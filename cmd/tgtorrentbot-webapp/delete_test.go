@@ -178,3 +178,36 @@ func TestLegacyTwoLabelTorrentOwnedByLabel0(t *testing.T) {
 		t.Fatalf("userTorrents(42) = %+v, want the legacy torrent", got)
 	}
 }
+
+// F39: user 42 cannot delete data that user 7's torrent still uses.
+func TestRemoveDataRefusesOtherUsersTorrentData(t *testing.T) {
+	app, root, _, removed := newDeleteTestApp(t,
+		`[{"id":5,"name":"B Movie","labels":["7","movies","7"],"percentDone":1}]`)
+	mustWriteFile(t, filepath.Join(root, "movies", "B Movie", "b.mkv"))
+
+	rec := deleteItem(app, 42, "movies", "B Movie")
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; body %s", rec.Code, rec.Body.String())
+	}
+	if removed.Load() {
+		t.Error("another user's torrent was removed")
+	}
+	if !exists(filepath.Join(root, "movies", "B Movie", "b.mkv")) {
+		t.Error("another user's data was deleted")
+	}
+}
+
+// Filesystem-only data (no torrent of anyone) stays deletable by any user.
+func TestRemoveDataFilesystemOnlyIsShared(t *testing.T) {
+	app, root, _, _ := newDeleteTestApp(t,
+		`[{"id":5,"name":"Other Name","labels":["7","movies","7"],"percentDone":1}]`)
+	mustWriteFile(t, filepath.Join(root, "movies", "Loose", "x.mkv"))
+
+	if rec := deleteItem(app, 42, "movies", "Loose"); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if exists(filepath.Join(root, "movies", "Loose")) {
+		t.Error("filesystem-only data still exists")
+	}
+}

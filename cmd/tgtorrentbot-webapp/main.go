@@ -544,6 +544,30 @@ func (app *App) findUserTorrent(userID int64, category, name string) (*transmiss
 	return nil, nil
 }
 
+// findOtherUsersTorrent returns a torrent named name that is not userID's and
+// whose data is where "Remove data" would delete: in category (legacy
+// single-label torrents count as "others"), or in any category for the
+// virtual incomplete category, whose folders share the incomplete directory.
+func (app *App) findOtherUsersTorrent(userID int64, category, name string) (*transmission.Torrent, error) {
+	torrents, err := app.transmissionClient.GetTorrents()
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range torrents {
+		if t.Name != name || torrentlabels.OwnedBy(t.Labels, userID) {
+			continue
+		}
+		torrentCategory := "others"
+		if len(t.Labels) >= 2 {
+			torrentCategory = t.Labels[1]
+		}
+		if category == media.IncompleteCategory || torrentCategory == category {
+			return t, nil
+		}
+	}
+	return nil, nil
+}
+
 // handleItemDelete routes DELETE /api/items/{id} and DELETE /api/items/{id}/torrent.
 func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Request) {
 	// Parse path: /api/items/{id} or /api/items/{id}/torrent
@@ -620,6 +644,23 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		logger.Error(err, "Failed to get torrents")
 		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Filesystem items are shared between allowed users, but data that
+	// another user's torrent still uses is theirs: deleting it would leave
+	// their torrent pointing at vanished files.
+	if torrent == nil {
+		other, err := app.findOtherUsersTorrent(userID, category, name)
+		if err != nil {
+			logger.Error(err, "Failed to get torrents")
+			http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
+			return
+		}
+		if other != nil {
+			logger.Warn("User %d tried to remove data of torrent %d (%s [%s]) owned by someone else", userID, other.ID, name, category)
+			http.Error(w, `{"error": "this data belongs to another user's torrent"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	if torrent != nil {
