@@ -110,7 +110,7 @@ func (cmd *DownloadCommand) replyAddFailed(ctx context.Context, chatID int64, er
 	}
 	logger.Error(err, "Error from transmission RPC")
 	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{ChatID: chatID, Text: text})
-	return err
+	return Replied(err)
 }
 
 func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transmission.Torrent, chatID, userID int64, category Category) error {
@@ -128,13 +128,13 @@ func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transm
 				ChatID: chatID,
 				Text:   fmt.Sprintf("Added %v, but could not set its category (%v) or remove it. Remove it in Transmission and try again.", torrent.ID, err),
 			})
-			return err
+			return Replied(err)
 		}
 		cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   fmt.Sprintf("Could not set the torrent's category (%v); it was not added. Please try again.", err),
 		})
-		return err
+		return Replied(err)
 	}
 
 	logger.Debug("Torrent %v labels set successfully", torrent.ID)

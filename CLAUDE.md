@@ -116,6 +116,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - Each factory implements `Accepts(upd *telegram.Update) (bool, Command)`
 - Commands implement `Handle(upd *telegram.Update) error`
 - Falls back to error message if no command matches
+- When a command returns an error, replies in the chat ("Something went wrong: …", or "already in Transmission" for `ErrDuplicateTorrent`) unless the command marked the error `commands.Replied` because it already told the user; wrap with `Replied` whenever a command sends its own error message before returning
 
 **environment/environment.go** - `Env` struct provides shared dependencies:
 - `TransmissionClient` - RPC client for torrent operations

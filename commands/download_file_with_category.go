@@ -77,7 +77,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *tel
 			ChatID: chatID,
 			Text:   "Error",
 		})
-		return err
+		return Replied(err)
 	}
 	content, err := api.DownloadFile(ctx, file)
 	if err != nil {
@@ -86,7 +86,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *tel
 			ChatID: chatID,
 			Text:   fmt.Sprintf("Download error: %v", err),
 		})
-		return err
+		return Replied(err)
 	}
 
 	downloadCmd := &DownloadCommand{

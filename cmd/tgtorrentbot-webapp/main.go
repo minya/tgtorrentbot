@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -364,6 +365,10 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		Metainfo:    torrentBase64,
 		DownloadDir: downloadPath,
 	})
+	if errors.Is(err, transmission.ErrDuplicateTorrent) {
+		http.Error(w, `{"error": "this torrent is already in Transmission"}`, http.StatusConflict)
+		return
+	}
 	if err != nil {
 		logger.Error(err, "Failed to add torrent to Transmission")
 		http.Error(w, `{"error": "failed to add torrent"}`, http.StatusInternalServerError)

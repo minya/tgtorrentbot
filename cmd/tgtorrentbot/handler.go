@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/commands"
 	"github.com/minya/tgtorrentbot/environment"
+	"github.com/odwrtw/transmission"
 )
 
 type UpdatesHandler struct {
@@ -80,24 +83,48 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 			handleErr := cmd.Handle(ctx, upd)
 			if handleErr == nil {
 				handler.notify()
+			} else if !commands.IsReplied(handleErr) {
+				// Most failure paths return without messaging the chat;
+				// without this the user sees "Processing..." and silence.
+				if chatID, ok := replyChatID(upd); ok {
+					handler.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+						ChatID: chatID,
+						Text:   failureText(handleErr),
+					})
+				}
 			}
 			return handleErr
 		}
 	}
 
-	var replyChatID int64
-	switch {
-	case upd.Message != nil && upd.Message.MessageID != 0:
-		replyChatID = upd.Message.Chat.ID
-	case upd.CallbackQuery != nil && upd.CallbackQuery.Message != nil:
-		replyChatID = upd.CallbackQuery.Message.Chat.ID
-	default:
+	chatID, ok := replyChatID(upd)
+	if !ok {
 		return nil
 	}
 
 	handler.TgApi.SendMessage(ctx, telegram.SendMessageParams{
-		ChatID: replyChatID,
+		ChatID: chatID,
 		Text:   "Expected a command, search query, or torrent file",
 	})
 	return nil
+}
+
+// replyChatID returns the chat a reply to upd goes to.
+func replyChatID(upd *telegram.Update) (int64, bool) {
+	switch {
+	case upd.Message != nil && upd.Message.MessageID != 0:
+		return upd.Message.Chat.ID, true
+	case upd.CallbackQuery != nil && upd.CallbackQuery.Message != nil:
+		return upd.CallbackQuery.Message.Chat.ID, true
+	}
+	return 0, false
+}
+
+// failureText is the chat reply for a command error the command did not
+// report itself.
+func failureText(err error) string {
+	if errors.Is(err, transmission.ErrDuplicateTorrent) {
+		return "This torrent is already in Transmission."
+	}
+	return fmt.Sprintf("Something went wrong: %v", err)
 }

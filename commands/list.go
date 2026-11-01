@@ -78,7 +78,7 @@ func sendTorrentsList(ctx context.Context, env environment.Env, chatID int64, pa
 			Text:   "Error",
 			ChatID: chatID,
 		})
-		return err
+		return Replied(err)
 	}
 
 	msg := telegram.SendMessageParams{

@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -14,6 +16,7 @@ import (
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/commands"
 	"github.com/minya/tgtorrentbot/environment"
+	"github.com/odwrtw/transmission"
 )
 
 // recordingTelegram is a fake Bot API that records the methods called.
@@ -163,4 +166,30 @@ func TestWebhookRecoversPanic(t *testing.T) {
 		t.Fatal("handler did not run")
 	}
 	time.Sleep(50 * time.Millisecond) // the test binary would have crashed by now
+}
+
+// F41: a command error the command did not report is answered in the chat.
+func TestHandleUpdateErrorRepliesInChat(t *testing.T) {
+	h, stub, tg, _ := newTestHandler(t, 42)
+	stub.handle = func(context.Context, *telegram.Update) error { return errors.New("rutracker unreachable") }
+	_ = h.HandleUpdate(context.Background(), &telegram.Update{Message: &telegram.Message{MessageID: 1, From: &telegram.User{ID: 42}, Chat: telegram.Chat{ID: 42}}})
+	if got := tg.calls(); !slices.Contains(got, "sendMessage") {
+		t.Fatalf("Telegram calls = %v, want a sendMessage", got)
+	}
+}
+
+// An error the command already reported is not answered twice.
+func TestHandleUpdateRepliedErrorNotRepeated(t *testing.T) {
+	h, stub, tg, _ := newTestHandler(t, 42)
+	stub.handle = func(context.Context, *telegram.Update) error { return commands.Replied(errors.New("told already")) }
+	_ = h.HandleUpdate(context.Background(), &telegram.Update{Message: &telegram.Message{MessageID: 1, From: &telegram.User{ID: 42}, Chat: telegram.Chat{ID: 42}}})
+	if got := tg.calls(); slices.Contains(got, "sendMessage") {
+		t.Fatalf("Telegram calls = %v, want no second message", got)
+	}
+}
+
+func TestFailureTextDuplicate(t *testing.T) {
+	if got := failureText(fmt.Errorf("add: %w", transmission.ErrDuplicateTorrent)); !strings.Contains(got, "already") {
+		t.Fatalf("failureText(duplicate) = %q", got)
+	}
 }
