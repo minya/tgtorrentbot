@@ -13,13 +13,17 @@ import (
 // jwtClaims is the full set of claims we ever put in tokens we mint. Unused
 // fields stay empty. Kept as one struct so sign/verify share a shape.
 type jwtClaims struct {
-	Iss          string   `json:"iss,omitempty"`
-	Sub          string   `json:"sub,omitempty"`
-	Aud          string   `json:"aud,omitempty"`
-	Exp          int64    `json:"exp,omitempty"`
-	Iat          int64    `json:"iat,omitempty"`
-	Jti          string   `json:"jti,omitempty"`
-	Typ          string   `json:"typ,omitempty"` // "access" | "refresh" | "client"
+	Iss string `json:"iss,omitempty"`
+	Sub string `json:"sub,omitempty"`
+	Aud string `json:"aud,omitempty"`
+	Exp int64  `json:"exp,omitempty"`
+	Iat int64  `json:"iat,omitempty"`
+	Jti string `json:"jti,omitempty"`
+	Typ string `json:"typ,omitempty"` // "access" | "refresh" | "client"
+	// AuthTime is when the owner typed the secret on /authorize (unix
+	// seconds). Refresh tokens carry it forward unchanged, so a session ends
+	// refreshTokenTTL after login however often it is refreshed.
+	AuthTime     int64    `json:"auth_time,omitempty"`
 	ClientID     string   `json:"client_id,omitempty"`
 	ClientName   string   `json:"client_name,omitempty"`
 	RedirectURIs []string `json:"redirect_uris,omitempty"`

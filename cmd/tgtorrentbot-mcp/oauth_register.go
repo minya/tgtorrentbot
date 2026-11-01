@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -35,19 +38,34 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	// /register is unauthenticated and its metadata is signed into the
+	// client_id, so bound both the body and the fields.
+	r.Body = http.MaxBytesReader(w, r.Body, maxRegistrationBody)
 	var req registrationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "request body is not valid JSON")
+		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "request body is not valid JSON or is too large")
 		return
 	}
 	if len(req.RedirectURIs) == 0 {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", "redirect_uris is required")
 		return
 	}
+	if len(req.RedirectURIs) > maxRedirectURIs {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", fmt.Sprintf("at most %d redirect_uris are allowed", maxRedirectURIs))
+		return
+	}
+	if len(req.ClientName) > maxClientNameLen {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", fmt.Sprintf("client_name is longer than %d bytes", maxClientNameLen))
+		return
+	}
 	for _, u := range req.RedirectURIs {
-		if !isAllowedRedirectURI(u) {
+		if len(u) > maxRedirectURILen {
+			writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", fmt.Sprintf("redirect_uri is longer than %d bytes", maxRedirectURILen))
+			return
+		}
+		if !s.redirectURIAllowed(u) {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri",
-				"redirect_uris must be https (http allowed only for localhost)")
+				"redirect_uris must be https (http allowed only for localhost), on a host allowed by TGT_MCP_REDIRECT_HOSTS when set")
 			return
 		}
 	}
@@ -77,6 +95,35 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		ResponseTypes:           []string{"code"},
 	}
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// Limits on /register input.
+const (
+	maxRegistrationBody = 16 << 10
+	maxRedirectURIs     = 10
+	maxRedirectURILen   = 2048
+	maxClientNameLen    = 200
+)
+
+// redirectURIAllowed applies isAllowedRedirectURI and, when
+// TGT_MCP_REDIRECT_HOSTS is set, requires the host to be one of those (or
+// loopback, for native clients).
+func (s *server) redirectURIAllowed(raw string) bool {
+	if !isAllowedRedirectURI(raw) {
+		return false
+	}
+	if len(s.config.RedirectHosts) == 0 {
+		return true
+	}
+	u, _ := url.Parse(raw)
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return true
+	}
+	return slices.Contains(s.config.RedirectHosts, host)
 }
 
 // isAllowedRedirectURI enforces OAuth 2.1: https everywhere, with the usual

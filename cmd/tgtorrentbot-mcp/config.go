@@ -37,6 +37,10 @@ type Config struct {
 	// set, so rotating either env var invalidates every outstanding token
 	// (see deriveJWTSecret).
 	JWTSecret []byte
+	// RedirectHosts, from the comma-separated TGT_MCP_REDIRECT_HOSTS, limits
+	// OAuth redirect URIs to these hosts (lowercase; loopback is always
+	// allowed). Empty allows any https host.
+	RedirectHosts []string
 }
 
 func loadConfig() (Config, error) {
@@ -79,6 +83,7 @@ func loadConfig() (Config, error) {
 		AudiobookshelfLibraryID: os.Getenv("TGT_AUDIOBOOKSHELF_LIBRARY_ID"),
 		AuthToken:               authToken,
 		PublicBaseURL:           publicURL,
+		RedirectHosts:           parseHostList(os.Getenv("TGT_MCP_REDIRECT_HOSTS")),
 		JWTSecret:               jwtSecret,
 	}, nil
 }
@@ -101,4 +106,16 @@ func deriveJWTSecret(authToken, jwtSecret string) []byte {
 	mac := hmac.New(sha256.New, []byte(jwtSecret))
 	mac.Write([]byte(jwtSecretLabel + authToken))
 	return mac.Sum(nil)
+}
+
+// parseHostList splits a comma-separated host list, lowercasing and dropping
+// empty entries.
+func parseHostList(s string) []string {
+	var hosts []string
+	for _, h := range strings.Split(s, ",") {
+		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
+			hosts = append(hosts, h)
+		}
+	}
+	return hosts
 }

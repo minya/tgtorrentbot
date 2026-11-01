@@ -71,7 +71,7 @@ func (s *server) handleTokenCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.issueTokens(w, clientID, ac.Scope)
+	s.issueTokens(w, clientID, ac.Scope, time.Now().Unix())
 }
 
 func (s *server) handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
@@ -93,16 +93,35 @@ func (s *server) handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", "token is not a refresh token")
 		return
 	}
+	if claims.Iss != s.config.PublicBaseURL || claims.Aud != s.config.PublicBaseURL {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", "refresh_token was issued for another server")
+		return
+	}
 	if claims.ClientID != clientID {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", "client_id mismatch")
 		return
 	}
+	// Refreshing never extends a session past refreshTokenTTL after the
+	// login it came from, so a leaked refresh token cannot renew itself
+	// forever. Tokens minted before auth_time existed count from their iat.
+	authTime := claims.AuthTime
+	if authTime == 0 {
+		authTime = claims.Iat
+	}
+	if time.Since(time.Unix(authTime, 0)) >= refreshTokenTTL {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", "session expired; authorize again")
+		return
+	}
 
-	s.issueTokens(w, clientID, "")
+	s.issueTokens(w, clientID, "", authTime)
 }
 
-func (s *server) issueTokens(w http.ResponseWriter, clientID, scope string) {
+// issueTokens mints an access token and a refresh token for clientID.
+// authTime is the unix time of the login the session started with; the
+// refresh token expires refreshTokenTTL after it.
+func (s *server) issueTokens(w http.ResponseWriter, clientID, scope string, authTime int64) {
 	now := time.Now()
+	refreshExp := time.Unix(authTime, 0).Add(refreshTokenTTL)
 	jti, err := randomToken(16)
 	if err != nil {
 		writeOAuthError(w, http.StatusInternalServerError, "server_error", "failed to mint token")
@@ -132,10 +151,11 @@ func (s *server) issueTokens(w http.ResponseWriter, clientID, scope string) {
 		Aud:      s.config.PublicBaseURL,
 		Sub:      clientID,
 		Iat:      now.Unix(),
-		Exp:      now.Add(refreshTokenTTL).Unix(),
+		Exp:      refreshExp.Unix(),
 		Jti:      refreshJTI,
 		Typ:      "refresh",
 		ClientID: clientID,
+		AuthTime: authTime,
 	})
 	if err != nil {
 		writeOAuthError(w, http.StatusInternalServerError, "server_error", "failed to mint refresh token")

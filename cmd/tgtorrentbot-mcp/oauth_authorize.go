@@ -166,11 +166,14 @@ p{color:#aaa;font-size:.9rem;margin:0 0 1rem}
 input[type=password]{width:100%;padding:.6rem;border:1px solid #333;background:#0d0d0d;color:#eee;border-radius:4px;box-sizing:border-box}
 button{margin-top:1rem;width:100%;padding:.6rem;background:#3b82f6;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:1rem}
 .err{color:#f87171;font-size:.85rem;margin-top:.5rem}
+.dest{color:#eee;font-size:1rem}
+.dest strong{color:#fbbf24;word-break:break-all}
 code{background:#222;padding:.1rem .3rem;border-radius:3px}
 </style></head><body>
 <form class="card" method="POST" action="/authorize">
 <h1>Authorize <code>{{.ClientName}}</code></h1>
-<p>Enter the MCP shared secret to grant access.</p>
+<p class="dest">After you authorize, access is sent to <strong>{{.RedirectHost}}</strong>.</p>
+<p>The name above is chosen by the client itself. Only continue if you started connecting this MCP server from <strong>{{.RedirectHost}}</strong>. Enter the MCP shared secret to grant access.</p>
 <input type="password" name="secret" autocomplete="off" autofocus required>
 {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
 <input type="hidden" name="response_type" value="{{.ResponseType}}">
@@ -195,6 +198,9 @@ type authorizeFormData struct {
 	CodeChallengeMethod string
 	Scope               string
 	Error               string
+	// RedirectHost is where the code will be sent, shown prominently so a
+	// self-declared ClientName cannot hide an attacker's destination.
+	RedirectHost string
 }
 
 func (s *server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +238,7 @@ func (s *server) validateAuthorizeParams(w http.ResponseWriter, r *http.Request,
 		writeOAuthError(w, http.StatusBadRequest, "invalid_client", "client_id is invalid")
 		return jwtClaims{}, data, false
 	}
-	if data.RedirectURI == "" || !slices.Contains(client.RedirectURIs, data.RedirectURI) {
+	if data.RedirectURI == "" || !slices.Contains(client.RedirectURIs, data.RedirectURI) || !s.redirectURIAllowed(data.RedirectURI) {
 		// Per RFC 6749 §3.1.2.4, redirect_uri errors must NOT redirect back;
 		// render directly.
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "redirect_uri does not match any registered URI")
@@ -256,6 +262,9 @@ func (s *server) validateAuthorizeParams(w http.ResponseWriter, r *http.Request,
 	data.ClientName = client.ClientName
 	if data.ClientName == "" {
 		data.ClientName = "MCP client"
+	}
+	if u, err := url.Parse(data.RedirectURI); err == nil {
+		data.RedirectHost = u.Host
 	}
 	return client, data, true
 }
@@ -319,6 +328,9 @@ func (s *server) handleAuthorizePost(w http.ResponseWriter, r *http.Request) {
 func renderAuthorizeForm(w http.ResponseWriter, status int, data authorizeFormData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	// The login form must not be framed by another site (clickjacking).
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 	w.WriteHeader(status)
 	_ = authorizeFormTmpl.Execute(w, data)
 }
