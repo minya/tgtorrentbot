@@ -35,8 +35,8 @@ func ReadSettings(settingsPath string) (Settings, error) {
 		return Settings{}, fmt.Errorf("can't get settings from file: %w", err)
 	}
 
-	if err := validateSettings(settings); err != nil {
-		return Settings{}, fmt.Errorf("file config validation error: %w", err)
+	if problems := validateSettings(settings); len(problems) > 0 {
+		return Settings{}, fmt.Errorf("settings file %s problems: %v", settingsPath, problems)
 	}
 
 	logger.Info("Settings read from file")
@@ -81,45 +81,14 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.WebhookSecret = os.Getenv("TGT_WEBHOOK_SECRET")
 
 	var problems []string
-	if settings.BotToken == "" {
-		problems = append(problems, "TGT_BOTTOKEN is not set")
-	}
-	if settings.WebHookURL == "" {
-		problems = append(problems, "TGT_WEBHOOKURL is not set")
-	}
-	if settings.DownloadPath == "" {
-		problems = append(problems, "TGT_DOWNLOADPATH is not set")
-	}
-	if settings.TransmissionRPC.Address == "" {
-		problems = append(problems, "TGT_RPC_ADDR is not set")
-	}
-	if settings.TransmissionRPC.User == "" {
-		problems = append(problems, "TGT_RPC_USER is not set")
-	}
-	if settings.TransmissionRPC.Password == "" {
-		problems = append(problems, "TGT_RPC_PASSWORD is not set")
-	}
-	if settings.RutrackerConfig.Username == "" {
-		problems = append(problems, "TGT_RUTRACKER_USERNAME is not set")
-	}
-	if settings.RutrackerConfig.Password == "" {
-		problems = append(problems, "TGT_RUTRACKER_PASSWORD is not set")
-	}
-
-	allowedUsersRaw := os.Getenv("TGT_ALLOWED_USERS")
-	if strings.TrimSpace(allowedUsersRaw) == "" {
-		problems = append(problems, "TGT_ALLOWED_USERS is not set")
-	} else {
+	if allowedUsersRaw := os.Getenv("TGT_ALLOWED_USERS"); strings.TrimSpace(allowedUsersRaw) != "" {
 		allowedUsers, err := parseAllowedUsers(allowedUsersRaw)
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("TGT_ALLOWED_USERS: %v", err))
 		}
 		settings.AllowedUsers = allowedUsers
 	}
-
-	if settings.WebhookSecret != "" && !validWebhookSecret(settings.WebhookSecret) {
-		problems = append(problems, "TGT_WEBHOOK_SECRET must be 1-256 characters of A-Z, a-z, 0-9, _ and -")
-	}
+	problems = append(problems, validateSettings(settings)...)
 
 	if len(problems) > 0 {
 		return settings, fmt.Errorf("environment config problems: %v", problems)
@@ -148,14 +117,34 @@ func parseAllowedUsers(s string) ([]int64, error) {
 	return result, nil
 }
 
-func validateSettings(s Settings) error {
+// validateSettings returns one problem per missing or invalid value. It runs
+// on settings from either source, so each message names the settings-file key
+// and the environment variable.
+func validateSettings(s Settings) []string {
+	var problems []string
+	for _, f := range []struct {
+		value, name string
+	}{
+		{s.BotToken, "botToken/TGT_BOTTOKEN"},
+		{s.WebHookURL, "webHookURL/TGT_WEBHOOKURL"},
+		{s.DownloadPath, "downloadPath/TGT_DOWNLOADPATH"},
+		{s.TransmissionRPC.Address, "transmissionRPC.address/TGT_RPC_ADDR"},
+		{s.TransmissionRPC.User, "transmissionRPC.user/TGT_RPC_USER"},
+		{s.TransmissionRPC.Password, "transmissionRPC.password/TGT_RPC_PASSWORD"},
+		{s.RutrackerConfig.Username, "rutrackerConfig.username/TGT_RUTRACKER_USERNAME"},
+		{s.RutrackerConfig.Password, "rutrackerConfig.password/TGT_RUTRACKER_PASSWORD"},
+	} {
+		if strings.TrimSpace(f.value) == "" {
+			problems = append(problems, f.name+" is not set")
+		}
+	}
 	if len(s.AllowedUsers) == 0 {
-		return fmt.Errorf("allowedUsers must not be empty")
+		problems = append(problems, "allowedUsers/TGT_ALLOWED_USERS is not set")
 	}
 	if s.WebhookSecret != "" && !validWebhookSecret(s.WebhookSecret) {
-		return fmt.Errorf("webhookSecret must be 1-256 characters of A-Z, a-z, 0-9, _ and -")
+		problems = append(problems, "webhookSecret/TGT_WEBHOOK_SECRET must be 1-256 characters of A-Z, a-z, 0-9, _ and -")
 	}
-	return nil
+	return problems
 }
 
 func readSettingsFromFile(path string) (Settings, error) {

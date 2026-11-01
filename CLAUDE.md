@@ -79,6 +79,8 @@ The webapp requires `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (
 
 Settings file uses 1Password secret references (e.g., `op://Private/...`).
 
+Both sources go through the same `validateSettings` (`cmd/tgtorrentbot/read_settings.go`): every required value must be set in the settings file too, under its JSON key (`botToken`, `webHookURL`, `downloadPath`, `transmissionRPC.{address,user,password}`, `rutrackerConfig.{username,password}`, `allowedUsers`). An empty `webHookURL` would make `setWebhook` deregister the webhook, so the bot refuses to start instead.
+
 ## Repository Layout
 
 This repo uses a `cmd/` layout for multiple binaries:
