@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -78,8 +79,7 @@ func (cmd *DownloadCommand) addTorrentAndReply(ctx context.Context, content []by
 		DownloadDir: downloadDir,
 	})
 	if err != nil {
-		logger.Error(err, "Error from transmission RPC")
-		return err
+		return cmd.replyAddFailed(ctx, chatID, err)
 	}
 
 	return cmd.finalizeTorrent(ctx, torrent, chatID, userID, category)
@@ -95,11 +95,22 @@ func (cmd *DownloadCommand) addMagnetAndReply(ctx context.Context, magnetURI str
 		DownloadDir: downloadDir,
 	})
 	if err != nil {
-		logger.Error(err, "Error from transmission RPC")
-		return err
+		return cmd.replyAddFailed(ctx, chatID, err)
 	}
 
 	return cmd.finalizeTorrent(ctx, torrent, chatID, userID, category)
+}
+
+// replyAddFailed tells the user why Transmission did not add the torrent and
+// returns err for the handler's log.
+func (cmd *DownloadCommand) replyAddFailed(ctx context.Context, chatID int64, err error) error {
+	text := fmt.Sprintf("Transmission did not add the torrent: %v", err)
+	if errors.Is(err, transmission.ErrDuplicateTorrent) {
+		text = "This torrent is already in Transmission."
+	}
+	logger.Error(err, "Error from transmission RPC")
+	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{ChatID: chatID, Text: text})
+	return err
 }
 
 func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transmission.Torrent, chatID, userID int64, category Category) error {
@@ -107,7 +118,22 @@ func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transm
 	logger.Debug("Torrent added with ID %v, setting labels to %v", torrent.ID, labels)
 
 	if err := torrent.Set(transmission.SetTorrentArg{Labels: labels}); err != nil {
-		logger.Error(err, "Error setting torrent labels")
+		// Without labels the torrent would get no completion notification
+		// and be invisible in the webapp, and a retry would only report a
+		// duplicate. Take it back out (data kept), as the webapp does.
+		logger.Error(err, "Error setting torrent labels, removing torrent %d", torrent.ID)
+		if rmErr := cmd.TransmissionClient.RemoveTorrents([]*transmission.Torrent{torrent}, false); rmErr != nil {
+			logger.Error(rmErr, "Failed to remove unlabelled torrent %d", torrent.ID)
+			cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+				ChatID: chatID,
+				Text:   fmt.Sprintf("Added %v, but could not set its category (%v) or remove it. Remove it in Transmission and try again.", torrent.ID, err),
+			})
+			return err
+		}
+		cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+			ChatID: chatID,
+			Text:   fmt.Sprintf("Could not set the torrent's category (%v); it was not added. Please try again.", err),
+		})
 		return err
 	}
 

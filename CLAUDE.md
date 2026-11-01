@@ -230,8 +230,8 @@ The completion checker uses Transmission labels to track which chat initiated ea
 4. `DownloadWithCategoryCommand` authenticates with Rutracker
 5. Downloads .torrent file as bytes
 6. Base64-encodes and sends to Transmission RPC with download dir `{DownloadPath}/{category}/`
-7. Sets torrent labels: `[chatID, category]`
-8. Sends confirmation message
+7. Sets torrent labels: `[chatID, category, userID]`. If that fails, the torrent is removed again (data kept) and the user is told, as the webapp does; an unlabelled torrent would get no notification and be invisible in the webapp
+8. Sends confirmation message. An add Transmission rejects is reported to the user too, a duplicate as "already in Transmission" (`replyAddFailed`)
 
 ### Download-by-File Flow
 1. User uploads a `.torrent` file directly to the bot
