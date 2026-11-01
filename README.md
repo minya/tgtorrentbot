@@ -81,6 +81,7 @@ Settings are loaded from environment variables or a JSON file (`settings.json` b
 | `TGT_RPC_PASSWORD` | Yes | Transmission RPC password |
 | `TGT_RUTRACKER_USERNAME` | Yes | Rutracker username |
 | `TGT_RUTRACKER_PASSWORD` | Yes | Rutracker password |
+| `TGT_ALLOWED_USERS` | Yes | Comma-separated Telegram user IDs allowed to use the bot and the webapp |
 | `TGT_LOGLEVEL` | No | Log level (`info`, `debug`, etc.) |
 | `TGT_WEBAPP_URL` | No | Mini App URL; registers it as the Telegram chat menu button |
 | `TGT_JELLYFIN_URL` | No | Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it |
@@ -104,7 +105,8 @@ Settings are loaded from environment variables or a JSON file (`settings.json` b
     "password": "..."
   },
   "logLevel": "info",
-  "webAppURL": "https://yourdomain.com/webapp"
+  "webAppURL": "https://yourdomain.com/webapp",
+  "allowedUsers": [123456789]
 }
 ```
 
@@ -161,6 +163,7 @@ Compose environment variables:
 | Variable | Required | Description |
 |---|---|---|
 | `BOT_TOKEN` | Yes | Telegram bot token |
+| `ALLOWED_USERS` | Yes | Comma-separated Telegram user IDs allowed to use the bot and the webapp |
 | `WEBHOOKURL` | Yes | Public webhook URL |
 | `PASSWD` | Yes | Transmission RPC password |
 | `RUTRACKER_USERNAME` | Yes | Rutracker username |

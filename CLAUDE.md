@@ -58,6 +58,9 @@ The bot can be configured via environment variables or a JSON settings file. Set
 - `TGT_RPC_PASSWORD` - Transmission RPC password
 - `TGT_RUTRACKER_USERNAME` - Rutracker username
 - `TGT_RUTRACKER_PASSWORD` - Rutracker password
+- `TGT_ALLOWED_USERS` - Comma-separated Telegram user IDs allowed to use the bot and the webapp (e.g. `123456789,987654321`). Settings-file key: `allowedUsers` (JSON array of numbers); startup fails when it is empty
+
+The webapp requires `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (plus the Transmission/Rutracker variables for the features that use them). The MCP server requires only `TGT_DOWNLOADPATH`.
 
 ### Optional environment variables:
 - `TGT_LOGLEVEL` - Log level (e.g., "info", "debug")
