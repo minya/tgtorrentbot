@@ -70,7 +70,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *tel
 	api := cmd.TgApi
 	AnswerCallbackQuery(ctx, upd, api)
 	file, err := api.GetFile(ctx, cmd.FileID)
-	chatID := upd.CallbackQuery.Message.Chat.ID
+	chatID, userID := callbackOrigin(upd)
 	if err != nil {
 		logger.Error(err, "Error getting file")
 		api.SendMessage(ctx, telegram.SendMessageParams{
@@ -93,5 +93,5 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *tel
 		Env: cmd.Env,
 	}
 
-	return downloadCmd.addTorrentAndReply(ctx, content, chatID, cmd.Category)
+	return downloadCmd.addTorrentAndReply(ctx, content, chatID, userID, cmd.Category)
 }

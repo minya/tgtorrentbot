@@ -10,6 +10,7 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
+	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/odwrtw/transmission"
 )
 
@@ -66,7 +67,7 @@ func (cmd *DownloadCommand) buildCategoryKeyboard() telegram.InlineKeyboardMarku
 	}
 }
 
-func (cmd *DownloadCommand) addTorrentAndReply(ctx context.Context, content []byte, chatID int64, category Category) error {
+func (cmd *DownloadCommand) addTorrentAndReply(ctx context.Context, content []byte, chatID, userID int64, category Category) error {
 	torrentBase64 := base64.StdEncoding.EncodeToString(content)
 	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
 
@@ -81,10 +82,10 @@ func (cmd *DownloadCommand) addTorrentAndReply(ctx context.Context, content []by
 		return err
 	}
 
-	return cmd.finalizeTorrent(ctx, torrent, chatID, category)
+	return cmd.finalizeTorrent(ctx, torrent, chatID, userID, category)
 }
 
-func (cmd *DownloadCommand) addMagnetAndReply(ctx context.Context, magnetURI string, chatID int64, category Category) error {
+func (cmd *DownloadCommand) addMagnetAndReply(ctx context.Context, magnetURI string, chatID, userID int64, category Category) error {
 	downloadDir := fmt.Sprintf("%s/%s", cmd.DownloadPath, category.String())
 
 	logger.Debug("Adding magnet with category %s to directory %s", category.String(), downloadDir)
@@ -98,11 +99,11 @@ func (cmd *DownloadCommand) addMagnetAndReply(ctx context.Context, magnetURI str
 		return err
 	}
 
-	return cmd.finalizeTorrent(ctx, torrent, chatID, category)
+	return cmd.finalizeTorrent(ctx, torrent, chatID, userID, category)
 }
 
-func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transmission.Torrent, chatID int64, category Category) error {
-	labels := []string{fmt.Sprintf("%v", chatID), category.String()}
+func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transmission.Torrent, chatID, userID int64, category Category) error {
+	labels := torrentlabels.New(chatID, userID, category.String())
 	logger.Debug("Torrent added with ID %v, setting labels to %v", torrent.ID, labels)
 
 	if err := torrent.Set(transmission.SetTorrentArg{Labels: labels}); err != nil {
@@ -117,4 +118,16 @@ func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transm
 		Text:   fmt.Sprintf("Added: %v [%s]", torrent.ID, category.DisplayName()),
 	})
 	return nil
+}
+
+// callbackOrigin returns the chat a category button was pressed in, which
+// gets the replies and the completion notification, and the user who pressed
+// it, who owns the torrent. They differ in a group chat.
+func callbackOrigin(upd *telegram.Update) (chatID, userID int64) {
+	chatID = upd.CallbackQuery.Message.Chat.ID
+	userID = chatID
+	if upd.CallbackQuery.From != nil {
+		userID = upd.CallbackQuery.From.ID
+	}
+	return chatID, userID
 }

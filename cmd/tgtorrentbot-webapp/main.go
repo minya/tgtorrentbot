@@ -23,6 +23,7 @@ import (
 	"github.com/minya/rutracker"
 	"github.com/minya/tgtorrentbot/internal/category"
 	"github.com/minya/tgtorrentbot/internal/media"
+	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
 	"github.com/odwrtw/transmission"
 )
@@ -258,10 +259,9 @@ func main() {
 
 // userTorrents filters and converts Transmission torrents to media.TorrentInfo for the given user.
 func userTorrents(torrents []*transmission.Torrent, userID int64) []media.TorrentInfo {
-	userIDStr := fmt.Sprintf("%d", userID)
 	var result []media.TorrentInfo
 	for _, t := range torrents {
-		if len(t.Labels) == 0 || t.Labels[0] != userIDStr {
+		if !torrentlabels.OwnedBy(t.Labels, userID) {
 			continue
 		}
 		category := "others"
@@ -370,7 +370,7 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		return
 	}
 
-	labels := []string{fmt.Sprintf("%d", userID), req.Category}
+	labels := torrentlabels.New(userID, userID, req.Category)
 	err = torrent.Set(transmission.SetTorrentArg{
 		Labels: labels,
 	})
@@ -539,9 +539,8 @@ func (app *App) findUserTorrent(userID int64, category, name string) (*transmiss
 	if err != nil {
 		return nil, err
 	}
-	userIDStr := fmt.Sprintf("%d", userID)
 	for _, t := range torrents {
-		if t.Name != name || len(t.Labels) == 0 || t.Labels[0] != userIDStr {
+		if t.Name != name || !torrentlabels.OwnedBy(t.Labels, userID) {
 			continue
 		}
 		// Match category from label, defaulting to "others" for legacy single-label torrents.

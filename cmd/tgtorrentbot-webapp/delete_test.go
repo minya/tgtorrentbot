@@ -139,3 +139,42 @@ func TestRemoveDataNotFound(t *testing.T) {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
 }
+
+// F83: a torrent the bot added from a group chat has the group as Labels[0]
+// and the user as Labels[2]; it is listed for that user and deletable.
+func TestGroupChatTorrentOwnedByUser(t *testing.T) {
+	const torrents = `[{"id":9,"name":"Grp","labels":["-100123","movies","42"],"percentDone":1}]`
+	app, root, _, removed := newDeleteTestApp(t, torrents)
+	mustWriteFile(t, filepath.Join(root, "movies", "Grp", "a.mkv"))
+
+	all, err := app.transmissionClient.GetTorrents()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := userTorrents(all, 42); len(got) != 1 || got[0].Name != "Grp" {
+		t.Fatalf("userTorrents(42) = %+v, want the group download", got)
+	}
+	if got := userTorrents(all, -100123); len(got) != 0 {
+		t.Fatalf("userTorrents(group id) = %+v, want none", got)
+	}
+
+	rec := deleteItem(app, 42, "movies", "Grp")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if !removed.Load() {
+		t.Error("torrent was not removed")
+	}
+}
+
+// Torrents labelled before the owner label existed still belong to Labels[0].
+func TestLegacyTwoLabelTorrentOwnedByLabel0(t *testing.T) {
+	app, _, _, _ := newDeleteTestApp(t, `[{"id":1,"name":"Old","labels":["42","movies"]}]`)
+	all, err := app.transmissionClient.GetTorrents()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := userTorrents(all, 42); len(got) != 1 {
+		t.Fatalf("userTorrents(42) = %+v, want the legacy torrent", got)
+	}
+}

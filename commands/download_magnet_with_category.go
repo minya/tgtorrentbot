@@ -53,6 +53,6 @@ func (cmd *DownloadMagnetWithCategoryCommand) Handle(ctx context.Context, upd *t
 	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
 
 	downloadCmd := &DownloadCommand{Env: cmd.Env}
-	chatID := upd.CallbackQuery.Message.Chat.ID
-	return downloadCmd.addMagnetAndReply(ctx, cmd.MagnetURI, chatID, cmd.Category)
+	chatID, userID := callbackOrigin(upd)
+	return downloadCmd.addMagnetAndReply(ctx, cmd.MagnetURI, chatID, userID, cmd.Category)
 }

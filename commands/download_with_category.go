@@ -66,6 +66,6 @@ func (cmd *DownloadWithCategoryCommand) Handle(ctx context.Context, upd *telegra
 		Env: cmd.Env,
 	}
 
-	chatID := upd.CallbackQuery.Message.Chat.ID
-	return downloadCmd.addTorrentAndReply(ctx, torrentBytes, chatID, cmd.Category)
+	chatID, userID := callbackOrigin(upd)
+	return downloadCmd.addTorrentAndReply(ctx, torrentBytes, chatID, userID, cmd.Category)
 }

@@ -90,6 +90,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - `internal/` — Internal helpers not exported outside this module
   - `internal/file_id_lookup.go` — `FileIDLookup` used by the file-upload and magnet-link flows
   - `internal/transmissionrpc/` — `New(address, user, password)` builds the Transmission client every binary uses: 30 s timeout, and a transport that handles the `X-Transmission-Session-Id` 409 dance under a mutex, because `odwrtw/transmission` stores the session id in an unsynchronised field and the client is shared across goroutines. Do not call `transmission.New` directly in production code
+  - `internal/torrentlabels/` — the Transmission label layout (`[chatID, category, userID]`) shared by the bot and the webapp
   - `internal/category/` — dependency-free download category list (`All()`, `Names()`, `Parse()`, `DisplayName()`), the single source of truth for every binary and the webapp frontend
   - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries.
 - `Dockerfile.bot` — Docker build for the bot
@@ -192,14 +193,16 @@ Everything else derives from `internal/category`: the bot's category keyboards, 
 
 ### Torrent Labels Convention
 
-Transmission torrent labels are used to store metadata:
-- `Labels[0]` - chatID (string) - Telegram chat that initiated the download
+Transmission torrent labels are used to store metadata (layout defined in `internal/torrentlabels`; write them with `torrentlabels.New`, test ownership with `torrentlabels.OwnedBy`):
+- `Labels[0]` - chatID (string) - Telegram chat that initiated the download and gets the completion notification
 - `Labels[1]` - category (string) - Download category (e.g., "movies", "shows")
+- `Labels[2]` - userID (string) - Telegram user who added the torrent, its owner. Differs from the chat ID for a bot download started in a group chat (the chat ID is then the negative group ID). The webapp lists and deletes torrents by owner and writes `[userID, category, userID]`. Torrents labelled before `Labels[2]` existed fall back to `Labels[0]` as owner
 
-Labels are set when adding a torrent (`commands/download.go:85-95`) and read by:
+Labels are set when adding a torrent (`finalizeTorrent` in `commands/download.go`, `handleDownloadTorrent` in the webapp) and read by:
 - Completion checker to notify the correct chat (`update_check.go:144`)
 - Completion checker to determine category for move (`update_check.go:156`)
 - List command to display category (`list.go`)
+- Webapp to show and delete only the user's own torrents (`userTorrents`, `findUserTorrent`)
 
 ### Torrent Completion Tracking
 
