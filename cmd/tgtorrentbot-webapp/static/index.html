@@ -1218,25 +1218,40 @@
         }
 
         // --- Search ---
+        // The overlay fades in and out; these delayed steps must not outlive
+        // a reopen or close that happens before they fire, or a stale hide
+        // leaves an invisible overlay over an inert page (or a stale focus
+        // lands in a hidden input).
+        let searchFocusTimer = null;
+        let searchHideTimer = null;
+
         function showSearchOverlay() {
+            clearTimeout(searchHideTimer);
+            searchHideTimer = null;
             const overlay = document.getElementById('search-overlay');
             searchOpener = document.activeElement;
             setInert(['main-screen', 'category-view', 'add-btn'], true);
             overlay.style.display = 'flex';
             overlay.offsetHeight;
             overlay.classList.add('search-overlay--visible');
-            setTimeout(() => {
+            clearTimeout(searchFocusTimer);
+            searchFocusTimer = setTimeout(() => {
+                searchFocusTimer = null;
                 document.getElementById('search-input').focus();
             }, 350);
         }
 
         function hideSearchOverlay() {
+            clearTimeout(searchFocusTimer);
+            searchFocusTimer = null;
             const overlay = document.getElementById('search-overlay');
             overlay.classList.remove('search-overlay--visible');
             setInert(['main-screen', 'category-view', 'add-btn'], false);
             if (searchOpener?.isConnected) searchOpener.focus();
             searchOpener = null;
-            setTimeout(() => {
+            clearTimeout(searchHideTimer);
+            searchHideTimer = setTimeout(() => {
+                searchHideTimer = null;
                 overlay.style.display = 'none';
                 document.getElementById('search-results').innerHTML = '';
                 document.getElementById('search-input').value = '';
