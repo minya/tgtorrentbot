@@ -13,6 +13,9 @@ type FsItem struct {
 	Size         int64
 	IsIncomplete bool
 	ModTime      time.Time // mtime of the top-level entry
+	// Path is where the scanner found the item:
+	// {DownloadPath}/{category}/{name} or {IncompletePath}/{name}.
+	Path string
 }
 
 // FilesystemScanner scans download and incomplete directories for media items.
@@ -69,6 +72,7 @@ func scanDir(dir string, incomplete bool) ([]FsItem, error) {
 			Size:         size,
 			IsIncomplete: incomplete,
 			ModTime:      modTime,
+			Path:         filepath.Join(dir, entry.Name()),
 		})
 	}
 	return items, nil

@@ -82,6 +82,7 @@ func MergeItems(
 				e.item.TotalSize = fi.Size
 			}
 			e.item.noteModTime(fi.ModTime)
+			e.item.notePath(fi.Path)
 		}
 	}
 
@@ -109,6 +110,7 @@ func MergeItems(
 				matched.item.TotalSize = fi.Size
 			}
 			matched.item.noteModTime(fi.ModTime)
+			matched.item.notePath(fi.Path)
 		} else {
 			// No torrent and no completed directory owns this incomplete
 			// folder — it's orphaned leftover data. Surface it under the
@@ -121,6 +123,7 @@ func MergeItems(
 				e.item.TotalSize = fi.Size
 			}
 			e.item.noteModTime(fi.ModTime)
+			e.item.notePath(fi.Path)
 		}
 	}
 
@@ -163,6 +166,13 @@ func MergeItems(
 		result = append(result, e.item)
 	}
 	return result
+}
+
+// notePath records p as one of the item's on-disk locations.
+func (u *UnifiedItem) notePath(p string) {
+	if p != "" && !slices.Contains(u.Paths, p) {
+		u.Paths = append(u.Paths, p)
+	}
 }
 
 // noteModTime records t as the item's mtime if it is newer than what's there.

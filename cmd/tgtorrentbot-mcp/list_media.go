@@ -4,7 +4,6 @@ import (
 	"context"
 	"io/fs"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -23,7 +22,7 @@ var knownCategories = category.Names()
 const maxListedFiles = 5000
 
 type listMediaInput struct {
-	Category  string `json:"category,omitempty" jsonschema:"optional category filter; one of the categories named in the tool description"`
+	Category  string `json:"category,omitempty" jsonschema:"optional category filter; one of the categories named in the tool description, or 'incomplete' for orphaned leftovers in the incomplete directory"`
 	Query     string `json:"query,omitempty" jsonschema:"optional case-insensitive substring to match against item names"`
 	Recursive bool   `json:"recursive,omitempty" jsonschema:"when true, also list every file inside each item's directory (e.g. individual episodes of a show) under 'files'; combine with category/query to keep the output small"`
 }
@@ -106,10 +105,12 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 		if wantQuery != "" && !strings.Contains(strings.ToLower(item.Name), wantQuery) {
 			continue
 		}
-		// Resolve filesystem path if the item exists on disk.
+		// The on-disk location the scan found: the completed copy when there
+		// is one, else the incomplete directory (in-progress downloads and
+		// orphans of the virtual incomplete category).
 		var path string
-		if slices.Contains(item.Sources, "filesystem") {
-			path = filepath.Join(s.config.DownloadPath, item.Category, item.Name)
+		if len(item.Paths) > 0 {
+			path = item.Paths[0]
 		}
 		li := listMediaItem{
 			Name:         item.Name,

@@ -30,4 +30,9 @@ type UnifiedItem struct {
 	Eta              *int     `json:"eta,omitempty"`
 	PeersConnected   *int     `json:"peersConnected,omitempty"`
 	PeersSendingToUs *int     `json:"peersSendingToUs,omitempty"`
+	// Paths lists where the item's data is on disk, as found by the
+	// filesystem scan: the completed {DownloadPath}/{category}/{name} first,
+	// then {IncompletePath}/{name} while still downloading or orphaned.
+	// Empty for items with no filesystem source.
+	Paths []string `json:"-"`
 }
