@@ -100,3 +100,14 @@ func resolveDestPath(downloadRoot, input string) (string, error) {
 	}
 	return filepath.Join(evalAncestor, tail), nil
 }
+
+// lexicalPath returns input as an absolute, cleaned path under downloadRoot
+// without resolving symlinks (relative inputs are joined to the root). It
+// does no validation; use resolvePath for that.
+func lexicalPath(downloadRoot, input string) string {
+	p := input
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(downloadRoot, p)
+	}
+	return filepath.Clean(p)
+}

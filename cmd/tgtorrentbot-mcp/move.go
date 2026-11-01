@@ -27,6 +27,12 @@ type moveMediaOutput struct {
 }
 
 func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveMediaInput) (*mcp.CallToolResult, moveMediaOutput, error) {
+	// A symlink source would move the link's target (resolvePath returns
+	// the resolved path), possibly another item in another category, while
+	// the caller named the link. Refuse instead.
+	if fi, err := os.Lstat(lexicalPath(s.config.DownloadPath, in.Source)); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return formatError("source %q is a symlink; move the item it points to by its own path", in.Source), moveMediaOutput{}, nil
+	}
 	src, err := resolvePath(s.config.DownloadPath, in.Source)
 	if err != nil {
 		return formatError("source: %v", err), moveMediaOutput{}, nil
@@ -34,6 +40,15 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	dst, err := resolveDestPath(s.config.DownloadPath, in.Destination)
 	if err != nil {
 		return formatError("destination: %v", err), moveMediaOutput{}, nil
+	}
+	// The download root, the category directories and the incomplete
+	// directory are structure, not media: moving one would pull every
+	// torrent's data out from under Transmission and empty a library mount.
+	if s.isStructuralDir(src) {
+		return formatError("source %q is the download root, a category directory or the incomplete directory; move items inside it instead", in.Source), moveMediaOutput{}, nil
+	}
+	if s.isStructuralDir(dst) {
+		return formatError("destination %q is the download root, a category directory or the incomplete directory; move into it with a name, e.g. %q", in.Destination, filepath.Join(in.Destination, filepath.Base(src))), moveMediaOutput{}, nil
 	}
 	if src == dst {
 		return formatError("source and destination are the same path"), moveMediaOutput{}, nil
@@ -106,4 +121,38 @@ func torrentRemovedSuffix(out moveMediaOutput) string {
 		return "; note: the torrent was already removed from Transmission (files kept at the source path)"
 	}
 	return ""
+}
+
+// isStructuralDir reports whether p (a resolved absolute path) is the
+// download root, {root}/{category} for a known category, or the incomplete
+// directory.
+func (s *server) isStructuralDir(p string) bool {
+	for _, d := range s.structuralDirs() {
+		if p == d {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *server) structuralDirs() []string {
+	root := evalOrClean(s.config.DownloadPath)
+	dirs := []string{root}
+	for _, c := range knownCategories {
+		dirs = append(dirs, evalOrClean(filepath.Join(s.config.DownloadPath, c)))
+	}
+	inc := s.config.IncompletePath
+	if inc == "" {
+		inc = filepath.Join(s.config.DownloadPath, "incomplete")
+	}
+	return append(dirs, evalOrClean(inc))
+}
+
+// evalOrClean resolves symlinks in p, or returns it cleaned when it does not
+// exist (yet).
+func evalOrClean(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return filepath.Clean(p)
 }
