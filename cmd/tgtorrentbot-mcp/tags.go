@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/bogem/id3v2/v2"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -480,32 +479,16 @@ func reinterpretAsCP1251(s string, dec *encoding.Decoder) (string, error) {
 	return dec.String(string(raw))
 }
 
-// encodingHint returns "cp1251" when the combined tags look like cp1251 bytes
-// mis-decoded as Latin-1, else "".
+// encodingHint returns "cp1251" when any one tag value looks like cp1251
+// bytes mis-decoded as Latin-1, else "". Each value is judged on its own with
+// the same test fix_encoding applies, so the hint never recommends a fix that
+// would leave everything unchanged, and accents spread over several correct
+// Western values (Jóga / Björk / Homogénic) do not add up to a false hint.
 func encodingHint(parts ...string) string {
-	joined := strings.Join(parts, "")
-	if joined == "" {
-		return ""
-	}
-	total, suspect := 0, 0
-	for _, r := range joined {
-		if r < 0x80 {
-			continue
+	for _, p := range parts {
+		if looksLikeCP1251Mojibake(p) {
+			return "cp1251"
 		}
-		total++
-		if r >= 0xC0 && r <= 0xFF {
-			// If re-decoding this byte as cp1251 yields Cyrillic, that's mojibake.
-			decoded, err := charmap.Windows1251.NewDecoder().Bytes([]byte{byte(r)})
-			if err == nil && utf8.RuneCountInString(string(decoded)) == 1 {
-				dr, _ := utf8.DecodeRune(decoded)
-				if dr >= 0x0400 && dr <= 0x04FF {
-					suspect++
-				}
-			}
-		}
-	}
-	if total > 2 && suspect*2 > total {
-		return "cp1251"
 	}
 	return ""
 }

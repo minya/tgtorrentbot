@@ -40,6 +40,10 @@ func TestEncodingHint(t *testing.T) {
 		{"short accented latin (café)", []string{"Café"}, ""},
 		{"empty", []string{""}, ""},
 		{"already utf8 russian", []string{"Привет мир"}, ""},
+		// F30: correct Western titles with accents across several fields.
+		{"björk homogénic", []string{"Jóga", "Björk", "Homogénic"}, ""},
+		{"déjà vu beyoncé", []string{"Déjà Vu", "Beyoncé", "B'Day"}, ""},
+		{"one mojibake field among correct ones", []string{"Jóga", "Ãðóïïà Êèíî"}, "cp1251"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
