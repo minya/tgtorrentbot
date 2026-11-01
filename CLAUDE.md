@@ -315,12 +315,15 @@ Logs go to **stderr**, not stdout — stdout is reserved for MCP JSON-RPC framin
 - The web app is a separate service (`tgtorrentbot-webapp`) defined in `docker-compose.yaml`, built with `Dockerfile.webapp`
 - Uses the same Rutracker/Transmission credentials
 - The web app button also appears in the `/list` command keyboard
-- API endpoints (all require `X-Telegram-Init-Data` header with valid Telegram HMAC):
+- API endpoints (registered in `cmd/tgtorrentbot-webapp/main.go`). The HTTP ones require the `X-Telegram-Init-Data` header with valid Telegram HMAC from a user in `TGT_ALLOWED_USERS` (`makeHandler`); a wrong method gets 405:
   - `GET /api/items` — returns unified media items merged from Transmission, filesystem, Jellyfin, and Audiobookshelf (see Unified Media Items below)
-  - `GET /api/torrents` — lists all torrents with category, sorted by ID descending
-  - `POST /api/torrents/remove?id=<n>` — removes a torrent by Transmission ID
+  - `DELETE /api/items/{id}` — "Remove data": removes the user's torrent for the item, if any (data kept by Transmission), then deletes its data from `{DownloadPath}/{category}/{name}` and `{IncompletePath}/{name}`. `{id}` is `base64url("{category}:{name}")`; the virtual `incomplete` category maps to the incomplete dir only
+  - `DELETE /api/items/{id}/torrent` — "Remove torrent": removes only the user's torrent, files stay
+  - `GET /api/torrents` — lists the requesting user's torrents (by owner label) with category, sorted by ID descending
   - `POST /api/torrents/download` — downloads from Rutracker and adds to Transmission; body: `{"downloadUrl":"...","category":"..."}`
   - `GET /api/search?q=<query>` — searches Rutracker, returns up to 20 results sorted by seeders
+  - `GET /api/ws` — WebSocket of live torrent progress for the user. Browsers cannot set headers on a WebSocket, so the init data travels as the subprotocol `tg-auth.<base64url(initData)>` (`websocket.go`)
+  - `GET /categories.js` — unauthenticated, the category list for the frontend (see Category System)
 
 ### Unified Media Items
 
@@ -345,7 +348,7 @@ Key files:
 - `cmd/tgtorrentbot-webapp/audiobookshelf.go` — Audiobookshelf API client
 - `cmd/tgtorrentbot-webapp/payloads.go` — response types including `UnifiedItem`
 
-The frontend (`static/index.html`) fetches from `/api/items` and shows source badges (T/F/J/A) on each item. Remove button only appears for items with a torrent source.
+The frontend (`static/index.html`) fetches from `/api/items` and shows source badges (T/F/J/A) on each item. Items with a torrent or filesystem source get a ⋮ menu: "Remove torrent" only when the item has a torrent source, "Remove data" for both (so filesystem-only items can be deleted too).
 
 ### Dependency Injection
 - `environment.Env` is created once in `cmd/tgtorrentbot/main.go`
