@@ -274,7 +274,7 @@ Optional binary (`cmd/tgtorrentbot-mcp/`) that exposes media-library tools to Cl
 
 **Fixing a mis-identified TV show:** `list_media(category="shows")` → `move_media` to a clean `Show Name (Year)` folder, passing the item's `torrent_id` if its sources include `"torrent"` → `jellyfin_rescan`. Jellyfin treats the renamed path as a new item and re-matches from the clean name, dropping the stale wrong-id entry on scan.
 
-All tool descriptions are in `main.go:registerTools` — keep them specific enough that Claude can pick the right tool from a natural-language request and knows when to chain calls (e.g., after `write_tags` on audiobooks, always call `abs_rescan`; after `move_media` on shows, call `jellyfin_rescan`).
+All tool descriptions are in `main.go:registerTools` — keep them specific enough that Claude can pick the right tool from a natural-language request and knows when to chain calls (e.g., after `write_tags` on audiobooks, always call `abs_rescan`; after `write_tags` on music/musicvideos and after `move_media` on shows, call `jellyfin_rescan`), and state the real limits (only `.mp3`, only `cp1251`) so Claude does not make calls bound to fail.
 
 **Only `TGT_DOWNLOADPATH` is required.** Transmission, Jellyfin, and Audiobookshelf env vars are optional — missing ones just reduce what `list_media` returns and disable `abs_rescan`.
 

@@ -170,8 +170,8 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "read_tags",
-		Description: "Read ID3 tags from one audio file or every audio file under a " +
-			"directory. Input path is relative to the configured download path (or " +
+		Description: "Read ID3 tags from one .mp3 file or every .mp3 file under a " +
+			"directory (other formats are not supported and are skipped). Input path is relative to the configured download path (or " +
 			"absolute under it). Returns per-file title/artist/album/album_artist/" +
 			"composer/year/genre/track/disc/comment plus an 'encoding_hint' flag " +
 			"suggesting cp1251-as-latin1 mojibake so Claude knows when to call " +
@@ -181,10 +181,10 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "write_tags",
-		Description: "Write ID3 tags to an audio file or every audio file under a " +
-			"directory. Two modes, combinable (applied in order fix → explicit):\n" +
+		Description: "Write ID3 tags to one .mp3 file or every .mp3 file under a " +
+			"directory (only .mp3 is supported). Two modes, combinable (applied in order fix → explicit):\n" +
 			"  1. fix_encoding: re-decode text (T***, TXXX), comment (COMM) and lyrics (USLT) frames from " +
-			"the given codepage (e.g. 'cp1251') to Unicode — use this when read_tags " +
+			"the given codepage to Unicode; 'cp1251' is the only codepage supported. Use this when read_tags " +
 			"reports mojibake. Only values that themselves look like cp1251 read " +
 			"as Latin-1 are rewritten; correct text (including accented Latin " +
 			"such as 'Café') is left as is, so it is safe on mixed directories.\n" +
@@ -194,8 +194,10 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"read_tags recursively on the directory, inspect filenames and parent " +
 			"folders, decide the correct TRCK/TPOS per file, and send those as " +
 			"explicit overrides (one write_tags call per file).\n" +
-			"Writes are restricted to the configured download path. After writing, " +
-			"call abs_rescan so Audiobookshelf/Jellyfin pick up the change.",
+			"Writes are restricted to the configured download path. After writing " +
+			"audiobooks, call abs_rescan so Audiobookshelf picks up the change; after " +
+			"writing music or musicvideos, call jellyfin_rescan (abs_rescan does not " +
+			"refresh Jellyfin).",
 	}, s.writeTags)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
