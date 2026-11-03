@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/minya/logger"
@@ -107,8 +106,8 @@ func main() {
 
 func startListen(port int, webhookSecret string, handleUpdate func(context.Context, *telegram.Update) error) {
 	logger.Info("Bot started")
-	var inFlight sync.WaitGroup
-	http.Handle("/", newWebhookHandler(webhookSecret, handleUpdate, &inFlight))
+	webhook := newWebhookHandler(webhookSecret, handleUpdate)
+	http.Handle("/", webhook)
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -119,19 +118,12 @@ func startListen(port int, webhookSecret string, handleUpdate func(context.Conte
 	// On SIGTERM, stop taking updates and let the ones being handled finish
 	// (an add is two RPCs, AddTorrent then the labels). Updates Telegram
 	// has not delivered yet are redelivered to the next instance.
-	if err := graceful.Serve(srv, func(ctx context.Context) { waitGroup(ctx, &inFlight) }); err != nil {
+	if err := graceful.Serve(srv, func(ctx context.Context) {
+		if err := webhook.Wait(ctx); err != nil {
+			logger.Warn("Shutdown deadline passed with updates still being handled")
+		}
+	}); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
-	}
-}
-
-// waitGroup waits for wg or until ctx is done.
-func waitGroup(ctx context.Context, wg *sync.WaitGroup) {
-	done := make(chan struct{})
-	go func() { wg.Wait(); close(done) }()
-	select {
-	case <-done:
-	case <-ctx.Done():
-		logger.Warn("Shutdown deadline passed with updates still being handled")
 	}
 }

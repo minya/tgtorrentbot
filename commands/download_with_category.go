@@ -51,12 +51,12 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 func (cmd *DownloadWithCategoryCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
 	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
+	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClientContext(ctx, cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err
 	}
-	torrentBytes, err := rutrackerClient.DownloadTorrent(cmd.URL)
+	torrentBytes, err := rutrackerClient.DownloadTorrentContext(ctx, cmd.URL)
 	if err != nil {
 		return err
 	}

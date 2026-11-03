@@ -4,10 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
-	"net/http"
-	"runtime/debug"
-	"sync"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
@@ -40,25 +36,13 @@ func validWebhookSecret(s string) bool {
 // X-Telegram-Bot-Api-Secret-Token header matching secret are rejected with
 // 401 (checked in constant time by telegram.WebhookHandler, which also
 // accepts only POST and caps the body), so updates cannot be forged by
-// anyone who learns the webhook URL. Accepted updates are acknowledged
-// immediately and handled in the background so Telegram does not retry them;
-// inFlight counts those background handlers so shutdown can wait for them.
-func newWebhookHandler(secret string, handleUpdate func(context.Context, *telegram.Update) error, inFlight *sync.WaitGroup) http.Handler {
-	return telegram.WebhookHandler(secret, func(ctx context.Context, upd *telegram.Update) error {
-		inFlight.Add(1)
-		go func() {
-			defer inFlight.Done()
-			// A panic in a command must not take the whole bot down: this
-			// goroutine is not covered by net/http's per-request recovery.
-			defer func() {
-				if r := recover(); r != nil {
-					logger.Error(fmt.Errorf("panic: %v\n%s", r, debug.Stack()), "Panic while handling update %d", upd.UpdateID)
-				}
-			}()
-			if err := handleUpdate(context.WithoutCancel(ctx), upd); err != nil {
-				logger.Error(err, "Failed to handle update from request")
-			}
-		}()
-		return nil
-	}, nil)
+// anyone who learns the webhook URL. telegram.WebhookHandler acknowledges
+// each update at once and handles it in its own goroutine, with a context
+// that survives Telegram disconnecting; the returned Webhook's Wait lets
+// shutdown finish the updates still being handled. Failures and panics in a
+// command are logged and never take the bot down.
+func newWebhookHandler(secret string, handleUpdate func(context.Context, *telegram.Update) error) *telegram.Webhook {
+	return telegram.WebhookHandler(secret, handleUpdate, func(upd *telegram.Update, err error) {
+		logger.Error(err, "Failed to handle update %d", upd.UpdateID)
+	})
 }

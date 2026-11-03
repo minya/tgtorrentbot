@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -30,7 +29,7 @@ func TestWebhookRejectsRequestsWithoutSecret(t *testing.T) {
 	h := newWebhookHandler(secret, func(_ context.Context, u *telegram.Update) error {
 		handled <- u
 		return nil
-	}, new(sync.WaitGroup))
+	})
 
 	wrong := "nope"
 	for name, hdr := range map[string]*string{"missing": nil, "wrong": &wrong} {
@@ -59,7 +58,7 @@ func TestWebhookRejectsRequestsWithoutSecret(t *testing.T) {
 
 func TestWebhookRejectsGet(t *testing.T) {
 	secret := deriveWebhookSecret("123:token")
-	h := newWebhookHandler(secret, func(context.Context, *telegram.Update) error { return nil }, new(sync.WaitGroup))
+	h := newWebhookHandler(secret, func(context.Context, *telegram.Update) error { return nil })
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("X-Telegram-Bot-Api-Secret-Token", secret)
 	rec := httptest.NewRecorder()
@@ -97,31 +96,27 @@ func TestValidWebhookSecret(t *testing.T) {
 	}
 }
 
-// F44: every update handled in the background is counted, so shutdown can
-// wait for it.
+// F44, F68: the update is acknowledged before it is handled, and the
+// webhook's Wait, which shutdown uses, waits for it to finish.
 func TestWebhookTracksInFlightUpdates(t *testing.T) {
 	secret := deriveWebhookSecret("123:token")
 	release := make(chan struct{})
-	var inFlight sync.WaitGroup
 	h := newWebhookHandler(secret, func(context.Context, *telegram.Update) error {
 		<-release
 		return nil
-	}, &inFlight)
+	})
 	if rec := postUpdate(h, &secret); rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	start := time.Now()
-	waitGroup(ctx, &inFlight)
-	if time.Since(start) < 90*time.Millisecond {
-		t.Fatal("waitGroup returned while an update was still being handled")
+	if err := h.Wait(ctx); err == nil {
+		t.Fatal("Wait returned while an update was still being handled")
 	}
 	close(release)
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel2()
-	waitGroup(ctx2, &inFlight)
-	if ctx2.Err() != nil {
-		t.Fatal("waitGroup did not return after the update finished")
+	if err := h.Wait(ctx2); err != nil {
+		t.Fatal("Wait did not return after the update finished")
 	}
 }

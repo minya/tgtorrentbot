@@ -76,12 +76,12 @@ func (cmd *SearchCommand) Handle(ctx context.Context, upd *telegram.Update) erro
 	}
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
 	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
+	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClientContext(ctx, cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err
 	}
-	found, err := rutrackerClient.Find(cmd.Pattern)
+	found, err := rutrackerClient.FindContext(ctx, cmd.Pattern)
 	if err != nil {
 		logger.Error(err, "Error searching")
 		return err

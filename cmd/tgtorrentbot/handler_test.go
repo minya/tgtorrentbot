@@ -157,7 +157,7 @@ func TestWebhookRecoversPanic(t *testing.T) {
 		var m map[string]int
 		m["x"] = 1 // nil map write panics
 		return nil
-	}, new(sync.WaitGroup))
+	})
 	if rec := postUpdate(h, &secret); rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}

@@ -345,7 +345,8 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		return
 	}
 
-	client, err := rutracker.NewAuthenticatedRutrackerClient(
+	client, err := rutracker.NewAuthenticatedRutrackerClientContext(
+		r.Context(),
 		app.config.RutrackerUsername,
 		app.config.RutrackerPassword,
 		rutracker.WithTimeout(30*time.Second),
@@ -356,7 +357,7 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		return
 	}
 
-	torrentData, err := client.DownloadTorrent(req.DownloadURL)
+	torrentData, err := client.DownloadTorrentContext(r.Context(), req.DownloadURL)
 	if err != nil {
 		logger.Error(err, "Failed to download torrent")
 		http.Error(w, `{"error": "failed to download torrent"}`, http.StatusInternalServerError)
@@ -416,7 +417,8 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	client, err := rutracker.NewAuthenticatedRutrackerClient(
+	client, err := rutracker.NewAuthenticatedRutrackerClientContext(
+		r.Context(),
 		app.config.RutrackerUsername,
 		app.config.RutrackerPassword,
 		rutracker.WithTimeout(30*time.Second),
@@ -428,7 +430,7 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	items, err := client.Find(query)
+	items, err := client.FindContext(r.Context(), query)
 	if err != nil {
 		logger.Error(err, "Failed to search rutracker")
 		http.Error(w, `{"error": "search failed"}`, http.StatusInternalServerError)
