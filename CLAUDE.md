@@ -180,12 +180,14 @@ The parser uses regex to extract topic ID, URL, title, size, and seeders from Ru
 ### Category System
 
 Downloads are organized by category (`internal/category/category.go`, the single source of truth; `commands/category.go` re-exports it for the bot):
-- `movies` - Фильмы (Films)
-- `shows` - Сериалы (TV Shows)
-- `music` - Музыка (Music)
+- `movies` - Movies
+- `shows` - TV Shows
+- `music` - Music
 - `musicvideos` - Music Videos
-- `audiobooks` - Аудиокниги (Audiobooks)
-- `others` - Другое (Other)
+- `audiobooks` - Audiobooks
+- `others` - Other
+
+The names after the dash are `DisplayName()`, shown on the bot's category keyboards, in `/list` and in completion notifications, and by the webapp.
 
 Categories determine the download subdirectory: `{DownloadPath}/{category}/`
 
