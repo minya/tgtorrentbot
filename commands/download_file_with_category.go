@@ -73,7 +73,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *tel
 	chatID, userID := callbackOrigin(upd)
 	if err != nil {
 		logger.Error(err, "Error getting file")
-		api.SendMessage(ctx, telegram.SendMessageParams{
+		SendMessage(ctx, api, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   "Error",
 		})
@@ -82,7 +82,7 @@ func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *tel
 	content, err := api.DownloadFile(ctx, file)
 	if err != nil {
 		logger.Error(err, "Error downloading file")
-		api.SendMessage(ctx, telegram.SendMessageParams{
+		SendMessage(ctx, api, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   fmt.Sprintf("Download error: %v", err),
 		})

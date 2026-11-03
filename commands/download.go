@@ -44,7 +44,7 @@ func (cmd *DownloadCommand) Handle(ctx context.Context, upd *telegram.Update) er
 	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
 
 	keyboard := cmd.buildCategoryKeyboard()
-	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+	SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 		ChatID:      upd.CallbackQuery.Message.Chat.ID,
 		Text:        "Select category:",
 		ReplyMarkup: keyboard,
@@ -109,7 +109,7 @@ func (cmd *DownloadCommand) replyAddFailed(ctx context.Context, chatID int64, er
 		text = "This torrent is already in Transmission."
 	}
 	logger.Error(err, "Error from transmission RPC")
-	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{ChatID: chatID, Text: text})
+	SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{ChatID: chatID, Text: text})
 	return Replied(err)
 }
 
@@ -124,13 +124,13 @@ func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transm
 		logger.Error(err, "Error setting torrent labels, removing torrent %d", torrent.ID)
 		if rmErr := cmd.TransmissionClient.RemoveTorrents([]*transmission.Torrent{torrent}, false); rmErr != nil {
 			logger.Error(rmErr, "Failed to remove unlabelled torrent %d", torrent.ID)
-			cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+			SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 				ChatID: chatID,
 				Text:   fmt.Sprintf("Added %v, but could not set its category (%v) or remove it. Remove it in Transmission and try again.", torrent.ID, err),
 			})
 			return Replied(err)
 		}
-		cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   fmt.Sprintf("Could not set the torrent's category (%v); it was not added. Please try again.", err),
 		})
@@ -139,7 +139,7 @@ func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transm
 
 	logger.Debug("Torrent %v labels set successfully", torrent.ID)
 
-	cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+	SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 		ChatID: chatID,
 		Text:   fmt.Sprintf("Added: %v [%s]", torrent.ID, category.DisplayName()),
 	})

@@ -74,7 +74,7 @@ func (cmd *ListPageCommand) Handle(ctx context.Context, upd *telegram.Update) er
 func sendTorrentsList(ctx context.Context, env environment.Env, chatID int64, page int) error {
 	text, keyboard, err := prepareTorrentsList(env, page)
 	if err != nil {
-		env.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		SendMessage(ctx, env.TgApi, telegram.SendMessageParams{
 			Text:   "Error",
 			ChatID: chatID,
 		})
@@ -89,8 +89,7 @@ func sendTorrentsList(ctx context.Context, env environment.Env, chatID int64, pa
 		msg.ReplyMarkup = keyboard
 	}
 
-	env.TgApi.SendMessage(ctx, msg)
-	return nil
+	return SendMessage(ctx, env.TgApi, msg)
 }
 
 // editTorrentsList edits an existing message with the torrent list (for pagination)
@@ -109,8 +108,7 @@ func editTorrentsList(ctx context.Context, env environment.Env, chatID int64, me
 		params.ReplyMarkup = keyboard
 	}
 
-	env.TgApi.EditMessageText(ctx, params)
-	return nil
+	return EditMessageText(ctx, env.TgApi, params)
 }
 
 // prepareTorrentsList fetches torrents and prepares the text and keyboard for display

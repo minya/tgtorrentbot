@@ -77,7 +77,7 @@ func (cmd *SearchCommand) Handle(ctx context.Context, upd *telegram.Update) erro
 
 	chatID := upd.Message.Chat.ID
 	if len(found) == 0 {
-		cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   "Nothing found",
 		})
@@ -89,7 +89,9 @@ func (cmd *SearchCommand) Handle(ctx context.Context, upd *telegram.Update) erro
 	})
 
 	for _, f := range found[:min(10, len(found))] {
-		cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+		// The results are the command's output: stop at the first one that
+		// cannot be sent (after SendMessage's flood-control retry).
+		if err := SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   fmt.Sprintf("%v\r\n\r\nSize:%v%v\r\nSeeders: %v", f.Title, f.Size.Size, f.Size.Unit, f.Seeders),
 			ReplyMarkup: &telegram.InlineKeyboardMarkup{
@@ -102,7 +104,9 @@ func (cmd *SearchCommand) Handle(ctx context.Context, upd *telegram.Update) erro
 					},
 				},
 			},
-		})
+		}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

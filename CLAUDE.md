@@ -89,6 +89,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - `cmd/tgtorrentbot-mcp/` — MCP server binary for Claude Code integration (main.go, config.go, path.go, list_media.go, tags.go, abs.go, move.go, remove_torrent.go, jellyfin.go; OAuth 2.1: jwt.go, oauth_metadata.go, oauth_register.go, oauth_authorize.go, oauth_token.go)
 - `commands/` — Bot command implementations (shared library)
 - `environment/` — Shared Env struct
+- `commands/tgsend.go` — `SendMessage`, `EditMessageText`, `AnswerCallback`: the bot's Telegram sends go through these, which log failures (they used to be discarded), retry once after a 429's `retry_after` (up to 30 s), and treat "message is not modified" as success. Return their error where the message is the command's result (search results, `/list`)
 - `internal/` — Internal helpers not exported outside this module
   - `internal/file_id_lookup.go` — `FileIDLookup` used by the file-upload and magnet-link flows
   - `internal/transmissionrpc/` — `New(address, user, password)` builds the Transmission client every binary uses: 30 s timeout, and a transport that handles the `X-Transmission-Session-Id` 409 dance under a mutex, because `odwrtw/transmission` stores the session id in an unsynchronised field and the client is shared across goroutines. Do not call `transmission.New` directly in production code

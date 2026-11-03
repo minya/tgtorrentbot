@@ -16,7 +16,7 @@ type Command interface {
 
 func AnswerCallbackQuery(ctx context.Context, upd *telegram.Update, api *telegram.API) {
 	if upd.CallbackQuery != nil {
-		api.AnswerCallbackQuery(ctx, telegram.AnswerCallbackQueryParams{
+		AnswerCallback(ctx, api, telegram.AnswerCallbackQueryParams{
 			CallbackQueryID: upd.CallbackQuery.ID,
 			Text:            "Processing...",
 			ShowAlert:       false,

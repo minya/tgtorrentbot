@@ -69,7 +69,7 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 	// of letting each command dereference a nil Message.
 	if upd.CallbackQuery != nil && upd.CallbackQuery.Message == nil {
 		logger.Warn("Ignoring callback query %q without a message", upd.CallbackQuery.Data)
-		handler.TgApi.AnswerCallbackQuery(ctx, telegram.AnswerCallbackQueryParams{
+		commands.AnswerCallback(ctx, handler.TgApi, telegram.AnswerCallbackQueryParams{
 			CallbackQueryID: upd.CallbackQuery.ID,
 			Text:            "This button only works in the bot chat",
 		})
@@ -87,7 +87,7 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 				// Most failure paths return without messaging the chat;
 				// without this the user sees "Processing..." and silence.
 				if chatID, ok := replyChatID(upd); ok {
-					handler.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+					commands.SendMessage(ctx, handler.TgApi, telegram.SendMessageParams{
 						ChatID: chatID,
 						Text:   failureText(handleErr),
 					})
@@ -102,7 +102,7 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 		return nil
 	}
 
-	handler.TgApi.SendMessage(ctx, telegram.SendMessageParams{
+	commands.SendMessage(ctx, handler.TgApi, telegram.SendMessageParams{
 		ChatID: chatID,
 		Text:   "Expected a command, search query, or torrent file",
 	})
