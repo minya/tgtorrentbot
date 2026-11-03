@@ -142,6 +142,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - Compares current state with previous state
 - Sends Telegram notification when torrent completes: PercentDone goes below 1 → 1 between checks, or a torrent not seen before is complete with Transmission `doneDate` at or after the previous poll (catches restarts, webapp adds and torrents that complete between two polls)
 - Completions that happen while the bot is down are not notified (the first check counts from process start)
+- A notification that fails transiently (network, timeout, 429, 5xx) is retried on the next check: the torrent is kept as incomplete in the checker's state. A 400/403 (bad chat, bot blocked) is logged and not retried
 - Sends completion notification only; does not move files between directories
 - Uses chatID stored in torrent labels to notify correct user
 

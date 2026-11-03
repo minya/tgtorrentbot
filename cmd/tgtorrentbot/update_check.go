@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -90,13 +92,38 @@ func updateCheckRoutine(
 		logger.Info("[UpdatesChecker] Found completed torrent: %s", torrent.Name)
 
 		category := getTorrentCategory(torrent)
-		api.SendMessage(context.Background(), telegram.SendMessageParams{
+		ctx, cancel := context.WithTimeout(context.Background(), notifyTimeout)
+		err = commands.SendMessage(ctx, api, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   fmt.Sprintf("Completed: %v [%s]", torrent.Name, category),
 		})
+		cancel()
+		if err != nil && transientSendError(err) {
+			// Record the torrent as still incomplete, so the next check
+			// sees the transition again and retries the notification.
+			retry := *torrent
+			retry.PercentDone = 0
+			torrents[torrent.HashString] = &retry
+			logger.Warn("[UpdatesChecker] Completion notice for %s not delivered, will retry: %v", torrent.Name, err)
+		}
 	}
 
 	return torrents, nil
+}
+
+// notifyTimeout bounds one completion notification, its flood-control
+// retry included.
+const notifyTimeout = 45 * time.Second
+
+// transientSendError reports whether a failed send is worth retrying on the
+// next check: network errors, timeouts, 429 and 5xx are; a 400 or 403 (bad
+// chat, bot blocked by the user) would fail forever.
+func transientSendError(err error) bool {
+	var tgErr *telegram.Error
+	if errors.As(err, &tgErr) {
+		return tgErr.Code == http.StatusTooManyRequests || tgErr.Code >= 500
+	}
+	return true
 }
 
 // newlyCompleted returns the torrents of current that completed since the

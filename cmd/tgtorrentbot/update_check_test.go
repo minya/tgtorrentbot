@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -138,5 +139,58 @@ func TestCheckerPollsWithoutNotify(t *testing.T) {
 	}
 	if sent.Load() != 1 {
 		t.Fatalf("sent %d notifications without notify(), want 1", sent.Load())
+	}
+}
+
+// flakyTelegram fails the first fails sendMessage calls with status, then
+// succeeds; it counts every call.
+func flakyTelegram(t *testing.T, status, fails int, calls *atomic.Int32) *telegram.API {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if int(calls.Add(1)) <= fails {
+			w.Write([]byte(fmt.Sprintf(`{"ok":false,"error_code":%d,"description":"fail"}`, status)))
+			return
+		}
+		w.Write([]byte(`{"ok":true,"result":{"message_id":1,"chat":{"id":42}}}`))
+	}))
+	t.Cleanup(srv.Close)
+	return telegram.NewAPI("tok", telegram.WithBaseURL(srv.URL))
+}
+
+// F69: a notification that fails transiently is retried on the next check
+// instead of being lost.
+func TestCompletionNoticeRetriedAfterTransientFailure(t *testing.T) {
+	ft := &fakeTorrent{}
+	ft.set(0.5, 0)
+	var calls atomic.Int32
+	tc, api := fakeTransmission(t, ft), flakyTelegram(t, 502, 1, &calls)
+	start := time.Now().Unix()
+
+	st, _ := updateCheckRoutine(tc, api, nil, start)
+	ft.set(1, start+30)
+	st, _ = updateCheckRoutine(tc, api, st, start+60) // send fails (502)
+	st, _ = updateCheckRoutine(tc, api, st, start+120) // retried, delivered
+	_, _ = updateCheckRoutine(tc, api, st, start+180) // nothing more
+
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("sendMessage calls = %d, want 2 (one failure, one retry)", got)
+	}
+}
+
+// A permanent failure (bot blocked: 403) is not retried every minute.
+func TestCompletionNoticeNotRetriedOnPermanentFailure(t *testing.T) {
+	ft := &fakeTorrent{}
+	ft.set(0.5, 0)
+	var calls atomic.Int32
+	tc, api := fakeTransmission(t, ft), flakyTelegram(t, 403, 100, &calls)
+	start := time.Now().Unix()
+
+	st, _ := updateCheckRoutine(tc, api, nil, start)
+	ft.set(1, start+30)
+	st, _ = updateCheckRoutine(tc, api, st, start+60)
+	_, _ = updateCheckRoutine(tc, api, st, start+120)
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("sendMessage calls = %d, want 1", got)
 	}
 }
