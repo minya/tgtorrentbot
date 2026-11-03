@@ -1195,8 +1195,15 @@
             }
         }
 
+        // Torrent ids a full refresh was already requested for because they
+        // were missing from allItems. Each new one triggers a single refresh,
+        // so an update for a torrent the list never shows cannot cause a
+        // refresh every 3 s.
+        const refreshedForTorrent = new Set();
+
         function handleTorrentUpdate(updates) {
             let anyCompleted = false;
+            let anyNew = false;
 
             for (const update of updates) {
                 if (update.isComplete) {
@@ -1205,6 +1212,13 @@
 
                 // Find matching item in allItems by torrentId
                 const idx = allItems.findIndex(item => item.torrentId === update.id);
+                if (idx === -1 && itemsLoaded && !refreshedForTorrent.has(update.id)) {
+                    // A torrent added elsewhere (the bot, another window):
+                    // fetch the full list so it shows up now, not at the
+                    // next 60 s poll.
+                    refreshedForTorrent.add(update.id);
+                    anyNew = true;
+                }
                 if (idx !== -1) {
                     allItems[idx].percentDone = update.percentDone;
                     allItems[idx].rateDownload = update.rateDownload;
@@ -1221,8 +1235,9 @@
                 renderCategoryItems(currentCategory);
             }
 
-            // If a torrent just completed, do a full refresh to update sources/filesystem
-            if (anyCompleted) {
+            // If a torrent just completed, or one is not listed yet, do a full
+            // refresh to update sources/filesystem
+            if (anyCompleted || anyNew) {
                 setTimeout(() => {
                     if (currentView === 'main') {
                         loadMainScreen();
