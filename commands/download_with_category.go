@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/minya/rutracker"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
+	"github.com/minya/tgtorrentbot/internal"
 )
 
 type DownloadWithCategoryCommand struct {
@@ -57,6 +59,14 @@ func (cmd *DownloadWithCategoryCommand) Handle(ctx context.Context, upd *telegra
 	torrentBytes, err := rutrackerClient.DownloadTorrent(cmd.URL)
 	if err != nil {
 		return err
+	}
+	if err := internal.CheckTorrentFile(torrentBytes); err != nil {
+		chatID, _ := callbackOrigin(upd)
+		SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
+			ChatID: chatID,
+			Text:   "Rutracker returned a web page instead of the .torrent file (the login or the topic may have failed). Please try again.",
+		})
+		return Replied(fmt.Errorf("download %s: %w", cmd.URL, err))
 	}
 
 	// Reuse the addTorrentAndReply method from DownloadCommand

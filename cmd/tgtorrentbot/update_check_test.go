@@ -168,9 +168,9 @@ func TestCompletionNoticeRetriedAfterTransientFailure(t *testing.T) {
 
 	st, _ := updateCheckRoutine(tc, api, nil, start)
 	ft.set(1, start+30)
-	st, _ = updateCheckRoutine(tc, api, st, start+60) // send fails (502)
+	st, _ = updateCheckRoutine(tc, api, st, start+60)  // send fails (502)
 	st, _ = updateCheckRoutine(tc, api, st, start+120) // retried, delivered
-	_, _ = updateCheckRoutine(tc, api, st, start+180) // nothing more
+	_, _ = updateCheckRoutine(tc, api, st, start+180)  // nothing more
 
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("sendMessage calls = %d, want 2 (one failure, one retry)", got)

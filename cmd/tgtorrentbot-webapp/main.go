@@ -22,6 +22,7 @@ import (
 
 	"github.com/minya/logger"
 	"github.com/minya/rutracker"
+	"github.com/minya/tgtorrentbot/internal"
 	"github.com/minya/tgtorrentbot/internal/category"
 	"github.com/minya/tgtorrentbot/internal/graceful"
 	"github.com/minya/tgtorrentbot/internal/media"
@@ -359,6 +360,11 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 	if err != nil {
 		logger.Error(err, "Failed to download torrent")
 		http.Error(w, `{"error": "failed to download torrent"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := internal.CheckTorrentFile(torrentData); err != nil {
+		logger.Error(err, "Rutracker returned no .torrent for %s", req.DownloadURL)
+		http.Error(w, `{"error": "rutracker returned a web page instead of the .torrent file (the login or the topic may have failed); please try again"}`, http.StatusBadGateway)
 		return
 	}
 
