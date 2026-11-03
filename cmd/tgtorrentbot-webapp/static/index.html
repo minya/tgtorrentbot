@@ -1056,19 +1056,27 @@
         }
 
         async function refreshCategoryView(cat) {
+            // Like loadMainScreen: a failed background refresh keeps the last
+            // good list (replacing it would drop keyboard focus and close an
+            // open menu); the error is shown only when there is nothing yet.
+            const showError = () => {
+                if (itemsLoaded) return;
+                document.getElementById('category-torrent-list').innerHTML =
+                    '<div class="error">Failed to load items</div>';
+            };
             try {
                 const response = await doFetch('/api/items');
                 if (!response.ok) {
-                    document.getElementById('category-torrent-list').innerHTML =
-                        '<div class="error">Failed to load items</div>';
+                    console.error('Category refresh failed: HTTP', response.status);
+                    showError();
                     return;
                 }
                 allItems = await response.json();
                 itemsLoaded = true;
                 renderCategoryItems(cat);
             } catch (err) {
-                document.getElementById('category-torrent-list').innerHTML =
-                    '<div class="error">Failed to load items</div>';
+                console.error('Category refresh failed:', err);
+                showError();
             }
         }
 
