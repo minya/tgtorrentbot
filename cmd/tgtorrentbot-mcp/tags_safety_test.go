@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bogem/id3v2/v2"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // audioPayload is recognisable "audio" placed after the tag, so tests can
@@ -387,4 +388,34 @@ func TestCommentOverrideKeepsDescribedComments(t *testing.T) {
 		t.Fatalf("COMM frames after override = %q, want the new comment and iTunSMPB kept", got)
 	}
 	assertAudioIntact(t, mp3)
+}
+
+// F75: failed saves are counted and summarised first, and a call in which
+// every file failed is a tool error.
+func TestWriteTagsReportsFailures(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := t.TempDir()
+	seedMP3(t, filepath.Join(root, "alb", "ok", "1.mp3"), 0o644, func(tag *id3v2.Tag) { tag.SetTitle("a") })
+	ro := filepath.Join(root, "alb", "ro")
+	seedMP3(t, filepath.Join(ro, "2.mp3"), 0o644, func(tag *id3v2.Tag) { tag.SetTitle("b") })
+	if err := os.Chmod(ro, 0o555); err != nil { // saveTag cannot create its temp file here
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(ro, 0o755) })
+	srv := &server{config: Config{DownloadPath: root}}
+
+	res, out, _ := srv.writeTags(context.Background(), nil, writeTagsInput{Path: "alb", Recursive: true, Tags: map[string]string{"album": "X"}})
+	if res.IsError || out.Failed != 1 || out.Changed != 1 || !strings.HasPrefix(out.Summary, "1 of 2 files failed") {
+		t.Fatalf("partial failure: IsError=%v failed=%d changed=%d summary=%q", res.IsError, out.Failed, out.Changed, out.Summary)
+	}
+	if text := res.Content[0].(*mcp.TextContent).Text; !strings.HasPrefix(text, "1 of 2 files failed") {
+		t.Errorf("result text starts %q, want the summary first", text[:min(40, len(text))])
+	}
+
+	res, out, _ = srv.writeTags(context.Background(), nil, writeTagsInput{Path: "alb/ro", Tags: map[string]string{"album": "Y"}})
+	if !res.IsError || out.Failed != 1 {
+		t.Fatalf("all failed: IsError=%v failed=%d, want a tool error", res.IsError, out.Failed)
+	}
 }

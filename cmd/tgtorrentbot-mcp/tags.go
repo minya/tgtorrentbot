@@ -38,7 +38,8 @@ type fileTags struct {
 }
 
 type readTagsOutput struct {
-	Files []fileTags `json:"files"`
+	Failed int        `json:"failed"` // files whose tags could not be read
+	Files  []fileTags `json:"files"`
 }
 
 type writeTagsInput struct {
@@ -55,7 +56,12 @@ type writeTagsResult struct {
 }
 
 type writeTagsOutput struct {
-	Files []writeTagsResult `json:"files"`
+	// Summary leads the result ("3 of 120 files failed to save, 117
+	// changed") so per-file errors cannot hide in a long files list.
+	Summary string            `json:"summary"`
+	Changed int               `json:"changed"`
+	Failed  int               `json:"failed"`
+	Files   []writeTagsResult `json:"files"`
 }
 
 var audioExtensions = map[string]bool{
@@ -95,6 +101,7 @@ func (s *server) readTags(ctx context.Context, _ *mcp.CallToolRequest, in readTa
 		tag, err := id3v2.Open(f, id3v2.Options{Parse: true})
 		if err != nil {
 			ft.Error = err.Error()
+			out.Failed++
 			out.Files = append(out.Files, ft)
 			continue
 		}
@@ -115,8 +122,13 @@ func (s *server) readTags(ctx context.Context, _ *mcp.CallToolRequest, in readTa
 		}
 		out.Files = append(out.Files, ft)
 	}
+	summary := fmt.Sprintf("read %d files", len(files))
+	if out.Failed > 0 {
+		summary = fmt.Sprintf("%d of %d files could not be read", out.Failed, len(files))
+	}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: mustJSON(out)}},
+		IsError: out.Failed == len(files),
+		Content: []mcp.Content{&mcp.TextContent{Text: summary + "\n" + mustJSON(out)}},
 	}, out, nil
 }
 
@@ -159,13 +171,23 @@ func (s *server) writeTags(ctx context.Context, _ *mcp.CallToolRequest, in write
 		changed, err := applyTags(f, decoder, in.Tags)
 		if err != nil {
 			res.Error = err.Error()
+			out.Failed++
 		} else {
 			res.Changed = changed
+			if changed {
+				out.Changed++
+			}
 		}
 		out.Files = append(out.Files, res)
 	}
+	out.Summary = fmt.Sprintf("%d of %d files failed to save, %d changed", out.Failed, len(files), out.Changed)
+	if out.Failed == 0 {
+		out.Summary = fmt.Sprintf("all %d files saved, %d changed", len(files), out.Changed)
+	}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: mustJSON(out)}},
+		// Every file failing is a failed call, not a result to summarise.
+		IsError: out.Failed == len(files),
+		Content: []mcp.Content{&mcp.TextContent{Text: out.Summary + "\n" + mustJSON(out)}},
 	}, out, nil
 }
 
