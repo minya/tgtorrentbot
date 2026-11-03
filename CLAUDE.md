@@ -298,7 +298,7 @@ Logs go to **stderr**, not stdout — stdout is reserved for MCP JSON-RPC framin
     }
   }
   ```
-  The wrapper script on the server exports env vars and `exec`s the binary.
+  The wrapper script on the server exports env vars and `exec`s the binary. With stdin on `/dev/null` (a container without `TGT_MCP_TOKEN`) the binary exits 1 with an error saying to set `TGT_MCP_TOKEN`/`TGT_MCP_PUBLIC_URL`, instead of reading EOF and exiting silently into a restart loop.
 
 - **HTTP** (streamable, OAuth 2.1): set `TGT_MCP_TOKEN` + `TGT_MCP_PUBLIC_URL` to enable. The binary listens on `:8080` and serves:
   - `GET /.well-known/oauth-authorization-server` (RFC 8414) and `GET /.well-known/oauth-protected-resource` (RFC 9728) — metadata for Claude's connector to discover endpoints

@@ -118,10 +118,31 @@ func main() {
 		return
 	}
 
+	// Without TGT_MCP_TOKEN the server speaks MCP over stdin/stdout, which
+	// only works with a client attached (Claude Code over SSH). A container
+	// has /dev/null on stdin, so the server would read EOF and exit at once,
+	// and Docker would restart it in a silent loop. Say why instead.
+	if stdinIsDevNull() {
+		logger.Error(nil, "stdin is /dev/null, so the stdio transport has no client. Set TGT_MCP_TOKEN and TGT_MCP_PUBLIC_URL to serve MCP over HTTP (e.g. MCP_TOKEN in the compose .env), or run this binary from an MCP client")
+		os.Exit(1)
+	}
 	if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil {
 		logger.Error(err, "MCP server exited with error")
 		os.Exit(1)
 	}
+}
+
+// stdinIsDevNull reports whether stdin is the null device.
+func stdinIsDevNull() bool {
+	in, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	null, err := os.Stat(os.DevNull)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(in, null)
 }
 
 // jwtAuth verifies Bearer access tokens on MCP requests. On failure, returns
