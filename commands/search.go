@@ -6,10 +6,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/minya/logger"
-	"github.com/minya/rutracker"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
 )
@@ -75,8 +73,7 @@ func (cmd *SearchCommand) Handle(ctx context.Context, upd *telegram.Update) erro
 		})
 	}
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
-	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClientContext(ctx, cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
+	rutrackerClient, err := cmd.Rutracker.Client(ctx)
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err

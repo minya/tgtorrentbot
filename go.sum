@@ -18,8 +18,8 @@ github.com/minya/goutils v0.0.0-20261103164850-c9063cfa906c h1:RN9TV/4tx3BBQ2QZ1
 github.com/minya/goutils v0.0.0-20261103164850-c9063cfa906c/go.mod h1:FI7uSadCRvIKUVdB2W4by9Hn5sMLX+3a5KNSMs34dA8=
 github.com/minya/logger v0.0.0-20261103164336-ff32fbee7812 h1:tpwBfR4hpY1hEDW4C/rQWNfs+legWgiOU7co8kZ5iw4=
 github.com/minya/logger v0.0.0-20261103164336-ff32fbee7812/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
-github.com/minya/rutracker v0.0.0-20261103173453-ffb2ec8bf701 h1:A2Qiy+inlV26Sz000gzr47FoCBErPzytztOOPLgHqUw=
-github.com/minya/rutracker v0.0.0-20261103173453-ffb2ec8bf701/go.mod h1:JLv/R50/OzjdMS0kktWAvh+mz4/LM0Z0h5wAgWmL7OY=
+github.com/minya/rutracker v0.0.0-20261103174442-03c6bf06c23a h1:rrmT0qaAI/3Dp0K3pOknk5pYk90hZeooRqMvFgRlTBw=
+github.com/minya/rutracker v0.0.0-20261103174442-03c6bf06c23a/go.mod h1:JLv/R50/OzjdMS0kktWAvh+mz4/LM0Z0h5wAgWmL7OY=
 github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19 h1:CMQP/vXZb7MLXvVNAHY9gTJtOP2SFpV5UyTi+4hN/os=
 github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19/go.mod h1:NF/NuUYrilpDV0ywHxfPoUyxUb/YB24NzPiia+GTX1o=
 github.com/modelcontextprotocol/go-sdk v1.5.0 h1:CHU0FIX9kpueNkxuYtfYQn1Z0slhFzBZuq+x6IiblIU=

@@ -7,7 +7,7 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/google/uuid v1.6.0
 	github.com/minya/logger v0.0.0-20261103164336-ff32fbee7812
-	github.com/minya/rutracker v0.0.0-20261103173453-ffb2ec8bf701
+	github.com/minya/rutracker v0.0.0-20261103174442-03c6bf06c23a
 	github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759

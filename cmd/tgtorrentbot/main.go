@@ -13,6 +13,7 @@ import (
 	"github.com/minya/tgtorrentbot/environment"
 	"github.com/minya/tgtorrentbot/internal"
 	"github.com/minya/tgtorrentbot/internal/graceful"
+	"github.com/minya/tgtorrentbot/internal/rutrackersession"
 	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
 )
 
@@ -59,6 +60,7 @@ func main() {
 		TgApi:              api,
 		DownloadPath:       settings.DownloadPath,
 		RutrackerConfig:    &settings.RutrackerConfig,
+		Rutracker:          rutrackersession.New(settings.RutrackerConfig.Username, settings.RutrackerConfig.Password),
 		WebAppURL:          settings.WebAppURL,
 		AllowedUsers:       settings.AllowedUsers,
 		FileIDLookup:       &fileIDLookup,

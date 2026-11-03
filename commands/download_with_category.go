@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/minya/logger"
-	"github.com/minya/rutracker"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
 	"github.com/minya/tgtorrentbot/internal"
@@ -50,8 +48,7 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 
 func (cmd *DownloadWithCategoryCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
-	cfg := cmd.RutrackerConfig
-	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClientContext(ctx, cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
+	rutrackerClient, err := cmd.Rutracker.Client(ctx)
 	if err != nil {
 		logger.Error(err, "Error creating authenticated rutracker client")
 		return err

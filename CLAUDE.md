@@ -101,6 +101,7 @@ This repo uses a `cmd/` layout for multiple binaries:
   - `internal/file_id_lookup.go` — `FileIDLookup` used by the file-upload and magnet-link flows
   - `internal/transmissionrpc/` — `New(address, user, password)` builds the Transmission client every binary uses: 30 s timeout, and a transport that handles the `X-Transmission-Session-Id` 409 dance under a mutex, because `odwrtw/transmission` stores the session id in an unsynchronised field and the client is shared across goroutines. Do not call `transmission.New` directly in production code
   - `internal/torrentlabels/` — the Transmission label layout (`[chatID, category, userID]`) shared by the bot and the webapp
+  - `internal/rutrackersession/` — `Session.Client(ctx)` returns the one logged-in rutracker client of the process (the bot's `Env.Rutracker`, the webapp's `App.rutracker`); it logs in on first use and the library logs in again when the session expires. Do not call `rutracker.NewAuthenticatedRutrackerClient*` per request: every call is a login, and repeated logins trigger rutracker's captcha
   - `internal/graceful/` — `Serve(srv, drain)` runs each binary's HTTP server until SIGTERM/SIGINT, then `Shutdown`s it within `graceful.Timeout` (8 s, below Docker's 10 s stop grace) so in-flight requests finish; the bot's `drain` waits for webhook updates still being handled in the background. Start servers through it, not `ListenAndServe`
   - `internal/category/` — dependency-free download category list (`All()`, `Names()`, `Parse()`, `DisplayName()`), the single source of truth for every binary and the webapp frontend
   - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries. `FetchLibraries(ctx, jf, abs)` fetches both optional sources concurrently; the caller's ctx deadline bounds and cancels them (webapp `/api/items` 8 s, MCP `list_media` 15 s).
@@ -178,13 +179,13 @@ Registered command factories (`NewUpdatesHandler` in `cmd/tgtorrentbot/handler.g
 
 The rutracker package has been extracted to an external library: `github.com/minya/rutracker`.
 
-Key functions:
-- `NewAuthenticatedRutrackerClient()` - creates client with cookie-based auth
-- `authenticate()` - logs in via form POST to get session cookie
+Key functions (each has a `…Context` variant; use those):
+- `NewAuthenticatedRutrackerClient()` - creates a client and logs in; fails with `ErrLoginFailed` or `ErrCaptcha` when rutracker does not hand out a session. The bot and webapp go through `internal/rutrackersession` instead of calling it per request
 - `Find(pattern)` - searches Rutracker, returns parsed results
-- `DownloadTorrent(url)` - fetches .torrent file as bytes
+- `DownloadTorrent(url)` - fetches a .torrent file as bytes (`ErrNotTorrent` for anything else)
+- Both log in again once when a response is rutracker's login page (expired session), and return `ErrNotLoggedIn` if that does not help. A client is safe for concurrent use
 
-The parser uses regex to extract topic ID, URL, title, size, and seeders from Rutracker search results HTML.
+The parser reads the results table one `<tr>` at a time and extracts topic ID, URL, title, size and seeders from each row; a row missing a field, or whose download link names another topic, is skipped.
 
 ### Category System
 
@@ -232,7 +233,7 @@ The completion checker uses Transmission labels to track which chat initiated ea
 
 ### Search Flow
 1. User sends text (plain or `/search <query>`)
-2. `SearchCommand` authenticates with Rutracker
+2. `SearchCommand` gets the shared Rutracker client (`Env.Rutracker`, logged in once per process)
 3. Results are parsed, sorted by seeders (descending)
 4. Top 10 results sent as messages with "Добавить" inline button
 5. Button triggers `/dl <url>` callback
@@ -241,7 +242,7 @@ The completion checker uses Transmission labels to track which chat initiated ea
 1. User clicks "Добавить" button → triggers `/dl <url>` callback
 2. `DownloadCommand` presents category selection keyboard
 3. User selects category → triggers `/dlcat <category> <url>` callback
-4. `DownloadWithCategoryCommand` authenticates with Rutracker
+4. `DownloadWithCategoryCommand` gets the shared Rutracker client
 5. Downloads .torrent file as bytes
 6. Base64-encodes and sends to Transmission RPC with download dir `{DownloadPath}/{category}/`
 7. Sets torrent labels: `[chatID, category, userID]`. If that fails, the torrent is removed again (data kept) and the user is told, as the webapp does; an unlabelled torrent would get no notification and be invisible in the webapp

@@ -4,6 +4,7 @@ import (
 	"github.com/minya/rutracker"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/internal"
+	"github.com/minya/tgtorrentbot/internal/rutrackersession"
 	"github.com/odwrtw/transmission"
 )
 
@@ -12,9 +13,12 @@ type Env struct {
 	TgApi              *telegram.API
 	DownloadPath       string
 	RutrackerConfig    *rutracker.Config
-	WebAppURL          string
-	AllowedUsers       []int64
-	FileIDLookup       *internal.FileIDLookup
+	// Rutracker is the one logged-in rutracker client of the process; use
+	// it rather than logging in per request.
+	Rutracker    *rutrackersession.Session
+	WebAppURL    string
+	AllowedUsers []int64
+	FileIDLookup *internal.FileIDLookup
 }
 
 func Environment(

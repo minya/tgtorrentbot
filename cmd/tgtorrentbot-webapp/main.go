@@ -25,6 +25,7 @@ import (
 	"github.com/minya/tgtorrentbot/internal/category"
 	"github.com/minya/tgtorrentbot/internal/graceful"
 	"github.com/minya/tgtorrentbot/internal/media"
+	"github.com/minya/tgtorrentbot/internal/rutrackersession"
 	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
 	"github.com/odwrtw/transmission"
@@ -111,6 +112,8 @@ type App struct {
 	jellyfinClient       *media.JellyfinClient
 	audiobookshelfClient *media.AudiobookshelfClient
 	hub                  *wsHub
+	// rutracker is the one logged-in rutracker client of the process.
+	rutracker *rutrackersession.Session
 }
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
@@ -221,6 +224,7 @@ func main() {
 		jellyfinClient:       media.NewJellyfinClient(config.JellyfinURL, config.JellyfinAPIKey),
 		audiobookshelfClient: media.NewAudiobookshelfClient(config.AudiobookshelfURL, config.AudiobookshelfAPIKey),
 		hub:                  newWsHub(),
+		rutracker:            rutrackersession.New(config.RutrackerUsername, config.RutrackerPassword),
 	}
 
 	go app.startTorrentPoller(context.Background())
@@ -380,12 +384,7 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 
 	rtCtx, cancel := context.WithTimeout(r.Context(), rutrackerBudget)
 	defer cancel()
-	client, err := rutracker.NewAuthenticatedRutrackerClientContext(
-		rtCtx,
-		app.config.RutrackerUsername,
-		app.config.RutrackerPassword,
-		rutracker.WithTimeout(30*time.Second),
-	)
+	client, err := app.rutracker.Client(rtCtx)
 	if err != nil {
 		logger.Error(err, "Failed to authenticate with rutracker")
 		writeRutrackerLoginError(w, err)
@@ -457,12 +456,7 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 	// dropped connection.
 	rtCtx, cancel := context.WithTimeout(r.Context(), rutrackerBudget)
 	defer cancel()
-	client, err := rutracker.NewAuthenticatedRutrackerClientContext(
-		rtCtx,
-		app.config.RutrackerUsername,
-		app.config.RutrackerPassword,
-		rutracker.WithTimeout(30*time.Second),
-	)
+	client, err := app.rutracker.Client(rtCtx)
 
 	if err != nil {
 		logger.Error(err, "Failed to authenticate with rutracker")
