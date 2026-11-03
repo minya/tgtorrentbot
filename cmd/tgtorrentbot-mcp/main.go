@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/minya/logger"
@@ -123,11 +126,47 @@ func main() {
 		logger.Error(nil, "stdin is /dev/null, so the stdio transport has no client. Set TGT_MCP_TOKEN and TGT_MCP_PUBLIC_URL to serve MCP over HTTP (e.g. MCP_TOKEN in the compose .env), or run this binary from an MCP client")
 		os.Exit(1)
 	}
-	if err := mcpServer.Run(ctx, &mcp.StdioTransport{}); err != nil {
-		logger.Error(err, "MCP server exited with error")
+	if err := runStdio(ctx, mcpServer, os.Stdin, os.Stdout); err != nil {
+		if errors.Is(err, errNoStdioClient) {
+			logger.Error(nil, "stdin closed before any MCP message arrived, so the stdio transport has no client. Set TGT_MCP_TOKEN and TGT_MCP_PUBLIC_URL to serve MCP over HTTP (e.g. MCP_TOKEN in the compose .env), or run this binary from an MCP client")
+		} else {
+			logger.Error(err, "MCP server exited with error")
+		}
 		os.Exit(1)
 	}
 }
+
+// errNoStdioClient means stdin ended before a single byte arrived.
+var errNoStdioClient = errors.New("no MCP client on stdin")
+
+// runStdio serves MCP over in/out. A session whose stdin ends before any
+// byte was read had no client: a container without TGT_MCP_TOKEN, whatever
+// its stdin is. That is reported as errNoStdioClient, so the container
+// exits with an explanation instead of looping silently; stdinIsDevNull
+// is only the early, common case of it.
+func runStdio(ctx context.Context, server *mcp.Server, in io.Reader, out io.Writer) error {
+	counted := &countingReader{r: in}
+	err := server.Run(ctx, &mcp.IOTransport{Reader: io.NopCloser(counted), Writer: nopWriteCloser{out}})
+	if counted.n.Load() == 0 {
+		return errNoStdioClient
+	}
+	return err
+}
+
+type countingReader struct {
+	r io.Reader
+	n atomic.Int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n.Add(int64(n))
+	return n, err
+}
+
+type nopWriteCloser struct{ io.Writer }
+
+func (nopWriteCloser) Close() error { return nil }
 
 // stdinIsDevNull reports whether stdin is the null device.
 func stdinIsDevNull() bool {
