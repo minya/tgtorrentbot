@@ -498,7 +498,9 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	// 3 and 4. Jellyfin and Audiobookshelf are optional, so they are fetched
 	// concurrently under a deadline and skipped when they don't answer in
 	// time, rather than holding the whole response past WriteTimeout.
-	jellyfinItems, absItems := app.fetchOptionalSources()
+	srcCtx, cancel := context.WithTimeout(r.Context(), optionalSourceTimeout)
+	jellyfinItems, absItems := media.FetchLibraries(srcCtx, app.jellyfinClient, app.audiobookshelfClient)
+	cancel()
 
 	// 5. Merge and return.
 	result := media.MergeItems(ut, fsItems, incompleteItems, jellyfinItems, absItems)
@@ -728,60 +730,15 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 }
 
 func (app *App) refreshLibraries() {
-	_ = app.jellyfinClient.RefreshLibrary()
-	_, _ = app.audiobookshelfClient.RefreshLibrary()
+	ctx, cancel := context.WithTimeout(context.Background(), refreshTimeout)
+	defer cancel()
+	_ = app.jellyfinClient.RefreshLibrary(ctx)
+	_, _ = app.audiobookshelfClient.RefreshLibrary(ctx)
 }
 
 // optionalSourceTimeout bounds how long /api/items waits for Jellyfin and
 // Audiobookshelf together; a variable so tests can shorten it.
 var optionalSourceTimeout = 8 * time.Second
 
-// fetchOptionalSources fetches Jellyfin and Audiobookshelf items
-// concurrently and returns whatever arrived within optionalSourceTimeout. A
-// source that errors or is late is logged and left out; a late call keeps
-// running in its goroutine until its client timeout (the clients take no
-// context) and its result is discarded.
-func (app *App) fetchOptionalSources() ([]media.JellyfinItem, []media.AudiobookshelfItem) {
-	jfCh := make(chan []media.JellyfinItem, 1)
-	absCh := make(chan []media.AudiobookshelfItem, 1)
-	go func() {
-		start := time.Now()
-		items, err := app.jellyfinClient.GetItems()
-		logger.Debug("Fetch Jellyfin items took %s", time.Since(start))
-		if err != nil {
-			logger.Error(err, "Failed to get Jellyfin items")
-		}
-		jfCh <- items
-	}()
-	go func() {
-		start := time.Now()
-		items, err := app.audiobookshelfClient.GetItems()
-		logger.Debug("Fetch Audiobookshelf items took %s", time.Since(start))
-		if err != nil {
-			logger.Error(err, "Failed to get Audiobookshelf items")
-		}
-		absCh <- items
-	}()
-
-	deadline := time.NewTimer(optionalSourceTimeout)
-	defer deadline.Stop()
-	var jf []media.JellyfinItem
-	var abs []media.AudiobookshelfItem
-	for gotJF, gotABS := false, false; !gotJF || !gotABS; {
-		select {
-		case jf = <-jfCh:
-			gotJF = true
-		case abs = <-absCh:
-			gotABS = true
-		case <-deadline.C:
-			if !gotJF {
-				logger.Warn("Jellyfin did not answer within %s; listing without it", optionalSourceTimeout)
-			}
-			if !gotABS {
-				logger.Warn("Audiobookshelf did not answer within %s; listing without it", optionalSourceTimeout)
-			}
-			return jf, abs
-		}
-	}
-	return jf, abs
-}
+// refreshTimeout bounds the background library refreshes after a deletion.
+const refreshTimeout = 2 * time.Minute

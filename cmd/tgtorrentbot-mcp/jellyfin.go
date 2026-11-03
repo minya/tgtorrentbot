@@ -16,7 +16,7 @@ func (s *server) jellyfinRescan(ctx context.Context, _ *mcp.CallToolRequest, _ j
 	if s.config.JellyfinURL == "" || s.config.JellyfinAPIKey == "" {
 		return formatError("Jellyfin is not configured (set TGT_JELLYFIN_URL and TGT_JELLYFIN_API_KEY)"), jellyfinRescanOutput{}, nil
 	}
-	if err := s.jf.RefreshLibrary(); err != nil {
+	if err := s.jf.RefreshLibrary(ctx); err != nil {
 		return formatError("Jellyfin library refresh failed: %v", err), jellyfinRescanOutput{}, nil
 	}
 	return &mcp.CallToolResult{

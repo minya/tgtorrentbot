@@ -1,6 +1,7 @@
 package media
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,7 @@ func TestBookLibraryIDPicksBookAndCaches(t *testing.T) {
 
 	c := NewAudiobookshelfClient(srv.URL, "key")
 	for range 2 {
-		id, err := c.BookLibraryID()
+		id, err := c.BookLibraryID(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -48,7 +49,7 @@ func TestBookLibraryIDAmbiguous(t *testing.T) {
 	}, &calls))
 	defer srv.Close()
 
-	if _, err := NewAudiobookshelfClient(srv.URL, "key").BookLibraryID(); err == nil {
+	if _, err := NewAudiobookshelfClient(srv.URL, "key").BookLibraryID(context.Background()); err == nil {
 		t.Fatal("expected error for multiple book libraries")
 	}
 }
@@ -67,13 +68,13 @@ func TestRemoveLibraryIssuesAndItem(t *testing.T) {
 	defer srv.Close()
 
 	c := NewAudiobookshelfClient(srv.URL, "key")
-	if status, err := c.RemoveLibraryIssues("lib_book"); err != nil || status != 200 {
+	if status, err := c.RemoveLibraryIssues(context.Background(), "lib_book"); err != nil || status != 200 {
 		t.Fatalf("RemoveLibraryIssues: status=%d err=%v", status, err)
 	}
-	if status, err := c.RemoveItem("li_1"); err != nil || status != 200 {
+	if status, err := c.RemoveItem(context.Background(), "li_1"); err != nil || status != 200 {
 		t.Fatalf("RemoveItem: status=%d err=%v", status, err)
 	}
-	if status, err := c.RemoveItem("li_missing"); err == nil || status != 404 {
+	if status, err := c.RemoveItem(context.Background(), "li_missing"); err == nil || status != 404 {
 		t.Fatalf("expected 404 error, got status=%d err=%v", status, err)
 	}
 

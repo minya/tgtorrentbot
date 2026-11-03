@@ -1,6 +1,7 @@
 package media
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -47,13 +48,13 @@ type jellyfinResponseItem struct {
 
 // GetItems fetches all items from Jellyfin. Returns an empty list if Jellyfin
 // is not configured (empty URL or API key).
-func (c *JellyfinClient) GetItems() ([]JellyfinItem, error) {
+func (c *JellyfinClient) GetItems(ctx context.Context) ([]JellyfinItem, error) {
 	if c.url == "" || c.apiKey == "" {
 		return nil, nil
 	}
 
 	reqURL := fmt.Sprintf("%s/Items?Recursive=true&Fields=Path&EnableImages=false&EnableUserData=false&EnableTotalRecordCount=false&IncludeItemTypes=Movie,Series,MusicAlbum,AudioBook,MusicVideo", c.url)
-	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -93,13 +94,13 @@ func (c *JellyfinClient) GetItems() ([]JellyfinItem, error) {
 // RefreshLibrary triggers a Jellyfin library scan so it picks up file changes.
 // It returns an error for a failed request or an HTTP error status; an
 // unconfigured client returns nil.
-func (c *JellyfinClient) RefreshLibrary() error {
+func (c *JellyfinClient) RefreshLibrary(ctx context.Context) error {
 	if c.url == "" || c.apiKey == "" {
 		return nil
 	}
 
 	reqURL := fmt.Sprintf("%s/Library/Refresh", c.url)
-	req, err := http.NewRequest(http.MethodPost, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, nil)
 	if err != nil {
 		logger.Error(err, "Failed to create Jellyfin refresh request")
 		return err

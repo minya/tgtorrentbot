@@ -1,6 +1,7 @@
 package media
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -66,8 +67,8 @@ type absMetadata struct {
 	Title string `json:"title"`
 }
 
-func (c *AudiobookshelfClient) doRequest(method, path string) (*http.Response, error) {
-	req, err := http.NewRequest(method, c.url+path, nil)
+func (c *AudiobookshelfClient) doRequest(ctx context.Context, method, path string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.url+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -75,12 +76,12 @@ func (c *AudiobookshelfClient) doRequest(method, path string) (*http.Response, e
 	return c.client.Do(req)
 }
 
-func (c *AudiobookshelfClient) GetItems() ([]AudiobookshelfItem, error) {
+func (c *AudiobookshelfClient) GetItems(ctx context.Context) ([]AudiobookshelfItem, error) {
 	if c.url == "" || c.apiKey == "" {
 		return nil, nil
 	}
 
-	resp, err := c.doRequest(http.MethodGet, "/api/libraries")
+	resp, err := c.doRequest(ctx, http.MethodGet, "/api/libraries")
 	if err != nil {
 		return nil, fmt.Errorf("requesting libraries: %w", err)
 	}
@@ -97,7 +98,10 @@ func (c *AudiobookshelfClient) GetItems() ([]AudiobookshelfItem, error) {
 
 	var items []AudiobookshelfItem
 	for _, lib := range libResp.Libraries {
-		libItems, err := c.getLibraryItems(lib.ID)
+		if err := ctx.Err(); err != nil {
+			return items, err
+		}
+		libItems, err := c.getLibraryItems(ctx, lib.ID)
 		if err != nil {
 			logger.Error(err, "Failed to get items for library %s", lib.ID)
 			continue
@@ -107,8 +111,8 @@ func (c *AudiobookshelfClient) GetItems() ([]AudiobookshelfItem, error) {
 	return items, nil
 }
 
-func (c *AudiobookshelfClient) getLibraryItems(libraryID string) ([]AudiobookshelfItem, error) {
-	resp, err := c.doRequest(http.MethodGet, fmt.Sprintf("/api/libraries/%s/items", libraryID))
+func (c *AudiobookshelfClient) getLibraryItems(ctx context.Context, libraryID string) ([]AudiobookshelfItem, error) {
+	resp, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/libraries/%s/items", libraryID))
 	if err != nil {
 		return nil, fmt.Errorf("requesting library items: %w", err)
 	}
@@ -144,12 +148,12 @@ func (c *AudiobookshelfClient) getLibraryItems(libraryID string) ([]Audiobookshe
 // RefreshLibrary starts a scan of every Audiobookshelf library. It returns
 // the ids whose scan started and an error joining every failure; an
 // unconfigured client returns nothing.
-func (c *AudiobookshelfClient) RefreshLibrary() (scanned []string, err error) {
+func (c *AudiobookshelfClient) RefreshLibrary(ctx context.Context) (scanned []string, err error) {
 	if c.url == "" || c.apiKey == "" {
 		return nil, nil
 	}
 
-	resp, err := c.doRequest(http.MethodGet, "/api/libraries")
+	resp, err := c.doRequest(ctx, http.MethodGet, "/api/libraries")
 	if err != nil {
 		logger.Error(err, "Failed to list Audiobookshelf libraries for refresh")
 		return nil, fmt.Errorf("listing libraries: %w", err)
@@ -169,7 +173,11 @@ func (c *AudiobookshelfClient) RefreshLibrary() (scanned []string, err error) {
 
 	var errs []error
 	for _, lib := range libResp.Libraries {
-		scanResp, err := c.doRequest(http.MethodPost, fmt.Sprintf("/api/libraries/%s/scan", lib.ID))
+		if err := ctx.Err(); err != nil {
+			errs = append(errs, err)
+			break
+		}
+		scanResp, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/libraries/%s/scan", lib.ID))
 		if err != nil {
 			logger.Error(err, "Failed to trigger Audiobookshelf scan for library %s", lib.ID)
 			errs = append(errs, fmt.Errorf("scanning library %s: %w", lib.ID, err))
@@ -195,14 +203,14 @@ func (c *AudiobookshelfClient) Configured() bool {
 // BookLibraryID returns the id of the single library whose mediaType is
 // "book", looking it up via GET /api/libraries on first use and caching it.
 // It errors when there is no book library or more than one.
-func (c *AudiobookshelfClient) BookLibraryID() (string, error) {
+func (c *AudiobookshelfClient) BookLibraryID(ctx context.Context) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.bookLibraryID != "" {
 		return c.bookLibraryID, nil
 	}
 
-	resp, err := c.doRequest(http.MethodGet, "/api/libraries")
+	resp, err := c.doRequest(ctx, http.MethodGet, "/api/libraries")
 	if err != nil {
 		return "", fmt.Errorf("requesting libraries: %w", err)
 	}
@@ -239,18 +247,18 @@ func (c *AudiobookshelfClient) BookLibraryID() (string, error) {
 // RemoveLibraryIssues deletes every item in the library that Audiobookshelf
 // flags as missing or invalid. Files on disk are not touched. It returns the
 // HTTP status; non-2xx statuses are also reported as an error.
-func (c *AudiobookshelfClient) RemoveLibraryIssues(libraryID string) (int, error) {
-	return c.doDelete(fmt.Sprintf("/api/libraries/%s/issues", url.PathEscape(libraryID)))
+func (c *AudiobookshelfClient) RemoveLibraryIssues(ctx context.Context, libraryID string) (int, error) {
+	return c.doDelete(ctx, fmt.Sprintf("/api/libraries/%s/issues", url.PathEscape(libraryID)))
 }
 
 // RemoveItem deletes a single library item by id. Without ?hard=1 ABS only
 // drops the database entry; files on disk are not touched.
-func (c *AudiobookshelfClient) RemoveItem(itemID string) (int, error) {
-	return c.doDelete(fmt.Sprintf("/api/items/%s", url.PathEscape(itemID)))
+func (c *AudiobookshelfClient) RemoveItem(ctx context.Context, itemID string) (int, error) {
+	return c.doDelete(ctx, fmt.Sprintf("/api/items/%s", url.PathEscape(itemID)))
 }
 
-func (c *AudiobookshelfClient) doDelete(path string) (int, error) {
-	resp, err := c.doRequest(http.MethodDelete, path)
+func (c *AudiobookshelfClient) doDelete(ctx context.Context, path string) (int, error) {
+	resp, err := c.doRequest(ctx, http.MethodDelete, path)
 	if err != nil {
 		return 0, fmt.Errorf("DELETE %s: %w", path, err)
 	}

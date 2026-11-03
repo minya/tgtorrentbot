@@ -1,6 +1,7 @@
 package media
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -33,7 +34,7 @@ func TestGetItems(t *testing.T) {
 	defer srv.Close()
 
 	client := NewJellyfinClient(srv.URL, "testkey")
-	items, err := client.GetItems()
+	items, err := client.GetItems(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestGetItems(t *testing.T) {
 
 func TestGetItemsNotConfigured(t *testing.T) {
 	client := NewJellyfinClient("", "somekey")
-	items, err := client.GetItems()
+	items, err := client.GetItems(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,7 +72,7 @@ func TestGetItemsNotConfigured(t *testing.T) {
 	}
 
 	client = NewJellyfinClient("http://localhost:8096", "")
-	items, err = client.GetItems()
+	items, err = client.GetItems(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -87,7 +88,7 @@ func TestGetItemsServerError(t *testing.T) {
 	defer srv.Close()
 
 	client := NewJellyfinClient(srv.URL, "testkey")
-	_, err := client.GetItems()
+	_, err := client.GetItems(context.Background())
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
@@ -101,7 +102,7 @@ func TestGetItemsEmptyLibrary(t *testing.T) {
 	defer srv.Close()
 
 	client := NewJellyfinClient(srv.URL, "testkey")
-	items, err := client.GetItems()
+	items, err := client.GetItems(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -144,7 +145,7 @@ func TestGetItemsTrailingSlashURL(t *testing.T) {
 	defer srv.Close()
 
 	client := NewJellyfinClient(srv.URL+"/", "testkey")
-	items, err := client.GetItems()
+	items, err := client.GetItems(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

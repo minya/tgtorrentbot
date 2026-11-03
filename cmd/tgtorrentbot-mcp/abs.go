@@ -20,7 +20,7 @@ func (s *server) absRescan(ctx context.Context, _ *mcp.CallToolRequest, _ absRes
 	if s.config.AudiobookshelfURL == "" || s.config.AudiobookshelfAPIKey == "" {
 		return formatError(absNotConfigured), absRescanOutput{}, nil
 	}
-	scanned, err := s.abs.RefreshLibrary()
+	scanned, err := s.abs.RefreshLibrary(ctx)
 	if err != nil {
 		return formatError("Audiobookshelf rescan failed (scan started for %v): %v", scanned, err), absRescanOutput{Libraries: scanned}, nil
 	}
@@ -52,13 +52,13 @@ func (s *server) absRemoveIssues(ctx context.Context, _ *mcp.CallToolRequest, in
 		libID = s.config.AudiobookshelfLibraryID
 	}
 	if libID == "" {
-		id, err := s.abs.BookLibraryID()
+		id, err := s.abs.BookLibraryID(ctx)
 		if err != nil {
 			return formatError("resolving library id: %v", err), absRemoveIssuesOutput{}, nil
 		}
 		libID = id
 	}
-	status, err := s.abs.RemoveLibraryIssues(libID)
+	status, err := s.abs.RemoveLibraryIssues(ctx, libID)
 	if err != nil {
 		return formatError("removing items with issues from library %s: %v%s", libID, err, absStatusHint(status, "library")), absRemoveIssuesOutput{}, nil
 	}
@@ -86,7 +86,7 @@ func (s *server) absRemoveItem(ctx context.Context, _ *mcp.CallToolRequest, in a
 	if id == "" {
 		return formatError("item_id is required"), absRemoveItemOutput{}, nil
 	}
-	status, err := s.abs.RemoveItem(id)
+	status, err := s.abs.RemoveItem(ctx, id)
 	if err != nil {
 		return formatError("removing item %s: %v%s", id, err, absStatusHint(status, "item")), absRemoveItemOutput{}, nil
 	}

@@ -54,6 +54,10 @@ type listMediaOutput struct {
 	FilesTruncated bool            `json:"files_truncated,omitempty"`
 }
 
+// listMediaSourceTimeout bounds how long list_media waits for Jellyfin and
+// Audiobookshelf; a variable so tests can shorten it.
+var listMediaSourceTimeout = 15 * time.Second
+
 func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listMediaInput) (*mcp.CallToolResult, listMediaOutput, error) {
 	// Torrents (optional — runs without transmission).
 	var torrents []mcplib.TorrentInfo
@@ -88,9 +92,11 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 	}
 	incompleteItems, _ := s.scan.ScanIncomplete()
 
-	// Jellyfin + Audiobookshelf.
-	jfItems, _ := s.jf.GetItems()
-	absItems, _ := s.abs.GetItems()
+	// Jellyfin + Audiobookshelf: optional, fetched concurrently and bounded
+	// so a hung server cannot hold the tool call (or keep running after it).
+	srcCtx, cancel := context.WithTimeout(ctx, listMediaSourceTimeout)
+	jfItems, absItems := mcplib.FetchLibraries(srcCtx, s.jf, s.abs)
+	cancel()
 
 	merged := mcplib.MergeItems(torrents, fsItems, incompleteItems, jfItems, absItems)
 

@@ -94,7 +94,7 @@ This repo uses a `cmd/` layout for multiple binaries:
   - `internal/transmissionrpc/` — `New(address, user, password)` builds the Transmission client every binary uses: 30 s timeout, and a transport that handles the `X-Transmission-Session-Id` 409 dance under a mutex, because `odwrtw/transmission` stores the session id in an unsynchronised field and the client is shared across goroutines. Do not call `transmission.New` directly in production code
   - `internal/torrentlabels/` — the Transmission label layout (`[chatID, category, userID]`) shared by the bot and the webapp
   - `internal/category/` — dependency-free download category list (`All()`, `Names()`, `Parse()`, `DisplayName()`), the single source of truth for every binary and the webapp frontend
-  - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries.
+  - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries. `FetchLibraries(ctx, jf, abs)` fetches both optional sources concurrently; the caller's ctx deadline bounds and cancels them (webapp `/api/items` 8 s, MCP `list_media` 15 s).
 - `Dockerfile.bot` — Docker build for the bot
 - `Dockerfile.webapp` — Docker build for the web app (static assets are embedded, no separate COPY step)
 
@@ -334,7 +334,7 @@ The webapp displays a unified view of media items merged from four sources:
 - **Jellyfin** — library items from the Jellyfin media server (optional)
 - **Audiobookshelf** — audiobook library items from Audiobookshelf (optional)
 
-Jellyfin and Audiobookshelf are optional: `/api/items` fetches them concurrently and lists without whichever has not answered within `optionalSourceTimeout` (8 s), and `DELETE /api/items/{id}` triggers their library refreshes in a goroutine after responding, so a hung Jellyfin/ABS never fails a listing or a deletion.
+Jellyfin and Audiobookshelf are optional: `/api/items` fetches them concurrently through `media.FetchLibraries` under a context derived from the request with `optionalSourceTimeout` (8 s), and lists without whichever has not answered; the deadline cancels the in-flight requests, so nothing keeps running after the response. `DELETE /api/items/{id}` triggers their library refreshes in a goroutine after responding (bounded by `refreshTimeout`), so a hung Jellyfin/ABS never fails a listing or a deletion. Every `JellyfinClient`/`AudiobookshelfClient` method takes a `context.Context` first; pass the request's or tool call's context, never `context.Background()` on a request path.
 
 Items are matched by normalized name (case-insensitive, trimmed) + category and merged into a single `UnifiedItem`. Each item shows which sources it appears in via a `sources` array (e.g., `["torrent", "filesystem", "jellyfin", "audiobookshelf"]`). Items found in the incomplete directory get `isIncomplete: true`.
 

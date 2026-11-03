@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/minya/tgtorrentbot/internal/media"
 )
@@ -71,5 +72,36 @@ func TestAbsRescanReportsFailure(t *testing.T) {
 		if res.IsError != tc.wantErr || out.Triggered == tc.wantErr || len(out.Libraries) != tc.wantLibs {
 			t.Errorf("%s: IsError=%v out=%+v, want IsError=%v and %d libraries", tc.name, res.IsError, out, tc.wantErr, tc.wantLibs)
 		}
+	}
+}
+
+// F43: list_media answers when Jellyfin and ABS hang, within its deadline.
+func TestListMediaBoundedWhenSourcesHang(t *testing.T) {
+	old := listMediaSourceTimeout
+	listMediaSourceTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { listMediaSourceTimeout = old })
+	done := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-done:
+		}
+	}))
+	t.Cleanup(func() { close(done); srv.Close() })
+
+	root := t.TempDir()
+	s := &server{
+		config: Config{DownloadPath: root},
+		scan:   &media.FilesystemScanner{DownloadPath: root},
+		jf:     media.NewJellyfinClient(srv.URL, "k"),
+		abs:    media.NewAudiobookshelfClient(srv.URL, "k"),
+	}
+	start := time.Now()
+	res, _, _ := s.listMedia(context.Background(), nil, listMediaInput{})
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("list_media took %s with hung sources", took)
+	}
+	if res.IsError {
+		t.Fatalf("list_media failed: %v", res.Content)
 	}
 }
