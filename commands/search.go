@@ -14,7 +14,9 @@ import (
 	"github.com/minya/tgtorrentbot/environment"
 )
 
-var reSearchCmd = regexp.MustCompile(`^/search\s(.+?)$`)
+// reSearchCmd matches "/search", optionally followed by a query that may
+// span several lines ((?s) lets . match newlines).
+var reSearchCmd = regexp.MustCompile(`(?s)^/search(?:\s+(.*))?$`)
 
 type SearchCommand struct {
 	Pattern string
@@ -36,19 +38,26 @@ func (factory *SearchCommandFactory) Accepts(upd *telegram.Update) (bool, Comman
 	return false, nil
 }
 
+// Match returns the search a message asks for, or nil. "/search <query>"
+// and plain text (anything not starting with "/") are searches; a bare
+// "/search" yields an empty Pattern, which Handle answers with a usage hint.
+// Whitespace, newlines included, is collapsed to single spaces.
 func Match(cmdText string) *SearchCommand {
-	if cmdText == "" {
+	text := strings.TrimSpace(cmdText)
+	if text == "" {
 		return nil
 	}
-	if found := reSearchCmd.FindStringSubmatch(cmdText); len(found) == 2 {
-		pattern := strings.TrimSpace(found[1])
-		return &SearchCommand{Pattern: pattern}
+	if found := reSearchCmd.FindStringSubmatch(text); found != nil {
+		return &SearchCommand{Pattern: normalizeQuery(found[1])}
 	}
-	if cmdText[0] != '/' {
-		pattern := strings.TrimSpace(cmdText)
-		return &SearchCommand{Pattern: pattern}
+	if text[0] != '/' {
+		return &SearchCommand{Pattern: normalizeQuery(text)}
 	}
 	return nil
+}
+
+func normalizeQuery(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func min(a int, b int) int {
@@ -59,6 +68,12 @@ func min(a int, b int) int {
 }
 
 func (cmd *SearchCommand) Handle(ctx context.Context, upd *telegram.Update) error {
+	if cmd.Pattern == "" {
+		return SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
+			ChatID: upd.Message.Chat.ID,
+			Text:   "Usage: /search <query>, or just send the text to search for.",
+		})
+	}
 	logger.Info("Starting search, pattern: %s", cmd.Pattern)
 	cfg := cmd.RutrackerConfig
 	rutrackerClient, err := rutracker.NewAuthenticatedRutrackerClient(cfg.Username, cfg.Password, rutracker.WithTimeout(30*time.Second))
