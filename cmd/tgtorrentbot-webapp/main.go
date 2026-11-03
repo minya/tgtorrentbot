@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -324,12 +323,13 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		return
 	}
 
-	parsedURL, err := url.Parse(req.DownloadURL)
-	isAbsoluteRutracker := err == nil && (parsedURL.Host == "rutracker.org" || parsedURL.Host == "www.rutracker.org")
-	isRelativeDownload := err == nil && parsedURL.Host == "" && relativeDownloadRe.MatchString(req.DownloadURL)
-	if !isAbsoluteRutracker && !isRelativeDownload {
+	// Only the relative form search results carry (dl.php?t=N): the
+	// rutracker client prefixes it with its forum URL itself, so an
+	// absolute URL could never be fetched as given, and accepting one let
+	// callers make arbitrary GETs with the bot's rutracker session.
+	if !relativeDownloadRe.MatchString(req.DownloadURL) {
 		logger.Warn("Invalid downloadUrl: %s", req.DownloadURL)
-		http.Error(w, `{"error": "invalid downloadUrl: must be a rutracker.org URL"}`, http.StatusBadRequest)
+		http.Error(w, `{"error": "invalid downloadUrl: must be dl.php?t=<topic id> from a search result"}`, http.StatusBadRequest)
 		return
 	}
 
