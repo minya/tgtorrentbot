@@ -358,3 +358,33 @@ func TestWriteTagsV24UsesUTF8(t *testing.T) {
 		t.Fatalf("TIT2 = %+v, want UTF-8 Привет", f)
 	}
 }
+
+// F73: a comment override replaces only the user comment and keeps
+// described COMM frames such as iTunSMPB; read_tags shows the user comment.
+func TestCommentOverrideKeepsDescribedComments(t *testing.T) {
+	root := t.TempDir()
+	mp3 := filepath.Join(root, "itunes.mp3")
+	seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) {
+		tag.AddCommentFrame(id3v2.CommentFrame{Encoding: id3v2.EncodingUTF8, Language: "eng", Description: "", Text: "old comment"})
+		tag.AddCommentFrame(id3v2.CommentFrame{Encoding: id3v2.EncodingUTF8, Language: "eng", Description: "iTunSMPB", Text: " 00000000 00000210 0000099C"})
+	})
+	srv := &server{config: Config{DownloadPath: root}}
+
+	_, out, _ := srv.readTags(context.Background(), nil, readTagsInput{Path: "itunes.mp3"})
+	if len(out.Files) != 1 || out.Files[0].Comment != "old comment" {
+		t.Fatalf("read_tags comment = %+v, want the user comment, not iTunSMPB", out.Files)
+	}
+
+	writeOne(t, srv, writeTagsInput{Path: "itunes.mp3", Tags: map[string]string{"comment": "new comment"}})
+
+	tag := openTag(t, mp3)
+	got := map[string]string{}
+	for _, f := range tag.GetFrames(tag.CommonID("Comments")) {
+		cf := f.(id3v2.CommentFrame)
+		got[cf.Description] = cf.Text
+	}
+	if len(got) != 2 || got[""] != "new comment" || got["iTunSMPB"] != " 00000000 00000210 0000099C" {
+		t.Fatalf("COMM frames after override = %q, want the new comment and iTunSMPB kept", got)
+	}
+	assertAudioIntact(t, mp3)
+}

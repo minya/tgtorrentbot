@@ -107,11 +107,7 @@ func (s *server) readTags(ctx context.Context, _ *mcp.CallToolRequest, in readTa
 		ft.Genre = tag.Genre()
 		ft.Track = tag.GetTextFrame(tag.CommonID("Track number/Position in set")).Text
 		ft.Disc = tag.GetTextFrame(tag.CommonID("Part of a set")).Text
-		if commFrames := tag.GetFrames(tag.CommonID("Comments")); len(commFrames) > 0 {
-			if cf, ok := commFrames[len(commFrames)-1].(id3v2.CommentFrame); ok {
-				ft.Comment = cf.Text
-			}
-		}
+		ft.Comment = userComment(tag)
 		tag.Close()
 
 		if hint := encodingHint(ft.Title, ft.Artist, ft.Album, ft.AlbumArtist, ft.Composer, ft.Genre, ft.Comment); hint != "" {
@@ -358,25 +354,47 @@ func setOverride(tag *id3v2.Tag, key, val string) bool {
 			return true
 		}
 	case "comment":
-		commID := tag.CommonID("Comments")
-		current := ""
-		if frames := tag.GetFrames(commID); len(frames) > 0 {
-			if cf, ok := frames[len(frames)-1].(id3v2.CommentFrame); ok {
-				current = cf.Text
-			}
-		}
-		if current != val {
-			tag.DeleteFrames(commID)
-			tag.AddCommentFrame(id3v2.CommentFrame{
-				Encoding:    tag.DefaultEncoding(),
-				Language:    "eng",
-				Description: "",
-				Text:        val,
-			})
+		if userComment(tag) != val {
+			setUserComment(tag, val)
 			return true
 		}
 	}
 	return false
+}
+
+// userComment returns the user comment: the COMM frame with an empty
+// description. Other COMM frames carry player data under a description
+// (iTunSMPB gapless info, iTunNORM normalisation) and are not the comment.
+func userComment(tag *id3v2.Tag) string {
+	comment := ""
+	for _, f := range tag.GetFrames(tag.CommonID("Comments")) {
+		if cf, ok := f.(id3v2.CommentFrame); ok && cf.Description == "" {
+			comment = cf.Text
+		}
+	}
+	return comment
+}
+
+// setUserComment replaces the user comment (empty-description COMM frames)
+// with val and keeps every described COMM frame as it was.
+func setUserComment(tag *id3v2.Tag, val string) {
+	commID := tag.CommonID("Comments")
+	var keep []id3v2.CommentFrame
+	for _, f := range tag.GetFrames(commID) {
+		if cf, ok := f.(id3v2.CommentFrame); ok && cf.Description != "" {
+			keep = append(keep, cf)
+		}
+	}
+	tag.DeleteFrames(commID)
+	for _, cf := range keep {
+		tag.AddCommentFrame(cf)
+	}
+	tag.AddCommentFrame(id3v2.CommentFrame{
+		Encoding:    tag.DefaultEncoding(),
+		Language:    "eng",
+		Description: "",
+		Text:        val,
+	})
 }
 
 // fixAllEncoding iterates every text-bearing frame: text frames (T***),
