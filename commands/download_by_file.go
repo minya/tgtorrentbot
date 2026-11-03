@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
@@ -22,13 +23,22 @@ func (factory *DownloadByFileCommandFactory) Accepts(upd *telegram.Update) (bool
 	if upd == nil || upd.Message == nil {
 		return false, nil
 	}
-	if upd.Message.HasDocument() {
+	if upd.Message.HasDocument() && isTorrentDocument(upd.Message.Document) {
 		return true, &DownloadByFileCommand{
 			Doc: upd.Message.Document,
 			Env: factory.Env,
 		}
 	}
 	return false, nil
+}
+
+// isTorrentDocument reports whether an uploaded document is a .torrent
+// file, by name or MIME type. Other documents (a PDF, a photo sent as a
+// file) fall through to the "Expected a command…" reply instead of being
+// offered a category and then rejected by Transmission.
+func isTorrentDocument(doc *telegram.Document) bool {
+	return strings.HasSuffix(strings.ToLower(doc.FileName), ".torrent") ||
+		doc.MimeType == "application/x-bittorrent"
 }
 
 func (cmd *DownloadByFileCommand) Handle(ctx context.Context, upd *telegram.Update) error {

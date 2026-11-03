@@ -170,7 +170,7 @@ Registered command factories (`NewUpdatesHandler` in `cmd/tgtorrentbot/handler.g
 - `DownloadFileWithCategoryCommandFactory` - handles file upload with category selection (callback only)
 - `DownloadMagnetWithCategoryCommandFactory` - `/dlmagnet <category> <uuid>` downloads magnet with category (callback only)
 - `DownloadCommandFactory` - `/dl <url>` prompts for category selection (callback only)
-- `DownloadByFileCommandFactory` - handles torrent file uploads, prompts for category
+- `DownloadByFileCommandFactory` - handles `.torrent` file uploads (by file name or `application/x-bittorrent` MIME type), prompts for category; other documents fall through to the fallback reply
 
 **Command ordering matters:** Commands are matched in order. More specific patterns (e.g., `/dlcat`) must come before general ones (e.g., `/dl`) to avoid incorrect matching. `DownloadByMagnetCommandFactory` must come before `SearchCommandFactory` so magnet URIs aren't treated as search queries.
 

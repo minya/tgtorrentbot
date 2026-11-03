@@ -114,7 +114,8 @@ func TestDownloadByFileCommandFactoryAcceptsDocument(t *testing.T) {
 		Message: &telegram.Message{
 			MessageID: 12,
 			Document: &telegram.Document{
-				FileID: "file123",
+				FileID:   "file123",
+				FileName: "Some.Show.S01.torrent",
 			},
 		},
 	}
@@ -145,5 +146,27 @@ func TestDownloadByFileCommandFactoryRejectsWithoutDocument(t *testing.T) {
 	ok, _ := factory.Accepts(&upd)
 	if ok {
 		t.Fatalf("expected factory to reject update without document")
+	}
+}
+
+// F76: only .torrent documents get a category prompt.
+func TestDownloadByFileCommandFactoryAcceptsOnlyTorrents(t *testing.T) {
+	factory := DownloadByFileCommandFactory{}
+	for _, tc := range []struct {
+		doc  telegram.Document
+		want bool
+	}{
+		{telegram.Document{FileID: "a", FileName: "x.torrent"}, true},
+		{telegram.Document{FileID: "b", FileName: "X.TORRENT"}, true},
+		{telegram.Document{FileID: "c", FileName: "noext", MimeType: "application/x-bittorrent"}, true},
+		{telegram.Document{FileID: "d", FileName: "book.pdf", MimeType: "application/pdf"}, false},
+		{telegram.Document{FileID: "e", FileName: "song.mp3", MimeType: "audio/mpeg"}, false},
+		{telegram.Document{FileID: "f"}, false},
+	} {
+		doc := tc.doc
+		ok, _ := factory.Accepts(&telegram.Update{Message: &telegram.Message{MessageID: 1, Document: &doc}})
+		if ok != tc.want {
+			t.Errorf("Accepts(%q, %q) = %v, want %v", doc.FileName, doc.MimeType, ok, tc.want)
+		}
 	}
 }
