@@ -43,6 +43,15 @@ type Config struct {
 	RedirectHosts []string
 }
 
+// resolvedDir returns p with symlinks resolved, or p itself when it does
+// not exist (yet).
+func resolvedDir(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
+}
+
 func loadConfig() (Config, error) {
 	dl := os.Getenv("TGT_DOWNLOADPATH")
 	if dl == "" {
@@ -52,11 +61,17 @@ func loadConfig() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("TGT_DOWNLOADPATH: %w", err)
 	}
-	dl = filepath.Clean(abs)
+	// Resolve symlinks in the root once. The path guards compare resolved
+	// paths against it and the tools report paths relative to it, so an
+	// unresolved root (e.g. /downloads -> /mnt/disk/downloads) would make
+	// every returned path absolute and then rejected when passed back.
+	dl = resolvedDir(filepath.Clean(abs))
 
 	inc := os.Getenv("TGT_INCOMPLETE_PATH")
 	if inc == "" {
 		inc = filepath.Join(dl, "incomplete")
+	} else if incAbs, err := filepath.Abs(inc); err == nil {
+		inc = resolvedDir(filepath.Clean(incAbs))
 	}
 
 	authToken := os.Getenv("TGT_MCP_TOKEN")
