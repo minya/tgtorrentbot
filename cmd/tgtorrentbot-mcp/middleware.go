@@ -46,6 +46,20 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap exposes the wrapped writer to http.ResponseController, which the
+// MCP SDK uses to flush every SSE event. Without it the flush fails with
+// http.ErrNotSupported and events sit in the server's buffer until the
+// handler returns.
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+// Flush forwards to the wrapped writer, for code that type-asserts
+// http.Flusher instead of using http.ResponseController.
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // accessLog logs every request at info level with method, path, status, and
 // elapsed time. Keeps the OAuth flow debuggable in prod without a debugger.
 func accessLog(next http.Handler) http.Handler {
