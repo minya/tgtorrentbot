@@ -16,10 +16,10 @@ github.com/mattn/go-isatty v0.0.21 h1:xYae+lCNBP7QuW4PUnNG61ffM4hVIfm+zUzDuSzYLG
 github.com/mattn/go-isatty v0.0.21/go.mod h1:ZXfXG4SQHsB/w3ZeOYbR0PrPwLy+n6xiMrJlRFqopa4=
 github.com/minya/goutils v0.0.0-20261103164850-c9063cfa906c h1:RN9TV/4tx3BBQ2QZ1maqszOZQzDY0rwZ3pJG9AkotBo=
 github.com/minya/goutils v0.0.0-20261103164850-c9063cfa906c/go.mod h1:FI7uSadCRvIKUVdB2W4by9Hn5sMLX+3a5KNSMs34dA8=
-github.com/minya/logger v0.0.0-20261103164336-ff32fbee7812 h1:tpwBfR4hpY1hEDW4C/rQWNfs+legWgiOU7co8kZ5iw4=
-github.com/minya/logger v0.0.0-20261103164336-ff32fbee7812/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
-github.com/minya/rutracker v0.0.0-20261103174442-03c6bf06c23a h1:rrmT0qaAI/3Dp0K3pOknk5pYk90hZeooRqMvFgRlTBw=
-github.com/minya/rutracker v0.0.0-20261103174442-03c6bf06c23a/go.mod h1:JLv/R50/OzjdMS0kktWAvh+mz4/LM0Z0h5wAgWmL7OY=
+github.com/minya/logger v0.0.0-20261103194241-62f8b0e71b44 h1:0jPgB5YX0EdD8b/Ehh8WEDYQoQk1x7C7xzubJ1/1EB0=
+github.com/minya/logger v0.0.0-20261103194241-62f8b0e71b44/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
+github.com/minya/rutracker v0.0.0-20261103194555-03732a77f4b1 h1:MOWYMm4WMV6nFnG9AmIPATiGXcw8cstxbqz/tzKSNZY=
+github.com/minya/rutracker v0.0.0-20261103194555-03732a77f4b1/go.mod h1:WWHsn+cg3n1Z1vw1Q49Os+rdxynj4UJBj7CGpvXTp/E=
 github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19 h1:CMQP/vXZb7MLXvVNAHY9gTJtOP2SFpV5UyTi+4hN/os=
 github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19/go.mod h1:NF/NuUYrilpDV0ywHxfPoUyxUb/YB24NzPiia+GTX1o=
 github.com/modelcontextprotocol/go-sdk v1.5.0 h1:CHU0FIX9kpueNkxuYtfYQn1Z0slhFzBZuq+x6IiblIU=
