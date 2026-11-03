@@ -1,66 +1,78 @@
 #!/bin/bash
+# Pin the sibling minya modules to their latest commits:
+#   logger   -> tgtorrentbot, telegram
+#   telegram -> tgtorrentbot
+# A module is pinned only at a commit that is clean and pushed, since the
+# Go proxy can only fetch what is on the remote. The script stops at the
+# first failure.
+set -euo pipefail
 
-# Function to check and update a module
+# require_published <module_src_path>: fail unless the source tree is
+# clean and its HEAD is on a remote branch.
+require_published() {
+    local src="$1"
+    if [ -n "$(git -C "$src" status --porcelain)" ]; then
+        echo "$(basename "$src") has uncommitted changes; commit and push them first." >&2
+        return 1
+    fi
+    if [ -z "$(git -C "$src" branch -r --contains HEAD 2>/dev/null)" ]; then
+        echo "$(basename "$src") HEAD $(git -C "$src" rev-parse --short=12 HEAD) is not pushed; push it first." >&2
+        return 1
+    fi
+}
+
+# update_module <target_mod_path> <module_name> <module_src_path>
 update_module() {
-    local target_mod_path="$1"      # Path to the project with go.mod to update
-    local module_name="$2"          # Name of the module to update (e.g., "logger", "telegram")
-    local module_src_path="$3"      # Path to the module's source directory
+    local target_mod_path="$1"
+    local module_name="$2"
+    local module_src_path="$3"
+    local target
+    target="$(basename "$target_mod_path")"
 
-    echo "Checking $module_name module in $(basename "$target_mod_path")..."
+    echo "Checking $module_name module in $target..."
 
-    # Get module version from target's go.mod
-    local version=$(grep -E "github\.com/minya/$module_name v[0-9]" "$target_mod_path/go.mod" | grep -v '=>' | awk '{print $2}')
-    local date_part=$(echo "$version" | cut -d '-' -f 2)
-    local mod_commit=$(echo "$version" | cut -d '-' -f 3)
-
-    if [ -z "$mod_commit" ] || [ -z "$date_part" ]; then
-        echo "Failed to extract commit or date from $module_name version string in $(basename "$target_mod_path")"
+    local version
+    version=$(grep -E "github\.com/minya/$module_name v[0-9]" "$target_mod_path/go.mod" | grep -v '=>' | awk '{print $2}' || true)
+    local mod_commit
+    mod_commit=$(echo "$version" | cut -d '-' -f 3)
+    if [ -z "$mod_commit" ]; then
+        echo "Failed to extract the commit from the $module_name version in $target/go.mod" >&2
         return 1
     fi
 
-    # Get latest commit from module source directory
-    local latest_commit=$(cd "$module_src_path" && git rev-parse --short=12 HEAD)
+    local latest_commit
+    latest_commit=$(git -C "$module_src_path" rev-parse --short=12 HEAD)
 
-    # Check if module needs updating
     if [ "$mod_commit" == "$latest_commit" ]; then
-        echo "$module_name is up to date in $(basename "$target_mod_path") (commit: $mod_commit)"
-    else
-        echo "$module_name needs updating in $(basename "$target_mod_path"):"
-        echo "Latest commit: $latest_commit"
-        echo "Current commit in go.mod: $mod_commit"
-
-        # Get current date in the format YYYYMMDD for the pseudo-version
-        local current_date=$(date +"%Y%m%d%H%M%S")
-
-        # Create new version with current date and latest commit
-        local new_version="v0.0.0-$current_date-$latest_commit"
-
-        echo "Updating $module_name from $version to $new_version"
-
-        # Update module using go get command
-        (
-            cd "$target_mod_path"
-            echo "go get -u github.com/minya/$module_name@$latest_commit"
-            go get -u "github.com/minya/$module_name@$latest_commit"
-            go mod tidy
-        )
-
-        echo "$module_name updated successfully"
+        echo "$module_name is up to date in $target (commit: $mod_commit)"
+        echo ""
+        return 0
     fi
+
+    require_published "$module_src_path"
+    echo "Updating $module_name in $target: $mod_commit -> $latest_commit"
+    # No -u: pin this module only, without upgrading every dependency it has.
+    (
+        cd "$target_mod_path"
+        go get "github.com/minya/$module_name@$latest_commit"
+        go mod tidy
+    )
+    echo "$module_name updated in $target"
     echo ""
 }
 
-# Go to the script directory
 cd "$(dirname "$0")"
 scriptdir="$(pwd)"
 
-# Update logger module in tgtorrentbot
 update_module "$scriptdir" "logger" "$scriptdir/../logger"
-
-# Update logger module in telegram
 update_module "$scriptdir/../telegram" "logger" "$scriptdir/../logger"
 
-# Update telegram module in tgtorrentbot
+# Pinning telegram here only picks up the logger bump once that bump is a
+# pushed telegram commit, so stop if the previous step changed telegram.
+if [ -n "$(git -C "$scriptdir/../telegram" status --porcelain -- go.mod go.sum)" ]; then
+    echo "telegram's go.mod changed. Commit and push telegram, then run this script again to pin it here." >&2
+    exit 1
+fi
 update_module "$scriptdir" "telegram" "$scriptdir/../telegram"
 
 echo "Dependency updates complete!"
