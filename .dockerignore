@@ -1,9 +1,12 @@
-settings.json
-/tgtorrentbot
-/tgtorrentbot-webapp
-*.swp
-.vscode/
-out/
-bin/
-*.code-workspace
-.git/
+# Allowlist: the build context holds only what `go build` needs. Everything
+# else stays out, in particular .env / .env.resolved (resolved secrets),
+# settings.json, docs/ (review database), .claude/ and local binaries, so
+# they never reach the builder or a cached COPY layer, and editing them
+# does not invalidate the build cache.
+*
+!go.mod
+!go.sum
+!cmd/
+!commands/
+!environment/
+!internal/

@@ -3,6 +3,7 @@ settings.json
 .env.resolved
 /tgtorrentbot
 /tgtorrentbot-webapp
+/tgtorrentbot-mcp
 *.swp
 .vscode/
 out/
