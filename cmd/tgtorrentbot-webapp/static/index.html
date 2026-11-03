@@ -830,6 +830,13 @@
         // folder) is shown under "Other", both in the count and in the list.
         // item.category itself stays unchanged: the item id built from it
         // tells DELETE which directory to look in.
+        // itemDate is when an item arrived, in Unix seconds: when its torrent
+        // was added, else the newest modification time on disk (items whose
+        // torrent was removed or that were moved have only that), else 0.
+        function itemDate(item) {
+            return item.addedDate || item.mtime || 0;
+        }
+
         function displayCategory(item) {
             if (item.category === 'incomplete' || CATEGORIES.some(c => c.key === item.category)) {
                 return item.category;
@@ -933,7 +940,7 @@
             } else {
                 bottomHtml = `<div class="torrent-meta">
                         <span>${formatSize(item.totalSize)}</span>
-                        <span>${item.addedDate ? formatDate(item.addedDate) : ''}</span>
+                        <span>${itemDate(item) ? formatDate(itemDate(item)) : ''}</span>
                    </div>`;
             }
 
@@ -1017,7 +1024,7 @@
             // Apply sort
             const dir = categorySort.asc ? 1 : -1;
             if (categorySort.field === 'date') {
-                items.sort((a, b) => dir * ((a.addedDate || 0) - (b.addedDate || 0)));
+                items.sort((a, b) => dir * (itemDate(a) - itemDate(b)));
             } else if (categorySort.field === 'name') {
                 items.sort((a, b) => dir * a.name.localeCompare(b.name));
             } else if (categorySort.field === 'size') {
