@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/minya/logger"
+	"github.com/minya/tgtorrentbot/internal/graceful"
 	mcplib "github.com/minya/tgtorrentbot/internal/media"
 	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -108,7 +109,9 @@ func main() {
 			Addr:    addr,
 			Handler: accessLog(corsMiddleware(mux)),
 		}
-		if err := httpSrv.ListenAndServe(); err != nil {
+		// On SIGTERM, let in-flight tool calls finish (move_media removes the
+		// torrent, then renames) before exiting.
+		if err := graceful.Serve(httpSrv, nil); err != nil {
 			logger.Error(err, "MCP HTTP server exited with error")
 			os.Exit(1)
 		}

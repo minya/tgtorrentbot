@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"sync"
 
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
@@ -40,10 +41,13 @@ func validWebhookSecret(s string) bool {
 // 401 (checked in constant time by telegram.WebhookHandler, which also
 // accepts only POST and caps the body), so updates cannot be forged by
 // anyone who learns the webhook URL. Accepted updates are acknowledged
-// immediately and handled in the background so Telegram does not retry them.
-func newWebhookHandler(secret string, handleUpdate func(context.Context, *telegram.Update) error) http.Handler {
+// immediately and handled in the background so Telegram does not retry them;
+// inFlight counts those background handlers so shutdown can wait for them.
+func newWebhookHandler(secret string, handleUpdate func(context.Context, *telegram.Update) error, inFlight *sync.WaitGroup) http.Handler {
 	return telegram.WebhookHandler(secret, func(ctx context.Context, upd *telegram.Update) error {
+		inFlight.Add(1)
 		go func() {
+			defer inFlight.Done()
 			// A panic in a command must not take the whole bot down: this
 			// goroutine is not covered by net/http's per-request recovery.
 			defer func() {

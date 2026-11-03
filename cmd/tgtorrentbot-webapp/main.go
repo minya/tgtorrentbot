@@ -23,6 +23,7 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/rutracker"
 	"github.com/minya/tgtorrentbot/internal/category"
+	"github.com/minya/tgtorrentbot/internal/graceful"
 	"github.com/minya/tgtorrentbot/internal/media"
 	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/minya/tgtorrentbot/internal/transmissionrpc"
@@ -252,7 +253,9 @@ func main() {
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	if err := srv.ListenAndServe(); err != nil {
+	// On SIGTERM, let in-flight requests (a deletion between RemoveTorrents
+	// and RemoveAll, a torrent add and its labels) finish before exiting.
+	if err := graceful.Serve(srv, nil); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
 	}
