@@ -825,6 +825,18 @@
             });
         }
 
+        // displayCategory is the grid bucket an item is shown in. A category
+        // the frontend does not know (a hand-set torrent label, a stray Jellyfin
+        // folder) is shown under "Other", both in the count and in the list.
+        // item.category itself stays unchanged: the item id built from it
+        // tells DELETE which directory to look in.
+        function displayCategory(item) {
+            if (item.category === 'incomplete' || CATEGORIES.some(c => c.key === item.category)) {
+                return item.category;
+            }
+            return 'others';
+        }
+
         function renderMainScreen() {
             document.getElementById('load-error').classList.remove('visible');
             setCountsLoading(false);
@@ -832,8 +844,7 @@
             const counts = Object.fromEntries(CATEGORIES.map(c => [c.key, 0]));
             counts.incomplete = 0;
             for (const item of allItems) {
-                const cat = item.category in counts ? item.category : 'others';
-                counts[cat]++;
+                counts[displayCategory(item)]++;
             }
             for (const [cat, count] of Object.entries(counts)) {
                 const el = document.getElementById('count-' + cat);
@@ -995,7 +1006,7 @@
                 container.innerHTML = '<div class="loading">Loading…</div>';
                 return;
             }
-            let items = allItems.filter(item => item.category === cat);
+            let items = allItems.filter(item => displayCategory(item) === cat);
 
             // Apply filter
             if (categoryFilter) {
