@@ -97,6 +97,9 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 		}
 	}
 
+	// Answer an unmatched button press too, or its spinner runs until
+	// Telegram times it out. Nil-safe for plain messages.
+	commands.AnswerCallbackQuery(ctx, upd, handler.TgApi)
 	chatID, ok := replyChatID(upd)
 	if !ok {
 		return nil

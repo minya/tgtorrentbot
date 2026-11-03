@@ -34,7 +34,7 @@ func (factory *DownloadMagnetWithCategoryCommandFactory) Accepts(upd *telegram.U
 
 	category, ok := ParseCategory(categoryStr)
 	if !ok {
-		return false, nil
+		return true, &outdatedCategoryButtonCommand{Category: categoryStr, Env: factory.Env}
 	}
 
 	magnetURI, ok := factory.FileIDLookup.Get(memID)

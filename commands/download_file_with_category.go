@@ -36,7 +36,7 @@ func (factory *DownloadFileWithCategoryCommandFactory) Accepts(upd *telegram.Upd
 
 	category, ok := ParseCategory(categoryStr)
 	if !ok {
-		return false, nil
+		return true, &outdatedCategoryButtonCommand{Category: categoryStr, Env: factory.Env}
 	}
 
 	fileID, ok := factory.FileIDLookup.Get(memFileID)

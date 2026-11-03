@@ -34,8 +34,7 @@ func (factory *DownloadWithCategoryCommandFactory) Accepts(upd *telegram.Update)
 
 		category, ok := ParseCategory(categoryStr)
 		if !ok {
-			logger.Error(nil, "Invalid category: %s", categoryStr)
-			return false, nil
+			return true, &outdatedCategoryButtonCommand{Category: categoryStr, Env: factory.Env}
 		}
 
 		return true, &DownloadWithCategoryCommand{

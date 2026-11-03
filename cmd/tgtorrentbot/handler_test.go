@@ -16,6 +16,7 @@ import (
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/commands"
 	"github.com/minya/tgtorrentbot/environment"
+	"github.com/minya/tgtorrentbot/internal"
 	"github.com/odwrtw/transmission"
 )
 
@@ -191,5 +192,25 @@ func TestHandleUpdateRepliedErrorNotRepeated(t *testing.T) {
 func TestFailureTextDuplicate(t *testing.T) {
 	if got := failureText(fmt.Errorf("add: %w", transmission.ErrDuplicateTorrent)); !strings.Contains(got, "already") {
 		t.Fatalf("failureText(duplicate) = %q", got)
+	}
+}
+
+// F50: a button press no command accepts, and one whose category no longer
+// exists, are answered so the client's spinner stops.
+func TestUnmatchedCallbacksAreAnswered(t *testing.T) {
+	for _, data := range []string{"/nosuchcommand 1", "/dlcat bogus dl.php?t=1", "/dlmagnet bogus abc", "/dlfilecat bogus abc"} {
+		tg, api := newRecordingTelegram(t)
+		h := NewUpdatesHandler(environment.Env{TgApi: api, AllowedUsers: []int64{42}, FileIDLookup: &internal.FileIDLookup{}}, func() {})
+		_ = h.HandleUpdate(context.Background(), &telegram.Update{CallbackQuery: &telegram.CallbackQuery{
+			ID: "q", Data: data, From: &telegram.User{ID: 42},
+			Message: &telegram.Message{MessageID: 1, Chat: telegram.Chat{ID: 42}},
+		}})
+		calls := tg.calls()
+		if !slices.Contains(calls, "answerCallbackQuery") {
+			t.Errorf("%q: Telegram calls %v, want answerCallbackQuery", data, calls)
+		}
+		if !slices.Contains(calls, "sendMessage") {
+			t.Errorf("%q: Telegram calls %v, want a message explaining it", data, calls)
+		}
 	}
 }
