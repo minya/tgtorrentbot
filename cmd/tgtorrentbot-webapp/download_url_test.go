@@ -1,6 +1,10 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/minya/rutracker"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,6 +33,21 @@ func TestDownloadURLValidation(t *testing.T) {
 	for _, u := range []string{"dl.php?t=123", "dl.php?t=1"} {
 		if !relativeDownloadRe.MatchString(u) {
 			t.Errorf("%q rejected", u)
+		}
+	}
+}
+
+// F2: a failed rutracker login says why.
+func TestRutrackerLoginErrorMessages(t *testing.T) {
+	for err, want := range map[error]string{
+		rutracker.ErrCaptcha:     "captcha",
+		rutracker.ErrLoginFailed: "username and password",
+		errors.New("dial tcp"):   "failed to authenticate",
+	} {
+		rec := httptest.NewRecorder()
+		writeRutrackerLoginError(rec, fmt.Errorf("login: %w", err))
+		if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("%v: %d %s, want 502 mentioning %q", err, rec.Code, rec.Body.String(), want)
 		}
 	}
 }

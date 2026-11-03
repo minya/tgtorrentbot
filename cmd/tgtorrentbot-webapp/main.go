@@ -308,6 +308,20 @@ func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// writeRutrackerLoginError answers a failed rutracker login, saying why
+// when rutracker said so (wrong credentials, a captcha to clear).
+func writeRutrackerLoginError(w http.ResponseWriter, err error) {
+	msg := "failed to authenticate with rutracker"
+	switch {
+	case errors.Is(err, rutracker.ErrCaptcha):
+		msg = "rutracker asks for a captcha; log in once at rutracker.org in a browser, then try again"
+	case errors.Is(err, rutracker.ErrLoginFailed):
+		msg = "rutracker rejected the login; check the bot's rutracker username and password"
+	}
+	b, _ := json.Marshal(map[string]string{"error": msg})
+	http.Error(w, string(b), http.StatusBadGateway)
+}
+
 // rutrackerBudget bounds the rutracker part of a request (a fresh login,
 // then the search or the .torrent fetch).
 const rutrackerBudget = 40 * time.Second
@@ -374,7 +388,7 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 	)
 	if err != nil {
 		logger.Error(err, "Failed to authenticate with rutracker")
-		http.Error(w, `{"error": "failed to authenticate with rutracker"}`, http.StatusInternalServerError)
+		writeRutrackerLoginError(w, err)
 		return
 	}
 
@@ -452,7 +466,7 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		logger.Error(err, "Failed to authenticate with rutracker")
-		http.Error(w, `{"error": "failed to authenticate with rutracker"}`, http.StatusInternalServerError)
+		writeRutrackerLoginError(w, err)
 		return
 	}
 
