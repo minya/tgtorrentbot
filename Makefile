@@ -2,7 +2,7 @@ BOT_IMAGE_NAME=tgtorrentbot_img
 WEBAPP_IMAGE_NAME=tgtorrentbot-webapp_img
 MCP_IMAGE_NAME=tgtorrentbot-mcp_img
 
-.PHONY: binaries bot-image webapp-image mcp-image images
+.PHONY: binaries bot-image webapp-image mcp-image images hooks
 
 binaries:
 	@echo "Building binaries..."
@@ -21,5 +21,10 @@ mcp-image:
 	@docker-buildx build --tag $(MCP_IMAGE_NAME) -f Dockerfile.mcp .
 
 images: bot-image webapp-image mcp-image
+
+# Use the repository's hooks (hooks/pre-commit blocks go.mod replace
+# directives). Run once per clone.
+hooks:
+	git config core.hooksPath hooks
 
 .DEFAULT_GOAL := binaries

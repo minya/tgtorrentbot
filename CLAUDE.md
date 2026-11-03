@@ -33,6 +33,12 @@ docker-buildx build --tag tgtorrentbot-mcp_img -f Dockerfile.mcp .
 go run ./cmd/tgtorrentbot -settings settings.json -log-level info
 ```
 
+### Git hooks
+```bash
+make hooks   # once per clone: git config core.hooksPath hooks
+```
+`hooks/pre-commit` refuses a commit whose staged `go.mod` has `replace` directives (local library overrides); `ALLOW_REPLACE=1 git commit ...` bypasses it.
+
 ### Run single test file
 ```bash
 go test -v ./commands -run TestSpecificFunction

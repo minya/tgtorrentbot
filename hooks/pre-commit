@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+
+# Prevent committing local replace directives in go.mod.
+# Install once per clone with: make hooks   (sets core.hooksPath to hooks/)
+# Bypass with ALLOW_REPLACE=1 git commit ...
+#
+# It checks the go.mod being committed (the index), not the working tree:
+# an unstaged local replace must not block unrelated commits, and a staged
+# replace must not slip through because the working tree was reverted.
+
+if ! staged="$(git show :go.mod 2>/dev/null)"; then
+  exit 0 # go.mod is not tracked or not in the index
+fi
+
+if grep -Eq '^\s*replace\s' <<<"${staged}"; then
+  if [[ "${ALLOW_REPLACE:-}" == "1" ]]; then
+    echo "ALLOW_REPLACE set; skipping replace check"
+    exit 0
+  fi
+  echo "The staged go.mod contains replace directives. Remove them before committing." >&2
+  echo "If intentional (e.g., a temporary override), set ALLOW_REPLACE=1 to bypass." >&2
+  exit 1
+fi
