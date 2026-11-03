@@ -287,3 +287,75 @@ func TestRemoveTorrentByIDAmongSameNamed(t *testing.T) {
 		t.Fatalf("remove data removed %v, want both torrents", removedIDs)
 	}
 }
+
+// F95: "Remove data" decides by where data is, not by category label. The
+// incomplete dir is shared by every category and user, so another torrent's
+// in-progress folder there is kept while the caller's own folder is deleted.
+func TestRemoveDataKeepsOtherDownloadsInIncompleteDir(t *testing.T) {
+	for _, tc := range []struct {
+		name, torrents string
+	}{
+		{"another user's download in another category", `[{"id":5,"name":"X","labels":["7","shows","7"],"percentDone":0.3}]`},
+		{"the caller's own download in another category", `[{"id":6,"name":"X","labels":["42","shows","42"],"percentDone":0.3}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app, root, inc, removed := newDeleteTestApp(t, tc.torrents)
+			mustWriteFile(t, filepath.Join(root, "movies", "X", "done.mkv"))
+			mustWriteFile(t, filepath.Join(inc, "X", "part.mkv"))
+
+			rec := deleteItem(app, 42, "movies", "X")
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+			}
+			if exists(filepath.Join(root, "movies", "X")) {
+				t.Error("the caller's completed folder was not deleted")
+			}
+			if !exists(filepath.Join(inc, "X", "part.mkv")) {
+				t.Error("the other torrent's in-progress data was deleted")
+			}
+			if removed.Load() {
+				t.Error("the other torrent was removed from Transmission")
+			}
+		})
+	}
+}
+
+// F95: a torrent with no labels (added in the Transmission UI) seeding from
+// the folder protects it.
+func TestRemoveDataRefusesUnlabelledTorrentsFolder(t *testing.T) {
+	app, root, _, removed := newDeleteTestApp(t, `[]`)
+	mustWriteFile(t, filepath.Join(root, "movies", "U", "a.mkv"))
+	tc, _ := transmission.New(transmission.Config{Address: fakeTorrentsServer(t,
+		`[{"id":8,"name":"U","labels":[],"percentDone":1,"downloadDir":"`+filepath.Join(root, "movies")+`"}]`)})
+	app.transmissionClient = tc
+
+	if rec := deleteItem(app, 42, "movies", "U"); rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, body %s; want 403", rec.Code, rec.Body.String())
+	}
+	if !exists(filepath.Join(root, "movies", "U", "a.mkv")) || removed.Load() {
+		t.Fatal("the unlabelled torrent's data was deleted")
+	}
+}
+
+// Deleting an orphan in the virtual incomplete category is refused while a
+// torrent is still downloading into it.
+func TestRemoveDataRefusesLiveIncompleteFolder(t *testing.T) {
+	app, _, inc, _ := newDeleteTestApp(t, `[{"id":5,"name":"X","labels":["7","shows","7"],"percentDone":0.3}]`)
+	mustWriteFile(t, filepath.Join(inc, "X", "part.mkv"))
+	if rec := deleteItem(app, 42, media.IncompleteCategory, "X"); rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	if !exists(filepath.Join(inc, "X", "part.mkv")) {
+		t.Fatal("live in-progress data was deleted")
+	}
+}
+
+func fakeTorrentsServer(t *testing.T, torrentsJSON string) string {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"result":"success","arguments":{"torrents":` + torrentsJSON + `}}`))
+	}))
+	t.Cleanup(ts.Close)
+	return ts.URL
+}

@@ -580,12 +580,17 @@ func (app *App) findUserTorrents(userID int64, category, name string) ([]*transm
 	if err != nil {
 		return nil, err
 	}
+	return userTorrentsNamed(torrents, userID, category, name), nil
+}
+
+// userTorrentsNamed returns the torrents of userID named name in category
+// (legacy single-label torrents count as "others").
+func userTorrentsNamed(torrents []*transmission.Torrent, userID int64, category, name string) []*transmission.Torrent {
 	var mine []*transmission.Torrent
 	for _, t := range torrents {
 		if t.Name != name || !torrentlabels.OwnedBy(t.Labels, userID) {
 			continue
 		}
-		// Match category from label, defaulting to "others" for legacy single-label torrents.
 		torrentCategory := "others"
 		if len(t.Labels) >= 2 {
 			torrentCategory = t.Labels[1]
@@ -594,31 +599,7 @@ func (app *App) findUserTorrents(userID int64, category, name string) ([]*transm
 			mine = append(mine, t)
 		}
 	}
-	return mine, nil
-}
-
-// findOtherUsersTorrent returns a torrent named name that is not userID's and
-// whose data is where "Remove data" would delete: in category (legacy
-// single-label torrents count as "others"), or in any category for the
-// virtual incomplete category, whose folders share the incomplete directory.
-func (app *App) findOtherUsersTorrent(userID int64, category, name string) (*transmission.Torrent, error) {
-	torrents, err := app.transmissionClient.GetTorrents()
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range torrents {
-		if t.Name != name || torrentlabels.OwnedBy(t.Labels, userID) {
-			continue
-		}
-		torrentCategory := "others"
-		if len(t.Labels) >= 2 {
-			torrentCategory = t.Labels[1]
-		}
-		if category == media.IncompleteCategory || torrentCategory == category {
-			return t, nil
-		}
-	}
-	return nil, nil
+	return mine
 }
 
 // handleItemDelete routes DELETE /api/items/{id} and DELETE /api/items/{id}/torrent.
@@ -703,27 +684,58 @@ func (app *App) handleRemoveItemTorrent(userID int64, w http.ResponseWriter, cat
 
 // handleRemoveItemData removes data files and the associated torrent (if any).
 func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, category, name string) {
-	// Remove the torrent records first (without deleteData — we handle files
-	// ourselves): every torrent of this user with this name and category,
-	// since they all use the folder about to be deleted.
-	mine, err := app.findUserTorrents(userID, category, name)
+	torrents, err := app.transmissionClient.GetTorrents()
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
 		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
 		return
+	}
+	// The user's torrents for this item are untracked (data kept by
+	// Transmission; the files are deleted below).
+	mine := userTorrentsNamed(torrents, userID, category, name)
+
+	// The folders this item's data can be in. An item of a real category may
+	// have data in {DownloadPath}/{category}/{name} once complete and in
+	// {IncompletePath}/{name} while still downloading (MergeItems shows both
+	// under the real category). Orphaned items of the virtual "incomplete"
+	// category live only in the incomplete directory.
+	primary := filepath.Join(app.config.DownloadPath, category, name)
+	candidates := []string{primary, filepath.Join(app.config.IncompletePath, name)}
+	if category == media.IncompleteCategory {
+		primary = filepath.Join(app.config.IncompletePath, name)
+		candidates = []string{primary}
+	}
+	// handleItemDelete already refused names that traverse; keep the
+	// folders strictly one level below their base anyway.
+	for _, dir := range candidates {
+		if filepath.Base(dir) != name {
+			http.Error(w, `{"error": "invalid item path"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
-	// Filesystem items are shared between allowed users, but data that
-	// another user's torrent still uses is theirs: deleting it would leave
-	// their torrent pointing at vanished files.
-	other, err := app.findOtherUsersTorrent(userID, category, name)
-	if err != nil {
-		logger.Error(err, "Failed to get torrents")
-		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
-		return
-	}
-	if other != nil {
-		logger.Warn("User %d tried to remove data of torrent %d (%s [%s]) owned by someone else", userID, other.ID, name, category)
+	// Decide by location, not by label: every other torrent (any owner, any
+	// category, labelled or not) protects the folders its data is in. The
+	// incomplete directory is shared by every category and user, so a
+	// same-named download elsewhere must not lose its partial data, and an
+	// unlabelled torrent seeding from this folder must not lose its files.
+	var toDelete []string
+	for _, dir := range candidates {
+		user := app.torrentUsing(torrents, mine, dir)
+		if user == nil {
+			toDelete = append(toDelete, dir)
+			continue
+		}
+		if dir != primary {
+			logger.Info("Keeping %s for user %d: torrent %d (%s) still uses it", dir, userID, user.ID, user.Name)
+			continue
+		}
+		if torrentlabels.OwnedBy(user.Labels, userID) {
+			logger.Warn("User %d tried to remove %s, which their torrent %d in another category uses", userID, dir, user.ID)
+			http.Error(w, `{"error": "this data is still used by another of your torrents; remove that torrent first"}`, http.StatusConflict)
+			return
+		}
+		logger.Warn("User %d tried to remove data of torrent %d (%s [%s]) owned by someone else", userID, user.ID, name, category)
 		http.Error(w, `{"error": "this data belongs to another user's torrent"}`, http.StatusForbidden)
 		return
 	}
@@ -739,27 +751,8 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		}
 	}
 
-	// Delete files from filesystem. An item of a real category may have data
-	// in two places: {DownloadPath}/{category}/{name} once complete, and
-	// {IncompletePath}/{name} while still downloading (MergeItems shows both
-	// under the real category). Orphaned items of the virtual "incomplete"
-	// category live only in the incomplete directory.
-	bases := []string{filepath.Join(app.config.DownloadPath, category), app.config.IncompletePath}
-	if category == media.IncompleteCategory {
-		bases = []string{app.config.IncompletePath}
-	}
 	found := false
-	for _, base := range bases {
-		if base == "" {
-			continue
-		}
-		dir := filepath.Clean(filepath.Join(base, name))
-		absBase, _ := filepath.Abs(base)
-		absDir, _ := filepath.Abs(dir)
-		if !strings.HasPrefix(absDir, absBase+string(filepath.Separator)) {
-			http.Error(w, `{"error": "invalid item path"}`, http.StatusBadRequest)
-			return
-		}
+	for _, dir := range toDelete {
 		if _, statErr := os.Lstat(dir); os.IsNotExist(statErr) {
 			continue
 		}
@@ -784,6 +777,36 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	// Jellyfin/ABS must not turn the deletion into a client-side failure.
 	// Both clients log their own failures.
 	go app.refreshLibraries()
+}
+
+// torrentUsing returns a torrent, other than those in except, whose data is
+// in dir: {downloadDir}/{name} (downloadDir defaults to the category folder
+// of its label when Transmission does not report one), or
+// {IncompletePath}/{name} while it is not complete. Transmission and the webapp see the same paths (the compose
+// file mounts the downloads at /downloads in both).
+func (app *App) torrentUsing(torrents, except []*transmission.Torrent, dir string) *transmission.Torrent {
+	dir = filepath.Clean(dir)
+	for _, t := range torrents {
+		if t.Name == "" || slices.Contains(except, t) {
+			continue
+		}
+		downloadDir := t.DownloadDir
+		if downloadDir == "" {
+			// Not reported: assume the bot's layout, {DownloadPath}/{category}.
+			category := "others"
+			if len(t.Labels) >= 2 {
+				category = t.Labels[1]
+			}
+			downloadDir = filepath.Join(app.config.DownloadPath, category)
+		}
+		if filepath.Clean(filepath.Join(downloadDir, t.Name)) == dir {
+			return t
+		}
+		if t.PercentDone < 1 && app.config.IncompletePath != "" && filepath.Clean(filepath.Join(app.config.IncompletePath, t.Name)) == dir {
+			return t
+		}
+	}
+	return nil
 }
 
 func (app *App) refreshLibraries() {
