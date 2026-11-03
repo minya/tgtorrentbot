@@ -105,10 +105,7 @@ func main() {
 		mux.Handle("/", srv.jwtAuth(mcpHandler))
 
 		logger.Info("starting MCP HTTP server on %s (OAuth 2.1)", addr)
-		httpSrv := &http.Server{
-			Addr:    addr,
-			Handler: accessLog(corsMiddleware(mux)),
-		}
+		httpSrv := newHTTPServer(addr, accessLog(corsMiddleware(mux)))
 		// On SIGTERM, let in-flight tool calls finish (move_media removes the
 		// torrent, then renames) before exiting.
 		if err := graceful.Serve(httpSrv, nil); err != nil {
@@ -143,6 +140,25 @@ func stdinIsDevNull() bool {
 		return false
 	}
 	return os.SameFile(in, null)
+}
+
+// readHeaderTimeout bounds how long a client may take to send its request
+// headers; a variable so tests can shorten it.
+var readHeaderTimeout = 10 * time.Second
+
+// newHTTPServer builds the MCP HTTP server. Slow or incomplete headers and
+// idle keep-alive connections are cut off, so nothing on the network can hold
+// connections and goroutines open indefinitely. There is deliberately no
+// ReadTimeout or WriteTimeout: Streamable HTTP keeps SSE responses open for
+// as long as a session lasts, and both would cut those streams off.
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+	}
 }
 
 // jwtAuth verifies Bearer access tokens on MCP requests. On failure, returns
