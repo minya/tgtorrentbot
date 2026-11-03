@@ -39,7 +39,7 @@ func (factory *DownloadMagnetWithCategoryCommandFactory) Accepts(upd *telegram.U
 
 	magnetURI, ok := factory.FileIDLookup.Get(memID)
 	if !ok {
-		return true, &expiredFileButtonCommand{Env: factory.Env}
+		return true, &expiredFileButtonCommand{Text: expiredMagnetText, Env: factory.Env}
 	}
 
 	return true, &DownloadMagnetWithCategoryCommand{

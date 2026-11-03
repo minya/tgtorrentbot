@@ -41,7 +41,7 @@ func (factory *DownloadFileWithCategoryCommandFactory) Accepts(upd *telegram.Upd
 
 	fileID, ok := factory.FileIDLookup.Get(memFileID)
 	if !ok {
-		return true, &expiredFileButtonCommand{Env: factory.Env}
+		return true, &expiredFileButtonCommand{Text: expiredFileText, Env: factory.Env}
 	}
 
 	return true, &DownloadFileWithCategoryCommand{
@@ -51,19 +51,26 @@ func (factory *DownloadFileWithCategoryCommandFactory) Accepts(upd *telegram.Upd
 	}
 }
 
+// expiredFileButtonCommand answers a category button whose lookup entry is
+// gone (the bot restarted, or the entry aged out). Text says what to send
+// again, which differs between the file and the magnet flow.
 type expiredFileButtonCommand struct {
+	Text string
 	environment.Env
 }
 
+const (
+	expiredFileText   = "This button has expired. Please upload the .torrent file again."
+	expiredMagnetText = "This button has expired. Please send the magnet link again."
+)
+
 func (cmd *expiredFileButtonCommand) Handle(ctx context.Context, upd *telegram.Update) error {
 	AnswerCallbackQuery(ctx, upd, cmd.TgApi)
-	chatID := upd.CallbackQuery.Message.Chat.ID
-	logger.Warn("File ID lookup expired or missing for callback %q", upd.CallbackQuery.Data)
-	_, err := cmd.TgApi.SendMessage(ctx, telegram.SendMessageParams{
-		ChatID: chatID,
-		Text:   "Кнопка устарела. Пожалуйста, загрузите файл заново.",
+	logger.Warn("Lookup entry expired or missing for callback %q", upd.CallbackQuery.Data)
+	return SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
+		ChatID: upd.CallbackQuery.Message.Chat.ID,
+		Text:   cmd.Text,
 	})
-	return err
 }
 
 func (cmd *DownloadFileWithCategoryCommand) Handle(ctx context.Context, upd *telegram.Update) error {
