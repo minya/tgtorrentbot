@@ -37,12 +37,15 @@ func TestFetchLibrariesCancelsHungRequests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	jf, abs := FetchLibraries(ctx, NewJellyfinClient(jfURL, "k"), NewAudiobookshelfClient(absURL, "k"))
+	jf, abs, errs := FetchLibraries(ctx, NewJellyfinClient(jfURL, "k"), NewAudiobookshelfClient(absURL, "k"))
 	if took := time.Since(start); took > 2*time.Second {
 		t.Fatalf("FetchLibraries took %s after a 200 ms deadline", took)
 	}
 	if jf != nil || abs != nil {
 		t.Fatalf("got items from hung servers: %v %v", jf, abs)
+	}
+	if len(errs) != 2 {
+		t.Fatalf("errs = %v, want one per source", errs)
 	}
 
 	deadline := time.Now().Add(2 * time.Second)

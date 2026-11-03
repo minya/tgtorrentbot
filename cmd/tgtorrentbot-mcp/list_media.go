@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"github.com/minya/logger"
 	"io/fs"
 	"path/filepath"
 	"sort"
@@ -52,6 +54,10 @@ type listMediaItem struct {
 type listMediaOutput struct {
 	Items          []listMediaItem `json:"items"`
 	FilesTruncated bool            `json:"files_truncated,omitempty"`
+	// Warnings names every source that could not be read, so a missing
+	// "torrent", "jellyfin" or "audiobookshelf" source on an item is not
+	// mistaken for "that service does not know this item".
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // listMediaSourceTimeout bounds how long list_media waits for Jellyfin and
@@ -60,11 +66,20 @@ var listMediaSourceTimeout = 15 * time.Second
 
 func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listMediaInput) (*mcp.CallToolResult, listMediaOutput, error) {
 	// Torrents (optional — runs without transmission).
+	// Every source is optional: one that fails is skipped and reported in
+	// warnings, so the rest of the library stays listable (e.g. paths for
+	// read_tags or move_media while Transmission is stopped).
+	var warnings []string
+	warn := func(msg string) {
+		logger.Warn("list_media: %s", msg)
+		warnings = append(warnings, msg)
+	}
+
 	var torrents []mcplib.TorrentInfo
 	if s.trans != nil {
 		rawTorrents, err := s.trans.GetTorrents()
 		if err != nil {
-			return formatError("failed to fetch torrents: %v", err), listMediaOutput{}, nil
+			warn(fmt.Sprintf("transmission unavailable, torrents not listed: %v", err))
 		}
 		for _, t := range rawTorrents {
 			category := "others"
@@ -86,24 +101,33 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 	fsItems := make(map[string][]mcplib.FsItem)
 	for _, cat := range knownCategories {
 		items, err := s.scan.ScanCategory(cat)
-		if err == nil && len(items) > 0 {
+		if err != nil {
+			warn(fmt.Sprintf("cannot read the %s directory: %v", cat, err))
+		}
+		if len(items) > 0 {
 			fsItems[cat] = items
 		}
 	}
-	incompleteItems, _ := s.scan.ScanIncomplete()
+	incompleteItems, err := s.scan.ScanIncomplete()
+	if err != nil {
+		warn(fmt.Sprintf("cannot read the incomplete directory: %v", err))
+	}
 
 	// Jellyfin + Audiobookshelf: optional, fetched concurrently and bounded
 	// so a hung server cannot hold the tool call (or keep running after it).
 	srcCtx, cancel := context.WithTimeout(ctx, listMediaSourceTimeout)
-	jfItems, absItems := mcplib.FetchLibraries(srcCtx, s.jf, s.abs)
+	jfItems, absItems, srcErrs := mcplib.FetchLibraries(srcCtx, s.jf, s.abs)
 	cancel()
+	for _, err := range srcErrs {
+		warnings = append(warnings, err.Error()+"; its source is missing from every item") // already logged
+	}
 
 	merged := mcplib.MergeItems(torrents, fsItems, incompleteItems, jfItems, absItems)
 
 	wantCat := strings.ToLower(strings.TrimSpace(in.Category))
 	wantQuery := strings.ToLower(strings.TrimSpace(in.Query))
 
-	out := listMediaOutput{Items: make([]listMediaItem, 0, len(merged))}
+	out := listMediaOutput{Items: make([]listMediaItem, 0, len(merged)), Warnings: warnings}
 	for _, item := range merged {
 		if wantCat != "" && item.Category != wantCat {
 			continue

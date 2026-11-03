@@ -205,7 +205,11 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"use them to find recently added items; torrent_id is NOT a recency " +
 			"signal. Set recursive=true to also list every file inside each item " +
 			"(e.g. the episodes of a show) with path/size/mtime; narrow with " +
-			"category/query, since output is capped (files_truncated=true when hit).",
+			"category/query, since output is capped (files_truncated=true when hit). " +
+			"If a source could not be read (Transmission, Jellyfin or Audiobookshelf " +
+			"down, a directory unreadable), 'warnings' says so: then a missing " +
+			"source on an item means nothing, so do not conclude an item is unknown " +
+			"to that service.",
 	}, s.listMedia)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{

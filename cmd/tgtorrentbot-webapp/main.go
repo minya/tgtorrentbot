@@ -508,7 +508,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 	// concurrently under a deadline and skipped when they don't answer in
 	// time, rather than holding the whole response past WriteTimeout.
 	srcCtx, cancel := context.WithTimeout(r.Context(), optionalSourceTimeout)
-	jellyfinItems, absItems := media.FetchLibraries(srcCtx, app.jellyfinClient, app.audiobookshelfClient)
+	jellyfinItems, absItems, _ := media.FetchLibraries(srcCtx, app.jellyfinClient, app.audiobookshelfClient) // failures are logged
 	cancel()
 
 	// 5. Merge and return.
