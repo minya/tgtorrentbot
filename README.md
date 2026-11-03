@@ -76,7 +76,7 @@ All endpoints require `X-Telegram-Init-Data` header with valid Telegram HMAC:
 
 ## Configuration
 
-Settings are loaded from environment variables or a JSON file (`settings.json` by default). The two sources are mutually exclusive: if all required environment variables are present, they are used and the file is ignored; otherwise the file is used.
+Settings are loaded from environment variables or a JSON file (`settings.json` by default), never a mix: if any required `TGT_*` variable is set, the environment is used exclusively and must be complete (a missing variable is a startup error); otherwise the file is used. The file is read as plain JSON, so 1Password `op://` references in it must be resolved first (`op inject -i settings.json -o settings.resolved.json`); unresolved ones are refused at startup.
 
 ### Environment Variables
 
@@ -165,7 +165,8 @@ make mcp-image       # tgtorrentbot-mcp_img only
 ### Locally
 
 ```bash
-go run ./cmd/tgtorrentbot -settings settings.json -log-level info
+op inject -i settings.json -o settings.resolved.json   # if it holds op:// references
+go run ./cmd/tgtorrentbot -settings settings.resolved.json -log-level info
 ```
 
 > **Note:** The bot listens on port 80. On Linux/macOS this requires either running as root, granting `CAP_NET_BIND_SERVICE`, or using a port forwarder (e.g. `sudo sysctl net.ipv4.ip_unprivileged_port_start=80`).

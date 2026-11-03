@@ -1,4 +1,5 @@
 settings.json
+settings.resolved.json
 .env
 .env.resolved
 /tgtorrentbot

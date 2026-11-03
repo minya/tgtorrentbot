@@ -64,3 +64,14 @@ func TestSettingsEnvStillValidated(t *testing.T) {
 		t.Fatalf("err = %v, want missing TGT_WEBHOOKURL and TGT_ALLOWED_USERS", err)
 	}
 }
+
+// F56: an op:// reference left in the settings file is refused, not used
+// literally as the bot token.
+func TestSettingsFileRejectsUnresolvedOpReferences(t *testing.T) {
+	clearTGTEnv(t)
+	body := strings.Replace(fullSettingsJSON, `"botToken": "tok"`, `"botToken": "op://Private/tgbot/token"`, 1)
+	_, err := ReadSettings(writeSettings(t, body))
+	if err == nil || !strings.Contains(err.Error(), "botToken") || !strings.Contains(err.Error(), "op inject") {
+		t.Fatalf("err = %v, want botToken flagged as an unresolved 1Password reference", err)
+	}
+}

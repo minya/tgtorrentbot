@@ -136,6 +136,10 @@ func validateSettings(s Settings) []string {
 	} {
 		if strings.TrimSpace(f.value) == "" {
 			problems = append(problems, f.name+" is not set")
+		} else if strings.HasPrefix(f.value, "op://") {
+			// The settings file is read as plain JSON; a 1Password
+			// reference would be used literally, e.g. as the bot token.
+			problems = append(problems, f.name+" is an unresolved 1Password reference; resolve the file with `op inject` first")
 		}
 	}
 	if len(s.AllowedUsers) == 0 {

@@ -29,8 +29,9 @@ docker-buildx build --tag tgtorrentbot-mcp_img -f Dockerfile.mcp .
 
 ### Run locally
 ```bash
-# Requires settings.json or environment variables
-go run ./cmd/tgtorrentbot -settings settings.json -log-level info
+# Requires a resolved settings file or environment variables (see Configuration)
+op inject -i settings.json -o settings.resolved.json
+go run ./cmd/tgtorrentbot -settings settings.resolved.json -log-level info
 ```
 
 ### Git hooks
@@ -51,9 +52,9 @@ go test -v ./...
 
 ## Configuration
 
-The bot can be configured via environment variables or a JSON settings file. Settings are read in priority order:
-1. Environment variables (see `read_settings.go:28`)
-2. Settings file (default: `settings.json`)
+The bot is configured either by environment variables or by a JSON settings file, never a mix (`ReadSettings` in `cmd/tgtorrentbot/read_settings.go`):
+- If any **required** `TGT_*` variable is set, the environment is used exclusively and must be complete; the file is ignored and a missing variable is a startup error.
+- Otherwise the settings file (default `settings.json`, `-settings` flag) is used, and optional variables such as `TGT_LOGLEVEL` and `TGT_WEBAPP_URL` are ignored.
 
 ### Required environment variables:
 - `TGT_BOTTOKEN` - Telegram bot token
@@ -83,7 +84,7 @@ The webapp requires `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (
 - `TGT_MCP_REDIRECT_HOSTS` - MCP server only, optional. Comma-separated hosts allowed as OAuth redirect targets (e.g. `claude.ai,claude.com`); loopback is always allowed. When set, `/register` and `/authorize` refuse any other host, which blocks consent phishing through self-registered clients. Unset → any https host
 - `TGT_MCP_JWT_SECRET` - MCP server only, optional. Extra key material for the JWT signing secret, which is SHA-256 of a label plus `TGT_MCP_TOKEN` when unset and HMAC-SHA256(`TGT_MCP_JWT_SECRET`, label plus `TGT_MCP_TOKEN`) when set (`deriveJWTSecret` in `config.go`). Rotate it to invalidate every outstanding access+refresh token without changing the login secret; rotating `TGT_MCP_TOKEN` invalidates them too
 
-Settings file uses 1Password secret references (e.g., `op://Private/...`).
+The local `settings.json` (git-ignored) holds 1Password secret references (e.g., `op://Private/...`). The bot reads the file as plain JSON and does not resolve them (`op run` resolves only environment variables), so resolve it first: `op inject -i settings.json -o settings.resolved.json && go run ./cmd/tgtorrentbot -settings settings.resolved.json`. A value still starting with `op://` is refused at startup.
 
 Both sources go through the same `validateSettings` (`cmd/tgtorrentbot/read_settings.go`): every required value must be set in the settings file too, under its JSON key (`botToken`, `webHookURL`, `downloadPath`, `transmissionRPC.{address,user,password}`, `rutrackerConfig.{username,password}`, `allowedUsers`). An empty `webHookURL` would make `setWebhook` deregister the webhook, so the bot refuses to start instead.
 
