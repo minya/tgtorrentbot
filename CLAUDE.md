@@ -334,8 +334,8 @@ Logs go to **stderr**, not stdout — stdout is reserved for MCP JSON-RPC framin
   - `DELETE /api/items/{id}` — "Remove data": removes the user's torrent for the item, if any (data kept by Transmission), then deletes its data from `{DownloadPath}/{category}/{name}` and `{IncompletePath}/{name}`. `{id}` is `base64url("{category}:{name}")`; the virtual `incomplete` category maps to the incomplete dir only. Filesystem items are shared between allowed users (`/api/items` lists every user's on-disk data), so any of them may delete filesystem-only data, but data that another user's torrent still uses (same name and category, `findOtherUsersTorrent`) is refused with 403
   - `DELETE /api/items/{id}/torrent[?torrentId=N]` — "Remove torrent": removes only the user's torrent (the one with id N when several share the name), files stay
   - `GET /api/torrents` — lists the requesting user's torrents (by owner label) with category, sorted by ID descending
-  - `POST /api/torrents/download` — downloads from Rutracker and adds to Transmission; body: `{"downloadUrl":"...","category":"..."}`
-  - `GET /api/search?q=<query>` — searches Rutracker, returns up to 20 results sorted by seeders
+  - `POST /api/torrents/download` — downloads from Rutracker and adds to Transmission; body: `{"downloadUrl":"dl.php?t=N","category":"..."}` (only that relative form is accepted). Rutracker gets `rutrackerBudget` (40 s) and the response's write deadline is extended to 3 min, since the add and label RPCs can follow, so a slow add is never reported as a failure after it happened
+  - `GET /api/search?q=<query>` — searches Rutracker (login and search within `rutrackerBudget`, under the 60 s WriteTimeout), returns up to 20 results sorted by seeders
   - `GET /api/ws` — WebSocket of live torrent progress for the user. Browsers cannot set headers on a WebSocket, so the init data travels as the subprotocol `tg-auth.<base64url(initData)>` (`websocket.go`)
   - `GET /categories.js` — unauthenticated, the category list for the frontend (see Category System)
 

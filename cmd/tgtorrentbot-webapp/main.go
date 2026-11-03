@@ -308,7 +308,26 @@ func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// rutrackerBudget bounds the rutracker part of a request (a fresh login,
+// then the search or the .torrent fetch).
+const rutrackerBudget = 40 * time.Second
+
+// slowRouteWriteTimeout replaces the server's 60 s WriteTimeout for the
+// routes that talk to rutracker: their worst case (rutrackerBudget, then
+// Transmission's add and label calls of up to 30 s each) is longer, and a
+// response cut off at 60 s would report a failure for a torrent that was
+// in fact added.
+const slowRouteWriteTimeout = 3 * time.Minute
+
+// extendWriteDeadline gives this response until d from now to be written.
+func extendWriteDeadline(w http.ResponseWriter, d time.Duration) {
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(d)); err != nil {
+		logger.Warn("Cannot extend the write deadline: %v", err)
+	}
+}
+
 func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *http.Request) {
+	extendWriteDeadline(w, slowRouteWriteTimeout)
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	var req DownloadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -345,8 +364,10 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		return
 	}
 
+	rtCtx, cancel := context.WithTimeout(r.Context(), rutrackerBudget)
+	defer cancel()
 	client, err := rutracker.NewAuthenticatedRutrackerClientContext(
-		r.Context(),
+		rtCtx,
 		app.config.RutrackerUsername,
 		app.config.RutrackerPassword,
 		rutracker.WithTimeout(30*time.Second),
@@ -357,7 +378,7 @@ func (app *App) handleDownloadTorrent(userID int64, w http.ResponseWriter, r *ht
 		return
 	}
 
-	torrentData, err := client.DownloadTorrentContext(r.Context(), req.DownloadURL)
+	torrentData, err := client.DownloadTorrentContext(rtCtx, req.DownloadURL)
 	if err != nil {
 		logger.Error(err, "Failed to download torrent")
 		http.Error(w, `{"error": "failed to download torrent"}`, http.StatusInternalServerError)
@@ -417,8 +438,13 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Login plus search fit in rutrackerBudget, below the server's 60 s
+	// WriteTimeout, so a slow rutracker gets an error response, not a
+	// dropped connection.
+	rtCtx, cancel := context.WithTimeout(r.Context(), rutrackerBudget)
+	defer cancel()
 	client, err := rutracker.NewAuthenticatedRutrackerClientContext(
-		r.Context(),
+		rtCtx,
 		app.config.RutrackerUsername,
 		app.config.RutrackerPassword,
 		rutracker.WithTimeout(30*time.Second),
@@ -430,7 +456,7 @@ func (app *App) handleSearch(userID int64, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	items, err := client.FindContext(r.Context(), query)
+	items, err := client.FindContext(rtCtx, query)
 	if err != nil {
 		logger.Error(err, "Failed to search rutracker")
 		http.Error(w, `{"error": "search failed"}`, http.StatusInternalServerError)
