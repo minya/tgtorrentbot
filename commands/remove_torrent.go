@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strconv"
 
@@ -53,12 +54,22 @@ func (cmd *RemoveTorrentCommand) Handle(ctx context.Context, upd *telegram.Updat
 			torrents = append(torrents, torrent)
 		}
 	}
+	chatID := upd.Message.Chat.ID
+	// Never call RemoveTorrents with no torrents: the user would be told
+	// "Removed." for a mistyped id, and an empty id list is one step from
+	// a nil one, which Transmission reads as "all torrents".
+	if len(torrents) == 0 {
+		SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
+			Text:   fmt.Sprintf("No torrent with id %d.", cmd.TorrentID),
+			ChatID: chatID,
+		})
+		return nil
+	}
 	err = cmd.TransmissionClient.RemoveTorrents(torrents, true)
 	if err != nil {
 		logger.Error(err, "Error removing torrents")
 		return err
 	}
-	chatID := upd.Message.Chat.ID
 	SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 		Text:   "Removed.",
 		ChatID: chatID,
