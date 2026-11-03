@@ -523,15 +523,29 @@ func fixFields(decoder *encoding.Decoder, fields ...*string) bool {
 }
 
 // looksLikeCP1251Mojibake reports whether s looks like cp1251 bytes that
-// were decoded as Latin-1, so re-decoding it as cp1251 is safe. Such text
-// (Cyrillic words read as Latin-1) consists of runs of U+00C0–U+00FF letters
-// (cp1251 А–я), plus U+00A8/U+00B8 (Ё/ё), and outnumbers ASCII letters,
-// while correct Western text (Café, Déjà Vu, Beyoncé) has a few accented
-// letters among many ASCII ones. Any rune above U+00FF means the text is not
-// Latin-1-decoded at all. fix_encoding only rewrites values that pass this
-// check, so frames that are already correct survive.
+// were decoded as Latin-1, so re-decoding it as cp1251 is safe. It judges
+// each word (a run of letters): a Cyrillic word read as Latin-1 consists of
+// U+00C0–U+00FF letters only (cp1251 А–я, plus U+00A8/U+00B8 for Ё/ё),
+// while correct Western words (Café, Déjà, Beyoncé, Björk) always mix those
+// letters with ASCII ones. So s is mojibake when it has a word of two or
+// more such letters and no word that mixes them with ASCII letters; Latin
+// words beside the mojibake ("Pink Floyd - Ñòåíà", "Track 01 - Ãëàâà 1")
+// do not hide it. Any rune above U+00FF means s is not Latin-1-decoded at
+// all. fix_encoding only rewrites values that pass this check, so frames
+// that are already correct survive.
 func looksLikeCP1251Mojibake(s string) bool {
+	mojibakeWord := false
 	high, ascii := 0, 0
+	endWord := func() bool {
+		if high > 0 && ascii > 0 {
+			return false // a mixed word: correct accented Latin text
+		}
+		if high >= 2 {
+			mojibakeWord = true
+		}
+		high, ascii = 0, 0
+		return true
+	}
 	for _, r := range s {
 		switch {
 		case r > 0xFF:
@@ -540,9 +554,13 @@ func looksLikeCP1251Mojibake(s string) bool {
 			high++
 		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z':
 			ascii++
+		default:
+			if !endWord() {
+				return false
+			}
 		}
 	}
-	return high >= 2 && high > ascii
+	return endWord() && mojibakeWord
 }
 
 // reinterpretAsCP1251 takes a string that was decoded as Latin-1 (or similar)

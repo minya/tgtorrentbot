@@ -219,6 +219,7 @@ func TestFixEncodingKeepsCorrectFrames(t *testing.T) {
 		tag.SetArtist("Beyoncé")
 		tag.SetAlbum("Café del Mar")
 		tag.AddTextFrame(tag.CommonID("Composer"), id3v2.EncodingISO, "Ïðèâåò Ìèð")
+		tag.AddTextFrame(tag.CommonID("Band/Orchestra/Accompaniment"), id3v2.EncodingISO, "Pink Floyd - Ñòåíà")
 		tag.AddCommentFrame(id3v2.CommentFrame{Encoding: id3v2.EncodingUTF8, Language: "eng", Text: "Señor"})
 	})
 
@@ -237,6 +238,9 @@ func TestFixEncodingKeepsCorrectFrames(t *testing.T) {
 	}
 	if got := tag.GetTextFrame(tag.CommonID("Composer")).Text; got != "Привет Мир" {
 		t.Errorf("composer = %q, want %q (mojibake not repaired)", got, "Привет Мир")
+	}
+	if got := tag.GetTextFrame(tag.CommonID("Band/Orchestra/Accompaniment")).Text; got != "Pink Floyd - Стена" {
+		t.Errorf("album artist = %q, want %q (mixed-script mojibake not repaired)", got, "Pink Floyd - Стена")
 	}
 	if frames := tag.GetFrames(tag.CommonID("Comments")); len(frames) != 1 || frames[0].(id3v2.CommentFrame).Text != "Señor" {
 		t.Errorf("comment changed: %+v", frames)
@@ -260,6 +264,13 @@ func TestLooksLikeCP1251Mojibake(t *testing.T) {
 		"":                   false,
 		"ÏðèâåòĀ":            false,
 		"Motörhead - Ace of": false,
+		// F118: Latin words beside the mojibake do not hide it.
+		"Track 01 - Ãëàâà 1":          true, // Track 01 - Глава 1
+		"Pink Floyd - Ñòåíà":          true, // Pink Floyd - Стена
+		"Ëåâ Òîëñòîé - War and Peace": true, // Лев Толстой - War and Peace
+		"Áè-2 feat. Brainstorm":       true, // Би-2 feat. Brainstorm
+		"Jóga Björk":                  false,
+		"Ação 2 - Ãëàâà":              false, // a mixed word means the text is correct Latin-1
 	} {
 		if got := looksLikeCP1251Mojibake(s); got != want {
 			t.Errorf("looksLikeCP1251Mojibake(%q) = %v, want %v", s, got, want)

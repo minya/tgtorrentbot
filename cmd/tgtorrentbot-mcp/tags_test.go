@@ -44,6 +44,7 @@ func TestEncodingHint(t *testing.T) {
 		{"björk homogénic", []string{"Jóga", "Björk", "Homogénic"}, ""},
 		{"déjà vu beyoncé", []string{"Déjà Vu", "Beyoncé", "B'Day"}, ""},
 		{"one mojibake field among correct ones", []string{"Jóga", "Ãðóïïà Êèíî"}, "cp1251"},
+		{"mixed-script mojibake (F118)", []string{"Track 01 - Ãëàâà 1"}, "cp1251"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
