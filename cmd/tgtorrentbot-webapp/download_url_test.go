@@ -3,12 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-
-	"github.com/minya/rutracker"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/minya/rutracker"
 )
 
 // F84: only the relative dl.php?t=N form search results carry is accepted;
