@@ -1,7 +1,8 @@
 #!/bin/bash
-# Pin the sibling minya modules to their latest commits:
-#   logger   -> tgtorrentbot, telegram
-#   telegram -> tgtorrentbot
+# Pin the sibling minya modules to their latest commits, wherever a go.mod
+# requires them: logger and goutils into rutracker (and telegram, should it
+# require them again), then logger, goutils, rutracker and telegram into
+# tgtorrentbot. A module a go.mod does not require is skipped.
 # A module is pinned only at a commit that is clean and pushed, since the
 # Go proxy can only fetch what is on the remote. The script stops at the
 # first failure.
@@ -63,16 +64,38 @@ update_module() {
 
 cd "$(dirname "$0")"
 scriptdir="$(pwd)"
+libs="$scriptdir/.."
 
-update_module "$scriptdir" "logger" "$scriptdir/../logger"
-update_module "$scriptdir/../telegram" "logger" "$scriptdir/../logger"
+# requires <target_mod_path> <module_name>: whether the target's go.mod
+# requires the module (directly or as // indirect).
+requires() {
+    grep -Eq "github\.com/minya/$2 v[0-9]" "$1/go.mod"
+}
 
-# Pinning telegram here only picks up the logger bump once that bump is a
-# pushed telegram commit, so stop if the previous step changed telegram.
-if [ -n "$(git -C "$scriptdir/../telegram" status --porcelain -- go.mod go.sum)" ]; then
-    echo "telegram's go.mod changed. Commit and push telegram, then run this script again to pin it here." >&2
-    exit 1
-fi
-update_module "$scriptdir" "telegram" "$scriptdir/../telegram"
+# pin <target_mod_path> <module>...: pin each module the target requires.
+pin() {
+    local target="$1"; shift
+    local m
+    for m in "$@"; do
+        if requires "$target" "$m"; then
+            update_module "$target" "$m" "$libs/$m"
+        fi
+    done
+}
+
+# 1. Libraries that depend on other minya libraries. Today only rutracker
+#    does (goutils, logger); telegram, logger and goutils have none.
+for lib in rutracker telegram; do
+    pin "$libs/$lib" logger goutils
+    # A bumped library only reaches tgtorrentbot once that bump is a pushed
+    # commit, so stop here until it is.
+    if [ -n "$(git -C "$libs/$lib" status --porcelain -- go.mod go.sum)" ]; then
+        echo "$lib's go.mod changed. Commit and push $lib, then run this script again." >&2
+        exit 1
+    fi
+done
+
+# 2. tgtorrentbot itself.
+pin "$scriptdir" logger goutils rutracker telegram
 
 echo "Dependency updates complete!"
