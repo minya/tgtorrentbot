@@ -10,16 +10,23 @@ A Telegram bot for managing torrents via [Transmission](https://transmissionbt.c
 - **Remove** torrents (`/remove <id>`)
 - **Completion notifications** — bot messages you when a download finishes
 - **Telegram Mini App** — optional sidecar service that opens as a chat menu button inside Telegram; provides a full UI for searching, downloading, and managing torrents without leaving the app
-- **Unified media view** — the Mini App shows media items merged from Transmission, filesystem, and Jellyfin with source indicators (T/F/J); works without Jellyfin
+- **Unified media view** — the Mini App shows media items merged from Transmission, the filesystem, Jellyfin and Audiobookshelf with source indicators (T/F/J/A); works without Jellyfin and Audiobookshelf
+- **MCP server** — optional binary that exposes the media library to Claude (Claude Code over stdio, or the claude.ai connector over HTTP with OAuth) for fixing audiobook tags, renaming mis-identified shows and library cleanup
 
 ## Architecture
 
 ```
 cmd/tgtorrentbot/        — Telegram bot binary
 cmd/tgtorrentbot-webapp/ — Telegram Mini App sidecar binary (static assets embedded via go:embed)
+cmd/tgtorrentbot-mcp/    — MCP server binary for Claude (media library tools)
 commands/                — Bot command implementations
 environment/             — Shared Env struct (dependencies)
+internal/                — Shared internals: categories, torrent labels, media merging
+                           (Transmission, filesystem, Jellyfin, Audiobookshelf), the
+                           Transmission client, graceful shutdown
 ```
+
+[CLAUDE.md](CLAUDE.md) has the detailed architecture, every MCP tool and the OAuth flow.
 
 The bot uses a webhook-based update flow. Downloads are organized into category subdirectories under the configured download path. Transmission torrent labels store the originating chat ID and category for completion tracking.
 
@@ -59,11 +66,13 @@ All endpoints require `X-Telegram-Init-Data` header with valid Telegram HMAC:
 
 | Method | Endpoint | Description |
 |---|---|---|
+| GET | `/api/items` | Unified media items merged from Transmission, the filesystem, Jellyfin and Audiobookshelf |
+| DELETE | `/api/items/{id}` | Remove data: the user's torrent (if any) and the item's files |
+| DELETE | `/api/items/{id}/torrent` | Remove only the user's torrent; files stay |
 | GET | `/api/torrents` | List torrents belonging to the authenticated user, sorted by ID desc |
-| POST | `/api/torrents/remove?id=<n>` | Remove a torrent from Transmission (local data is kept) |
 | POST | `/api/torrents/download` | Add a torrent; body: `{"downloadUrl":"...","category":"..."}` |
 | GET | `/api/search?q=<query>` | Search Rutracker, returns up to 20 results |
-| GET | `/api/items` | Unified media items merged from Transmission, filesystem, and Jellyfin |
+| GET | `/api/ws` | WebSocket of live torrent progress (init data sent as the `tg-auth.<base64url>` subprotocol) |
 
 ## Configuration
 
@@ -86,7 +95,24 @@ Settings are loaded from environment variables or a JSON file (`settings.json` b
 | `TGT_WEBAPP_URL` | No | Mini App URL; registers it as the Telegram chat menu button |
 | `TGT_JELLYFIN_URL` | No | Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it |
 | `TGT_JELLYFIN_API_KEY` | No | Jellyfin API key (generated from Jellyfin admin dashboard) |
-| `TGT_INCOMPLETE_PATH` | No | Path to incomplete downloads directory; defaults to `{downloadPath}/../incomplete` |
+| `TGT_AUDIOBOOKSHELF_URL` | No | Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp and MCP work without it |
+| `TGT_AUDIOBOOKSHELF_API_KEY` | No | Audiobookshelf API token (Settings → Users → user → API Token) |
+| `TGT_INCOMPLETE_PATH` | No | Path to Transmission's incomplete downloads directory; defaults to `{downloadPath}/incomplete` |
+| `TGT_WEBHOOK_SECRET` | No | Bot only. Webhook `secret_token`; defaults to a value derived from the bot token |
+
+The bot needs every required variable. The webapp needs `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (plus the Transmission and Rutracker variables for the features that use them).
+
+#### MCP server
+
+The MCP server needs only `TGT_DOWNLOADPATH`; Transmission, Jellyfin and Audiobookshelf variables are optional and enable the matching tools.
+
+| Variable | Required | Description |
+|---|---|---|
+| `TGT_MCP_TOKEN` | No | When set, serve MCP over HTTP on `:8080` behind OAuth 2.1; it is the secret typed into the login form. Unset → stdio |
+| `TGT_MCP_PUBLIC_URL` | With `TGT_MCP_TOKEN` | Public HTTPS base URL, used as OAuth issuer and audience |
+| `TGT_MCP_REDIRECT_HOSTS` | No | Comma-separated hosts allowed as OAuth redirect targets (e.g. `claude.ai,claude.com`) |
+| `TGT_MCP_JWT_SECRET` | No | Extra key material for token signing; rotate it to revoke every token |
+| `TGT_AUDIOBOOKSHELF_LIBRARY_ID` | No | Default library for `abs_remove_issues` |
 
 ### Settings File (`settings.json`)
 
@@ -128,9 +154,10 @@ go build -o bin/ ./cmd/...
 ### Build Docker images
 
 ```bash
-make images          # both images
+make images          # all three images
 make bot-image       # tgtorrentbot_img only
 make webapp-image    # tgtorrentbot-webapp_img only
+make mcp-image       # tgtorrentbot-mcp_img only
 ```
 
 ## Running
@@ -154,8 +181,11 @@ docker compose up -d
 The compose stack includes:
 - `tgt-bot` — Telegram bot
 - `tgt-webapp` — Telegram Mini App sidecar
+- `tgt-mcp` — MCP server for Claude (HTTP + OAuth, needs `MCP_TOKEN` and `MCP_PUBLIC_URL`)
 - `tgt-transmission` — Transmission BitTorrent client
 - `tgt-jellyfin` — Jellyfin media server
+- `tgt-audiobookshelf` — Audiobookshelf audiobook server
+- `tgt-dufs` — dufs file server over the download directories
 - `tgt-cloudflare-tunnel` — Cloudflare tunnel for public access
 
 Compose environment variables:
@@ -171,6 +201,12 @@ Compose environment variables:
 | `TUNNEL_TOKEN` | Yes | Cloudflare tunnel token |
 | `WEBAPP_URL` | No | Mini App public URL; enables the chat menu button and Mini App sidecar |
 | `JELLYFIN_API_KEY` | No | Jellyfin API key; enables unified media items with Jellyfin source |
+| `AUDIOBOOKSHELF_API_KEY` | No | Audiobookshelf API token; enables the Audiobookshelf source and the MCP `abs_*` tools |
+| `MCP_TOKEN` | For `tgt-mcp` | MCP login secret; without it the `tgt-mcp` container exits with an error |
+| `MCP_PUBLIC_URL` | For `tgt-mcp` | Public HTTPS URL of the MCP server |
+| `DUFS_USER` | For `tgt-dufs` | dufs login user |
+| `DUFS_PASSWORD` | For `tgt-dufs` | dufs login password |
+| `LOGLEVEL` | No | Log level for the bot, webapp and MCP server (`info`, `debug`, …) |
 
 ## Testing
 
@@ -187,3 +223,5 @@ go test -v ./commands -run TestFunctionName
 - [`github.com/odwrtw/transmission`](https://github.com/odwrtw/transmission) — Transmission RPC client
 - [`github.com/minya/logger`](https://github.com/minya/logger) — Logging wrapper (zerolog)
 - [`github.com/minya/goutils`](https://github.com/minya/goutils) — HTTP utilities
+- [`github.com/modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) — MCP server SDK
+- [`github.com/bogem/id3v2`](https://github.com/bogem/id3v2) — ID3 tags for the MCP tag tools
