@@ -953,7 +953,7 @@
             if (hasTorrent || hasFs) {
                 let menuItems = '';
                 if (hasTorrent) {
-                    menuItems += `<button type="button" role="menuitem" class="popup-menu-item" onclick="event.stopPropagation(); removeItemTorrent('${escapeAttr(itemId)}', this)">Remove torrent</button>`;
+                    menuItems += `<button type="button" role="menuitem" class="popup-menu-item" onclick="event.stopPropagation(); removeItemTorrent('${escapeAttr(itemId)}', ${Number(item.torrentId) || 0}, this)">Remove torrent</button>`;
                 }
                 menuItems += `<button type="button" role="menuitem" class="popup-menu-item popup-menu-item--danger" onclick="event.stopPropagation(); removeItemData('${escapeAttr(itemId)}', this)">Remove data</button>`;
                 menuHtml = `<div class="more-wrap"><button type="button" class="more-btn" onclick="togglePopupMenu(event, this)" aria-label="More actions" aria-haspopup="menu" aria-expanded="false">&#8942;</button><div class="popup-menu" role="menu">${menuItems}</div></div>`;
@@ -1578,13 +1578,16 @@
             }, 300);
         }
 
-        async function removeItemTorrent(itemId, btn) {
+        // torrentId picks the right torrent when several share a name and
+        // category (each is shown as its own item).
+        async function removeItemTorrent(itemId, torrentId, btn) {
             closeAllPopupMenus();
             tg.showConfirm('Remove torrent? Files will be kept.', async function(confirmed) {
                 if (!confirmed) return;
                 setItemBusy(itemId, btn, true);
                 try {
-                    const response = await doFetch('/api/items/' + encodeURIComponent(itemId) + '/torrent', { method: 'DELETE' });
+                    const query = torrentId ? '?torrentId=' + encodeURIComponent(torrentId) : '';
+                    const response = await doFetch('/api/items/' + encodeURIComponent(itemId) + '/torrent' + query, { method: 'DELETE' });
                     if (response.ok) {
                         refreshAfterRemove(itemId);
                     } else {

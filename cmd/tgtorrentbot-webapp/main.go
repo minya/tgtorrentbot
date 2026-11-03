@@ -540,12 +540,13 @@ func decodeItemID(encoded string) (category, name string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// findUserTorrent finds a Transmission torrent owned by userID with the given name and category.
-func (app *App) findUserTorrent(userID int64, category, name string) (*transmission.Torrent, error) {
+// findUserTorrents finds a Transmission torrent owned by userID with the given name and category.
+func (app *App) findUserTorrents(userID int64, category, name string) ([]*transmission.Torrent, error) {
 	torrents, err := app.transmissionClient.GetTorrents()
 	if err != nil {
 		return nil, err
 	}
+	var mine []*transmission.Torrent
 	for _, t := range torrents {
 		if t.Name != name || !torrentlabels.OwnedBy(t.Labels, userID) {
 			continue
@@ -556,10 +557,10 @@ func (app *App) findUserTorrent(userID int64, category, name string) (*transmiss
 			torrentCategory = t.Labels[1]
 		}
 		if torrentCategory == category {
-			return t, nil
+			mine = append(mine, t)
 		}
 	}
-	return nil, nil
+	return mine, nil
 }
 
 // findOtherUsersTorrent returns a torrent named name that is not userID's and
@@ -624,19 +625,29 @@ func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Re
 	}
 
 	if torrentOnly {
-		app.handleRemoveItemTorrent(userID, w, category, name)
+		// torrentId picks one of several torrents with the same name and
+		// category (each is its own item); without it the first is removed.
+		torrentID, _ := strconv.Atoi(r.URL.Query().Get("torrentId"))
+		app.handleRemoveItemTorrent(userID, w, category, name, torrentID)
 	} else {
 		app.handleRemoveItemData(userID, w, category, name)
 	}
 }
 
 // handleRemoveItemTorrent removes a torrent without deleting data files.
-func (app *App) handleRemoveItemTorrent(userID int64, w http.ResponseWriter, category, name string) {
-	torrent, err := app.findUserTorrent(userID, category, name)
+func (app *App) handleRemoveItemTorrent(userID int64, w http.ResponseWriter, category, name string, torrentID int) {
+	mine, err := app.findUserTorrents(userID, category, name)
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
 		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
 		return
+	}
+	var torrent *transmission.Torrent
+	for _, t := range mine {
+		if torrentID == 0 || t.ID == torrentID {
+			torrent = t
+			break
+		}
 	}
 	if torrent == nil {
 		http.Error(w, `{"error": "torrent not found"}`, http.StatusNotFound)
@@ -658,8 +669,10 @@ func (app *App) handleRemoveItemTorrent(userID int64, w http.ResponseWriter, cat
 
 // handleRemoveItemData removes data files and the associated torrent (if any).
 func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, category, name string) {
-	// Remove torrent record first (without deleteData — we handle files ourselves).
-	torrent, err := app.findUserTorrent(userID, category, name)
+	// Remove the torrent records first (without deleteData — we handle files
+	// ourselves): every torrent of this user with this name and category,
+	// since they all use the folder about to be deleted.
+	mine, err := app.findUserTorrents(userID, category, name)
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
 		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
@@ -669,28 +682,27 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	// Filesystem items are shared between allowed users, but data that
 	// another user's torrent still uses is theirs: deleting it would leave
 	// their torrent pointing at vanished files.
-	if torrent == nil {
-		other, err := app.findOtherUsersTorrent(userID, category, name)
-		if err != nil {
-			logger.Error(err, "Failed to get torrents")
-			http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
-			return
-		}
-		if other != nil {
-			logger.Warn("User %d tried to remove data of torrent %d (%s [%s]) owned by someone else", userID, other.ID, name, category)
-			http.Error(w, `{"error": "this data belongs to another user's torrent"}`, http.StatusForbidden)
-			return
-		}
+	other, err := app.findOtherUsersTorrent(userID, category, name)
+	if err != nil {
+		logger.Error(err, "Failed to get torrents")
+		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
+		return
+	}
+	if other != nil {
+		logger.Warn("User %d tried to remove data of torrent %d (%s [%s]) owned by someone else", userID, other.ID, name, category)
+		http.Error(w, `{"error": "this data belongs to another user's torrent"}`, http.StatusForbidden)
+		return
 	}
 
-	if torrent != nil {
-		err = app.transmissionClient.RemoveTorrents([]*transmission.Torrent{torrent}, false)
-		if err != nil {
+	if len(mine) > 0 {
+		if err := app.transmissionClient.RemoveTorrents(mine, false); err != nil {
 			logger.Error(err, "Failed to remove torrent")
 			http.Error(w, `{"error": "failed to remove torrent"}`, http.StatusInternalServerError)
 			return
 		}
-		logger.Info("Removed torrent %d: %s [%s] for user %d", torrent.ID, name, category, userID)
+		for _, t := range mine {
+			logger.Info("Removed torrent %d: %s [%s] for user %d", t.ID, name, category, userID)
+		}
 	}
 
 	// Delete files from filesystem. An item of a real category may have data
@@ -725,7 +737,7 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		}
 		logger.Info("Removed data: %s for user %d", dir, userID)
 	}
-	if !found && torrent == nil {
+	if !found && len(mine) == 0 {
 		http.Error(w, `{"error": "item not found"}`, http.StatusNotFound)
 		return
 	}

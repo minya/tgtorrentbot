@@ -237,3 +237,53 @@ func TestRemoveDataRejectsTraversalNames(t *testing.T) {
 		t.Fatal("traversal deleted data outside the category")
 	}
 }
+
+func deleteTorrentOnly(app *App, userID int64, category, name, query string) *httptest.ResponseRecorder {
+	id := base64.URLEncoding.EncodeToString([]byte(category + ":" + name))
+	rec := httptest.NewRecorder()
+	app.handleItemDelete(userID, rec, httptest.NewRequest(http.MethodDelete, "/api/items/"+id+"/torrent"+query, nil))
+	return rec
+}
+
+// F79: with two torrents of the same name, "Remove torrent" removes the one
+// whose id the item carries.
+func TestRemoveTorrentByIDAmongSameNamed(t *testing.T) {
+	var removedIDs []int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var req struct {
+			Method    string
+			Arguments struct{ IDs []int }
+		}
+		_ = json.Unmarshal(b, &req)
+		if req.Method == "torrent-remove" {
+			removedIDs = append(removedIDs, req.Arguments.IDs...)
+			w.Write([]byte(`{"result":"success","arguments":{}}`))
+			return
+		}
+		w.Write([]byte(`{"result":"success","arguments":{"torrents":[` +
+			`{"id":1,"name":"Movie","labels":["42","movies","42"]},` +
+			`{"id":2,"name":"Movie","labels":["42","movies","42"]}]}}`))
+	}))
+	defer ts.Close()
+	app, _, _, _ := newDeleteTestApp(t, `[]`)
+	tc, _ := transmission.New(transmission.Config{Address: ts.URL})
+	app.transmissionClient = tc
+
+	if rec := deleteTorrentOnly(app, 42, "movies", "Movie", "?torrentId=2"); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if len(removedIDs) != 1 || removedIDs[0] != 2 {
+		t.Fatalf("removed %v, want only torrent 2", removedIDs)
+	}
+
+	// Remove data untracks every torrent using the folder.
+	removedIDs = nil
+	mustWriteFile(t, filepath.Join(app.config.DownloadPath, "movies", "Movie", "a.mkv"))
+	if rec := deleteItem(app, 42, "movies", "Movie"); rec.Code != http.StatusOK {
+		t.Fatalf("remove data: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if len(removedIDs) != 2 {
+		t.Fatalf("remove data removed %v, want both torrents", removedIDs)
+	}
+}

@@ -290,3 +290,35 @@ func TestMergeItems_NoModTimeWithoutFilesystem(t *testing.T) {
 		t.Errorf("expected nil mtime for torrent-only item, got %v", *result[0].ModTime)
 	}
 }
+
+// F79: two torrents with the same name and category stay two items, each
+// with its own id; the folder merges into the first.
+func TestMergeItems_SameNameTorrentsStaySeparate(t *testing.T) {
+	torrents := []TorrentInfo{
+		{ID: 1, Name: "Movie (2020)", Category: "movies", PercentDone: 100},
+		{ID: 2, Name: "Movie (2020)", Category: "movies", PercentDone: 40},
+	}
+	fs := map[string][]FsItem{"movies": {{Name: "Movie (2020)", Size: 10}}}
+	items := MergeItems(torrents, fs, []FsItem{{Name: "Movie (2020)"}}, []JellyfinItem{{Name: "Movie (2020)", Category: "movies"}}, nil)
+
+	if len(items) != 2 {
+		t.Fatalf("got %d items, want 2: %+v", len(items), items)
+	}
+	ids := map[int]UnifiedItem{}
+	for _, it := range items {
+		if it.TorrentID == nil {
+			t.Fatalf("item without torrent id: %+v", it)
+		}
+		ids[*it.TorrentID] = it
+	}
+	if *ids[1].PercentDone != 100 || *ids[2].PercentDone != 40 {
+		t.Errorf("progress mixed up: 1=%v 2=%v", *ids[1].PercentDone, *ids[2].PercentDone)
+	}
+	first := ids[1]
+	if !slices.Contains(first.Sources, "filesystem") || !slices.Contains(first.Sources, "jellyfin") || !first.IsIncomplete {
+		t.Errorf("first entry sources = %v incomplete=%v, want the folder, Jellyfin and incomplete data merged into it", first.Sources, first.IsIncomplete)
+	}
+	if got := ids[2].Sources; len(got) != 1 || got[0] != "torrent" {
+		t.Errorf("second entry sources = %v, want torrent only", got)
+	}
+}

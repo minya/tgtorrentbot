@@ -1,6 +1,7 @@
 package media
 
 import (
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -54,6 +55,17 @@ func MergeItems(
 
 	for _, t := range torrents {
 		e := getOrCreate(t.Name, t.Category)
+		if e.item.TorrentID != nil {
+			// A second torrent with the same name and category (a topic
+			// re-uploaded with a new hash and added again) gets its own
+			// entry, keyed by its id, so both stay visible and removable.
+			// Name matching joins different sources of one item; two
+			// torrents are two items. The folder, Jellyfin and
+			// Audiobookshelf merge into the first one.
+			e = &entry{item: UnifiedItem{Name: t.Name, Category: t.Category}, order: nextOrder}
+			nextOrder++
+			merged[fmt.Sprintf("%s\x00#%d", normalizedKey(t.Name, t.Category), t.ID)] = e
+		}
 		e.item.Sources = appendUnique(e.item.Sources, "torrent")
 		id := t.ID
 		e.item.TorrentID = &id
@@ -88,6 +100,9 @@ func MergeItems(
 
 	nameIndex := make(map[string]*entry)
 	for key, e := range merged {
+		if strings.Contains(key, "\x00#") {
+			continue // a duplicate torrent; data merges into the first entry
+		}
 		normName := key[:strings.Index(key, "\x00")]
 		if existing, ok := nameIndex[normName]; !ok {
 			nameIndex[normName] = e
