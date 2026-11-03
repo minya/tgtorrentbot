@@ -1318,7 +1318,7 @@
                 }
 
                 container.innerHTML = results.map(r => `
-                    <div class="search-result" data-download-url="${escapeHtml(r.downloadUrl)}">
+                    <div class="search-result" data-download-url="${escapeAttr(r.downloadUrl)}">
                         <div class="search-title">${escapeHtml(r.title)}</div>
                         <div class="search-meta">
                             <span>${escapeHtml(r.size)}</span> · <span>${r.seeders} seeders</span>
@@ -1426,8 +1426,11 @@
                 .replace(/\+/g, '-').replace(/\//g, '_');
         }
 
+        // escapeAttr escapes text for a quoted HTML attribute value. Use it
+        // for every attribute interpolation: escapeHtml leaves quotes alone,
+        // so it is only safe between tags.
         function escapeAttr(s) {
-            return s.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         }
 
         function togglePopupMenu(event, btn) {
