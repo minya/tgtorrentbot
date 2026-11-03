@@ -1,3 +1,9 @@
+# Third-party images are pinned to a release (checked by
+# TestComposeImagesArePinned in internal/deploycheck). ./restart recreates
+# every container, so a floating :latest would pull whatever was released
+# last, Jellyfin and Audiobookshelf database migrations included. To
+# upgrade, change the tag here after reading the release notes. Our own
+# *_img images are built locally by make images.
 services:
   tgtorrentbot:
     build:
@@ -97,7 +103,7 @@ services:
         max-file: "3"
 
   transmission:
-    image: lscr.io/linuxserver/transmission
+    image: lscr.io/linuxserver/transmission:4.1.4
     container_name: tgt-transmission
     environment:
       - PUID=1000
@@ -163,7 +169,7 @@ services:
         #max-file: "3"
 
   jellyfin:
-    image: jellyfin/jellyfin:latest
+    image: jellyfin/jellyfin:12.4
     container_name: tgt-jellyfin
     networks:
       - tunnel-net
@@ -189,7 +195,7 @@ services:
         max-file: "3"
 
   audiobookshelf:
-    image: ghcr.io/advplyr/audiobookshelf:latest
+    image: ghcr.io/advplyr/audiobookshelf:2.37.2
     container_name: tgt-audiobookshelf
     environment:
       - PUID=1000
@@ -208,7 +214,7 @@ services:
         max-file: "3"
 
   dufs:
-    image: sigoden/dufs:latest
+    image: sigoden/dufs:v0.47.0
     container_name: tgt-dufs
     command: /data -A --auth ${DUFS_USER}:${DUFS_PASSWORD}@/:rw
     volumes:
@@ -227,7 +233,7 @@ services:
         max-file: "3"
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.10.7
     container_name: tgt-cloudflare-tunnel
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
     networks:

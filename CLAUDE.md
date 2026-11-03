@@ -108,6 +108,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - `Dockerfile.bot` — Docker build for the bot
 - `Dockerfile.webapp` — Docker build for the web app (static assets are embedded, no separate COPY step)
 - `Dockerfile.mcp` — Docker build for the MCP server
+- `docker-compose.yaml` — the deployment. Third-party images are pinned to releases (`internal/deploycheck` fails on an untagged or `:latest` one): `./restart` recreates every container, so a floating tag would pull unreviewed upgrades and database migrations. Upgrade by changing the tag deliberately
 
 ## Architecture
 
