@@ -91,9 +91,9 @@ Both sources go through the same `validateSettings` (`cmd/tgtorrentbot/read_sett
 ## Repository Layout
 
 This repo uses a `cmd/` layout for multiple binaries:
-- `cmd/tgtorrentbot/` — Telegram bot binary (main.go, handler.go, update_check.go, read_settings.go, settings.go)
-- `cmd/tgtorrentbot-webapp/` — Web app binary (main.go, payloads.go, websocket.go, init_data.go, static/index.html embedded via go:embed)
-- `cmd/tgtorrentbot-mcp/` — MCP server binary for Claude Code integration (main.go, config.go, path.go, list_media.go, tags.go, abs.go, move.go, remove_torrent.go, jellyfin.go; OAuth 2.1: jwt.go, oauth_metadata.go, oauth_register.go, oauth_authorize.go, oauth_token.go)
+- `cmd/tgtorrentbot/` — Telegram bot binary (main.go, handler.go, webhook.go, update_check.go, read_settings.go, settings.go)
+- `cmd/tgtorrentbot-webapp/` — Web app binary (main.go, payloads.go, websocket.go, init_data.go, categories.go, static/index.html embedded via go:embed)
+- `cmd/tgtorrentbot-mcp/` — MCP server binary for Claude Code integration (main.go, config.go, middleware.go, path.go, list_media.go, tags.go, abs.go, move.go with rename_noreplace_*.go and samedev_*.go, remove_torrent.go, jellyfin.go; OAuth 2.1: jwt.go, oauth_metadata.go, oauth_register.go, oauth_authorize.go, oauth_token.go)
 - `commands/` — Bot command implementations (shared library)
 - `environment/` — Shared Env struct
 - `commands/tgsend.go` — `SendMessage`, `EditMessageText`, `AnswerCallback`: the bot's Telegram sends go through these, which log failures (they used to be discarded), retry once after a 429's `retry_after` (up to 30 s), and treat "message is not modified" as success. Return their error where the message is the command's result (search results, `/list`)
@@ -106,6 +106,7 @@ This repo uses a `cmd/` layout for multiple binaries:
   - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries. `FetchLibraries(ctx, jf, abs)` fetches both optional sources concurrently; the caller's ctx deadline bounds and cancels them (webapp `/api/items` 8 s, MCP `list_media` 15 s).
 - `Dockerfile.bot` — Docker build for the bot
 - `Dockerfile.webapp` — Docker build for the web app (static assets are embedded, no separate COPY step)
+- `Dockerfile.mcp` — Docker build for the MCP server
 
 ## Architecture
 
@@ -123,7 +124,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 **cmd/tgtorrentbot/handler.go** - `UpdatesHandler` processes incoming Telegram updates:
 - Routes messages/callbacks to appropriate command factories
 - Each factory implements `Accepts(upd *telegram.Update) (bool, Command)`
-- Commands implement `Handle(upd *telegram.Update) error`
+- Commands implement `Handle(ctx context.Context, upd *telegram.Update) error`
 - Falls back to error message if no command matches
 - When a command returns an error, replies in the chat ("Something went wrong: …", or "already in Transmission" for `ErrDuplicateTorrent`) unless the command marked the error `commands.Replied` because it already told the user; wrap with `Replied` whenever a command sends its own error message before returning
 
@@ -148,17 +149,17 @@ This repo uses a `cmd/` layout for multiple binaries:
 
 All bot commands follow the factory pattern in `commands/`:
 
-1. **CommandFactory** interface (`commands/command.go:7`):
+1. **CommandFactory** interface (`commands/command.go`):
    - `Accepts(upd *telegram.Update) (bool, Command)` - checks if update matches this command
 
-2. **Command** interface (`commands/command.go:11`):
-   - `Handle(upd *telegram.Update) error` - executes the command logic
+2. **Command** interface (`commands/command.go`):
+   - `Handle(ctx context.Context, upd *telegram.Update) error` - executes the command logic
 
 3. Each command has:
    - Factory struct (holds `environment.Env`)
    - Command struct (holds parsed params + `environment.Env`)
 
-Registered command factories (`cmd/tgtorrentbot/handler.go:20`):
+Registered command factories (`NewUpdatesHandler` in `cmd/tgtorrentbot/handler.go`):
 - `ListCommandFactory` - `/list` shows active torrents (paginated, 5 per page)
 - `ListPageCommandFactory` - `/list_page <page>` handles pagination callbacks
 - `RemoveTorrentCommandFactory` - `/remove <id>` removes a torrent
@@ -213,15 +214,15 @@ Transmission torrent labels are used to store metadata (layout defined in `inter
 - `Labels[2]` - userID (string) - Telegram user who added the torrent, its owner. Differs from the chat ID for a bot download started in a group chat (the chat ID is then the negative group ID). The webapp lists and deletes torrents by owner and writes `[userID, category, userID]`. Torrents labelled before `Labels[2]` existed fall back to `Labels[0]` as owner
 
 Labels are set when adding a torrent (`finalizeTorrent` in `commands/download.go`, `handleDownloadTorrent` in the webapp) and read by:
-- Completion checker to notify the correct chat (`update_check.go:144`)
-- Completion checker to determine category for move (`update_check.go:156`)
+- Completion checker to notify the correct chat (`getTorrentChatID` in `update_check.go`)
+- Completion checker to name the category in the notification (`getTorrentCategory` in `update_check.go`)
 - List command to display category (`list.go`)
 - Webapp to show and delete only the user's own torrents (`userTorrents`, `findUserTorrent`)
 
 ### Torrent Completion Tracking
 
 The completion checker uses Transmission labels to track which chat initiated each download:
-- When adding torrent, chatID and category are stored in labels (`commands/download.go:85`)
+- When adding torrent, chatID, category and userID are stored in labels (`finalizeTorrent` in `commands/download.go`)
 - Completion routine reads labels to determine where to send notification
 - Compares `PercentDone` between checks to detect transitions to 1, and uses `doneDate` for torrents first seen already complete (`newlyCompleted` in `update_check.go`)
 - Sends Telegram notification to the chat stored in label[0]
@@ -354,11 +355,13 @@ An incomplete-directory folder that matches an existing torrent or completed `{c
 Audiobookshelf items are matched against existing entries by path prefix: if Audiobookshelf returns sub-items (e.g., `Author - Book/Том 1`, `Author - Book/Том 2`), they merge into the parent filesystem entry (`Author - Book`) rather than creating separate items.
 
 Key files:
-- `cmd/tgtorrentbot-webapp/unified.go` — merge logic
-- `cmd/tgtorrentbot-webapp/filesystem.go` — scans download directories
-- `cmd/tgtorrentbot-webapp/jellyfin.go` — Jellyfin API client
-- `cmd/tgtorrentbot-webapp/audiobookshelf.go` — Audiobookshelf API client
-- `cmd/tgtorrentbot-webapp/payloads.go` — response types including `UnifiedItem`
+- `internal/media/unified.go` — merge logic (`MergeItems`)
+- `internal/media/filesystem.go` — scans download directories (`FilesystemScanner`)
+- `internal/media/jellyfin.go` — Jellyfin API client
+- `internal/media/audiobookshelf.go` — Audiobookshelf API client
+- `internal/media/fetch.go` — `FetchLibraries`, concurrent bounded fetch of both
+- `internal/media/types.go` — `UnifiedItem`, `TorrentInfo`, `FsItem` and the source item types
+- `cmd/tgtorrentbot-webapp/payloads.go` — webapp request/response payloads
 
 The frontend (`static/index.html`) fetches from `/api/items` and shows source badges (T/F/J/A) on each item. Items with a torrent or filesystem source get a ⋮ menu: "Remove torrent" only when the item has a torrent source, "Remove data" for both (so filesystem-only items can be deleted too).
 
