@@ -198,7 +198,7 @@ func (app *App) pollAndBroadcast(prevPercent map[int]float64) {
 	}
 
 	for _, userID := range app.hub.userIDs() {
-		updates := torrentUpdates(userTorrents(torrents, userID), prevPercent)
+		updates := torrentUpdates(listedTorrents(torrents), prevPercent)
 
 		var msg WSMessage
 		if len(updates) > 0 {

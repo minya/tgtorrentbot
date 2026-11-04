@@ -67,9 +67,9 @@ All endpoints require `X-Telegram-Init-Data` header with valid Telegram HMAC:
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/items` | Unified media items merged from Transmission, the filesystem, Jellyfin and Audiobookshelf |
-| DELETE | `/api/items/{id}` | Remove data: the user's torrent (if any) and the item's files |
-| DELETE | `/api/items/{id}/torrent` | Remove only the user's torrent; files stay |
-| GET | `/api/torrents` | List torrents belonging to the authenticated user, sorted by ID desc |
+| DELETE | `/api/items/{id}` | Remove data: the item's torrents (if any) and its files |
+| DELETE | `/api/items/{id}/torrent` | Remove only the item's torrent; files stay |
+| GET | `/api/torrents` | List every torrent (downloads are shared between allowed users), sorted by ID desc |
 | POST | `/api/torrents/download` | Add a torrent; body: `{"downloadUrl":"...","category":"..."}` |
 | GET | `/api/search?q=<query>` | Search Rutracker, returns up to 20 results |
 | GET | `/api/ws` | WebSocket of live torrent progress (init data sent as the `tg-auth.<base64url>` subprotocol) |

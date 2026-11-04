@@ -140,65 +140,39 @@ func TestRemoveDataNotFound(t *testing.T) {
 	}
 }
 
-// F83: a torrent the bot added from a group chat has the group as Labels[0]
-// and the user as Labels[2]; it is listed for that user and deletable.
-func TestGroupChatTorrentOwnedByUser(t *testing.T) {
-	const torrents = `[{"id":9,"name":"Grp","labels":["-100123","movies","42"],"percentDone":1}]`
+// Downloads are shared: every allowed user sees every torrent, whoever added
+// it and from whichever chat (group downloads and legacy two-label ones too),
+// and can remove it.
+func TestTorrentsAreShared(t *testing.T) {
+	const torrents = `[` +
+		`{"id":9,"name":"Grp","labels":["-100123","movies","42"],"percentDone":1},` +
+		`{"id":5,"name":"B Movie","labels":["7","movies","7"],"percentDone":1},` +
+		`{"id":1,"name":"Old","labels":["42","movies"]}]`
 	app, root, _, removed := newDeleteTestApp(t, torrents)
-	mustWriteFile(t, filepath.Join(root, "movies", "Grp", "a.mkv"))
+	mustWriteFile(t, filepath.Join(root, "movies", "B Movie", "b.mkv"))
 
 	all, err := app.transmissionClient.GetTorrents()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := userTorrents(all, 42); len(got) != 1 || got[0].Name != "Grp" {
-		t.Fatalf("userTorrents(42) = %+v, want the group download", got)
-	}
-	if got := userTorrents(all, -100123); len(got) != 0 {
-		t.Fatalf("userTorrents(group id) = %+v, want none", got)
+	if got := listedTorrents(all); len(got) != 3 {
+		t.Fatalf("listedTorrents = %+v, want all three torrents", got)
 	}
 
-	rec := deleteItem(app, 42, "movies", "Grp")
+	// User 42 removes the data of a torrent user 7 added.
+	rec := deleteItem(app, 42, "movies", "B Movie")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
 	}
 	if !removed.Load() {
-		t.Error("torrent was not removed")
+		t.Error("the torrent was not removed")
+	}
+	if exists(filepath.Join(root, "movies", "B Movie")) {
+		t.Error("the data was not deleted")
 	}
 }
 
-// Torrents labelled before the owner label existed still belong to Labels[0].
-func TestLegacyTwoLabelTorrentOwnedByLabel0(t *testing.T) {
-	app, _, _, _ := newDeleteTestApp(t, `[{"id":1,"name":"Old","labels":["42","movies"]}]`)
-	all, err := app.transmissionClient.GetTorrents()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := userTorrents(all, 42); len(got) != 1 {
-		t.Fatalf("userTorrents(42) = %+v, want the legacy torrent", got)
-	}
-}
-
-// F39: user 42 cannot delete data that user 7's torrent still uses.
-func TestRemoveDataRefusesOtherUsersTorrentData(t *testing.T) {
-	app, root, _, removed := newDeleteTestApp(t,
-		`[{"id":5,"name":"B Movie","labels":["7","movies","7"],"percentDone":1}]`)
-	mustWriteFile(t, filepath.Join(root, "movies", "B Movie", "b.mkv"))
-
-	rec := deleteItem(app, 42, "movies", "B Movie")
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403; body %s", rec.Code, rec.Body.String())
-	}
-	if removed.Load() {
-		t.Error("another user's torrent was removed")
-	}
-	if !exists(filepath.Join(root, "movies", "B Movie", "b.mkv")) {
-		t.Error("another user's data was deleted")
-	}
-}
-
-// Filesystem-only data (no torrent of anyone) stays deletable by any user.
+// Filesystem-only data (no torrent) is deletable by any user.
 func TestRemoveDataFilesystemOnlyIsShared(t *testing.T) {
 	app, root, _, _ := newDeleteTestApp(t,
 		`[{"id":5,"name":"Other Name","labels":["7","movies","7"],"percentDone":1}]`)
@@ -321,33 +295,51 @@ func TestRemoveDataKeepsOtherDownloadsInIncompleteDir(t *testing.T) {
 	}
 }
 
-// F95: a torrent with no labels (added in the Transmission UI) seeding from
-// the folder protects it.
-func TestRemoveDataRefusesUnlabelledTorrentsFolder(t *testing.T) {
-	app, root, _, removed := newDeleteTestApp(t, `[]`)
+// A torrent with no labels (added in the Transmission UI) seeding from the
+// item's folder is part of the item: it is untracked with it.
+func TestRemoveDataUntracksUnlabelledTorrentInFolder(t *testing.T) {
+	app, root, _, _ := newDeleteTestApp(t, `[]`)
 	mustWriteFile(t, filepath.Join(root, "movies", "U", "a.mkv"))
-	tc, _ := transmission.New(transmission.Config{Address: fakeTorrentsServer(t,
-		`[{"id":8,"name":"U","labels":[],"percentDone":1,"downloadDir":"`+filepath.Join(root, "movies")+`"}]`)})
+	var removedIDs []int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var req struct {
+			Method    string
+			Arguments struct{ IDs []int }
+		}
+		_ = json.Unmarshal(b, &req)
+		if req.Method == "torrent-remove" {
+			removedIDs = append(removedIDs, req.Arguments.IDs...)
+			w.Write([]byte(`{"result":"success","arguments":{}}`))
+			return
+		}
+		w.Write([]byte(`{"result":"success","arguments":{"torrents":[{"id":8,"name":"U","labels":[],"percentDone":1,"downloadDir":"` + filepath.Join(root, "movies") + `"}]}}`))
+	}))
+	defer ts.Close()
+	tc, _ := transmission.New(transmission.Config{Address: ts.URL})
 	app.transmissionClient = tc
 
-	if rec := deleteItem(app, 42, "movies", "U"); rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, body %s; want 403", rec.Code, rec.Body.String())
+	if rec := deleteItem(app, 42, "movies", "U"); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
 	}
-	if !exists(filepath.Join(root, "movies", "U", "a.mkv")) || removed.Load() {
-		t.Fatal("the unlabelled torrent's data was deleted")
+	if len(removedIDs) != 1 || removedIDs[0] != 8 {
+		t.Fatalf("removed %v, want the unlabelled torrent 8 untracked before its data goes", removedIDs)
+	}
+	if exists(filepath.Join(root, "movies", "U")) {
+		t.Fatal("the data was not deleted")
 	}
 }
 
-// Deleting an orphan in the virtual incomplete category is refused while a
-// torrent is still downloading into it.
-func TestRemoveDataRefusesLiveIncompleteFolder(t *testing.T) {
-	app, _, inc, _ := newDeleteTestApp(t, `[{"id":5,"name":"X","labels":["7","shows","7"],"percentDone":0.3}]`)
+// Deleting a folder of the virtual incomplete category untracks the torrent
+// still downloading into it, so Transmission is not left without its files.
+func TestRemoveDataIncompleteFolderUntracksItsDownload(t *testing.T) {
+	app, _, inc, removed := newDeleteTestApp(t, `[{"id":5,"name":"X","labels":["7","shows","7"],"percentDone":0.3}]`)
 	mustWriteFile(t, filepath.Join(inc, "X", "part.mkv"))
-	if rec := deleteItem(app, 42, media.IncompleteCategory, "X"); rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", rec.Code)
+	if rec := deleteItem(app, 42, media.IncompleteCategory, "X"); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
 	}
-	if !exists(filepath.Join(inc, "X", "part.mkv")) {
-		t.Fatal("live in-progress data was deleted")
+	if !removed.Load() || exists(filepath.Join(inc, "X")) {
+		t.Fatalf("torrent removed = %v, data exists = %v; want the torrent untracked and the data gone", removed.Load(), exists(filepath.Join(inc, "X")))
 	}
 }
 

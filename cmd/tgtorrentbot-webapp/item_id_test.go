@@ -73,18 +73,19 @@ func TestItemDeleteRejectsTraversal(t *testing.T) {
 	}
 }
 
-func TestUserTorrentsFiltersByOwner(t *testing.T) {
+// Every torrent is listed, whoever added it; fields are converted.
+func TestListedTorrentsAreShared(t *testing.T) {
 	ts := []*transmission.Torrent{
 		{ID: 1, Name: "mine", Labels: []string{"42", "movies"}, PercentDone: 0.5},
 		{ID: 2, Name: "theirs", Labels: []string{"7", "movies"}},
 		{ID: 3, Name: "legacy", Labels: []string{"42"}},
 		{ID: 4, Name: "unlabelled"},
 	}
-	got := userTorrents(ts, 42)
-	if len(got) != 2 || got[0].ID != 1 || got[1].ID != 3 {
-		t.Fatalf("userTorrents = %+v", got)
+	got := listedTorrents(ts)
+	if len(got) != 4 {
+		t.Fatalf("listedTorrents = %+v, want all four", got)
 	}
-	if got[0].PercentDone != 50 || got[0].Category != "movies" || got[1].Category != "others" {
+	if got[0].PercentDone != 50 || got[0].Category != "movies" || got[2].Category != "others" || got[3].Category != "others" {
 		t.Fatalf("converted fields wrong: %+v", got)
 	}
 }

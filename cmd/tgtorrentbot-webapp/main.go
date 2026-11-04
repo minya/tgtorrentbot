@@ -265,13 +265,11 @@ func main() {
 	}
 }
 
-// userTorrents filters and converts Transmission torrents to media.TorrentInfo for the given user.
-func userTorrents(torrents []*transmission.Torrent, userID int64) []media.TorrentInfo {
+// listedTorrents converts Transmission torrents to media.TorrentInfo. Every
+// allowed user sees and manages every torrent: downloads are shared.
+func listedTorrents(torrents []*transmission.Torrent) []media.TorrentInfo {
 	var result []media.TorrentInfo
 	for _, t := range torrents {
-		if !torrentlabels.OwnedBy(t.Labels, userID) {
-			continue
-		}
 		category := "others"
 		if len(t.Labels) >= 2 {
 			category = t.Labels[1]
@@ -305,7 +303,7 @@ func (app *App) handleTorrents(userID int64, w http.ResponseWriter, r *http.Requ
 		return torrents[i].ID > torrents[j].ID
 	})
 
-	result := userTorrents(torrents, userID)
+	result := listedTorrents(torrents)
 
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		logger.Error(err, "Failed to encode torrents response")
@@ -512,7 +510,7 @@ func (app *App) handleUnifiedItems(userID int64, w http.ResponseWriter, r *http.
 		return torrents[i].ID > torrents[j].ID
 	})
 
-	ut := userTorrents(torrents, userID)
+	ut := listedTorrents(torrents)
 
 	// 2. Scan filesystem.
 	scanner := &media.FilesystemScanner{
@@ -574,21 +572,21 @@ func decodeItemID(encoded string) (category, name string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// findUserTorrents finds a Transmission torrent owned by userID with the given name and category.
-func (app *App) findUserTorrents(userID int64, category, name string) ([]*transmission.Torrent, error) {
+// findItemTorrents finds a Transmission torrent owned by userID with the given name and category.
+func (app *App) findItemTorrents(category, name string) ([]*transmission.Torrent, error) {
 	torrents, err := app.transmissionClient.GetTorrents()
 	if err != nil {
 		return nil, err
 	}
-	return userTorrentsNamed(torrents, userID, category, name), nil
+	return itemTorrents(torrents, category, name), nil
 }
 
-// userTorrentsNamed returns the torrents of userID named name in category
-// (legacy single-label torrents count as "others").
-func userTorrentsNamed(torrents []*transmission.Torrent, userID int64, category, name string) []*transmission.Torrent {
-	var mine []*transmission.Torrent
+// itemTorrents returns the torrents named name in category, whoever added
+// them (legacy single-label torrents count as "others").
+func itemTorrents(torrents []*transmission.Torrent, category, name string) []*transmission.Torrent {
+	var item []*transmission.Torrent
 	for _, t := range torrents {
-		if t.Name != name || !torrentlabels.OwnedBy(t.Labels, userID) {
+		if t.Name != name {
 			continue
 		}
 		torrentCategory := "others"
@@ -596,10 +594,10 @@ func userTorrentsNamed(torrents []*transmission.Torrent, userID int64, category,
 			torrentCategory = t.Labels[1]
 		}
 		if torrentCategory == category {
-			mine = append(mine, t)
+			item = append(item, t)
 		}
 	}
-	return mine
+	return item
 }
 
 // handleItemDelete routes DELETE /api/items/{id} and DELETE /api/items/{id}/torrent.
@@ -651,14 +649,14 @@ func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Re
 
 // handleRemoveItemTorrent removes a torrent without deleting data files.
 func (app *App) handleRemoveItemTorrent(userID int64, w http.ResponseWriter, category, name string, torrentID int) {
-	mine, err := app.findUserTorrents(userID, category, name)
+	item, err := app.findItemTorrents(category, name)
 	if err != nil {
 		logger.Error(err, "Failed to get torrents")
 		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
 		return
 	}
 	var torrent *transmission.Torrent
-	for _, t := range mine {
+	for _, t := range item {
 		if torrentID == 0 || t.ID == torrentID {
 			torrent = t
 			break
@@ -690,9 +688,10 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		http.Error(w, `{"error": "failed to get torrents"}`, http.StatusInternalServerError)
 		return
 	}
-	// The user's torrents for this item are untracked (data kept by
-	// Transmission; the files are deleted below).
-	mine := userTorrentsNamed(torrents, userID, category, name)
+	// Downloads are shared, so every torrent of this item is untracked,
+	// whoever added it (data kept by Transmission; the files are deleted
+	// below).
+	mine := itemTorrents(torrents, category, name)
 
 	// The folders this item's data can be in. An item of a real category may
 	// have data in {DownloadPath}/{category}/{name} once complete and in
@@ -714,30 +713,22 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 		}
 	}
 
-	// Decide by location, not by label: every other torrent (any owner, any
-	// category, labelled or not) protects the folders its data is in. The
-	// incomplete directory is shared by every category and user, so a
-	// same-named download elsewhere must not lose its partial data, and an
-	// unlabelled torrent seeding from this folder must not lose its files.
+	// Decide by location, not by label. Any other torrent whose data is in
+	// the item's own folder (an unlabelled one added in the Transmission UI,
+	// say) is part of this item and is untracked too. The incomplete
+	// directory is shared by every category, so a same-named download of
+	// another item still writing there keeps its partial data: that folder
+	// is skipped.
+	for u := app.torrentUsing(torrents, mine, primary); u != nil; u = app.torrentUsing(torrents, mine, primary) {
+		mine = append(mine, u)
+	}
 	var toDelete []string
 	for _, dir := range candidates {
-		user := app.torrentUsing(torrents, mine, dir)
-		if user == nil {
-			toDelete = append(toDelete, dir)
+		if u := app.torrentUsing(torrents, mine, dir); u != nil {
+			logger.Info("Keeping %s: torrent %d (%s) of another item still uses it", dir, u.ID, u.Name)
 			continue
 		}
-		if dir != primary {
-			logger.Info("Keeping %s for user %d: torrent %d (%s) still uses it", dir, userID, user.ID, user.Name)
-			continue
-		}
-		if torrentlabels.OwnedBy(user.Labels, userID) {
-			logger.Warn("User %d tried to remove %s, which their torrent %d in another category uses", userID, dir, user.ID)
-			http.Error(w, `{"error": "this data is still used by another of your torrents; remove that torrent first"}`, http.StatusConflict)
-			return
-		}
-		logger.Warn("User %d tried to remove data of torrent %d (%s [%s]) owned by someone else", userID, user.ID, name, category)
-		http.Error(w, `{"error": "this data belongs to another user's torrent"}`, http.StatusForbidden)
-		return
+		toDelete = append(toDelete, dir)
 	}
 
 	if len(mine) > 0 {
