@@ -6,8 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"slices"
-	"strings"
 	"time"
 )
 
@@ -63,9 +61,9 @@ func (s *server) handleRegister(w http.ResponseWriter, r *http.Request) {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", fmt.Sprintf("redirect_uri is longer than %d bytes", maxRedirectURILen))
 			return
 		}
-		if !s.redirectURIAllowed(u) {
+		if !isAllowedRedirectURI(u) {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri",
-				"redirect_uris must be https (http allowed only for localhost), on a host allowed by TGT_MCP_REDIRECT_HOSTS when set")
+				"redirect_uris must be https (http allowed only for localhost)")
 			return
 		}
 	}
@@ -104,27 +102,6 @@ const (
 	maxRedirectURILen   = 2048
 	maxClientNameLen    = 200
 )
-
-// redirectURIAllowed applies isAllowedRedirectURI and, when
-// TGT_MCP_REDIRECT_HOSTS is set, requires the host to be one of those (or
-// loopback, for native clients).
-func (s *server) redirectURIAllowed(raw string) bool {
-	if !isAllowedRedirectURI(raw) {
-		return false
-	}
-	if len(s.config.RedirectHosts) == 0 {
-		return true
-	}
-	u, _ := url.Parse(raw)
-	host := strings.ToLower(u.Hostname())
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		return true
-	}
-	return slices.Contains(s.config.RedirectHosts, host)
-}
 
 // isAllowedRedirectURI enforces OAuth 2.1: https everywhere, with the usual
 // loopback-for-native-apps carve-out. The loopback test parses the URL and

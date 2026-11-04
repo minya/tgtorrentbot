@@ -87,30 +87,6 @@ func TestAuthorizeFormShowsRedirectHostAndDeniesFraming(t *testing.T) {
 	}
 }
 
-// F23: with TGT_MCP_REDIRECT_HOSTS set, other hosts cannot register or
-// authorize, while listed hosts and loopback can.
-func TestRedirectHostAllowlist(t *testing.T) {
-	srv, ts := newTestHTTPServer(t)
-	defer ts.Close()
-
-	// Registered before the allowlist was configured.
-	_, early := registerJSON(t, ts, `{"redirect_uris":["https://attacker.example/cb"]}`)
-	srv.config.RedirectHosts = []string{"claude.ai"}
-
-	if code, _ := registerJSON(t, ts, `{"redirect_uris":["https://attacker.example/cb"]}`); code != http.StatusBadRequest {
-		t.Errorf("register unlisted host: status %d, want 400", code)
-	}
-	if code, _ := registerJSON(t, ts, `{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}`); code != http.StatusCreated {
-		t.Errorf("register listed host: status %d, want 201", code)
-	}
-	if code, _ := registerJSON(t, ts, `{"redirect_uris":["http://127.0.0.1:33418/callback"]}`); code != http.StatusCreated {
-		t.Errorf("register loopback: status %d, want 201", code)
-	}
-	if resp, _ := authorizeGetPage(t, ts, early.ClientID, "https://attacker.example/cb"); resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("authorize with a client registered before the allowlist: status %d, want 400", resp.StatusCode)
-	}
-}
-
 func refreshWith(t *testing.T, ts *httptest.Server, clientID, refresh string) (int, tokenResponse) {
 	t.Helper()
 	resp, err := http.PostForm(ts.URL+"/token", url.Values{
@@ -194,12 +170,5 @@ func TestRefreshLegacyTokenCountsFromIat(t *testing.T) {
 		Iat: now.Add(-time.Hour).Unix(), Exp: now.Add(time.Hour).Unix()})
 	if code, _ := refreshWith(t, ts, "c", recent); code != http.StatusOK {
 		t.Fatalf("recent legacy token: status %d, want 200", code)
-	}
-}
-
-func TestParseHostList(t *testing.T) {
-	got := parseHostList(" Claude.ai, ,claude.com ")
-	if len(got) != 2 || got[0] != "claude.ai" || got[1] != "claude.com" {
-		t.Fatalf("parseHostList = %v", got)
 	}
 }

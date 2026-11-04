@@ -91,6 +91,7 @@ services:
       - TGT_AUDIOBOOKSHELF_API_KEY=${AUDIOBOOKSHELF_API_KEY}
       - TGT_MCP_TOKEN=${MCP_TOKEN}
       - TGT_MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
+      - TGT_MCP_JWT_SECRET=${MCP_JWT_SECRET}
       - TGT_LOGLEVEL=${LOGLEVEL}
     volumes:
       - /var/transmission/downloads:/downloads

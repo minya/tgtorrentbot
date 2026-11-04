@@ -238,7 +238,7 @@ func (s *server) validateAuthorizeParams(w http.ResponseWriter, r *http.Request,
 		writeOAuthError(w, http.StatusBadRequest, "invalid_client", "client_id is invalid")
 		return jwtClaims{}, data, false
 	}
-	if data.RedirectURI == "" || !slices.Contains(client.RedirectURIs, data.RedirectURI) || !s.redirectURIAllowed(data.RedirectURI) {
+	if data.RedirectURI == "" || !slices.Contains(client.RedirectURIs, data.RedirectURI) || !isAllowedRedirectURI(data.RedirectURI) {
 		// Per RFC 6749 §3.1.2.4, redirect_uri errors must NOT redirect back;
 		// render directly.
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "redirect_uri does not match any registered URI")

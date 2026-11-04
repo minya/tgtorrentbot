@@ -33,14 +33,10 @@ type Config struct {
 	// issuer and audience, and prefixes every endpoint advertised in metadata.
 	PublicBaseURL string
 	// JWTSecret signs every token we issue (access, refresh, client_id).
-	// It always depends on AuthToken, and also on TGT_MCP_JWT_SECRET when
-	// set, so rotating either env var invalidates every outstanding token
-	// (see deriveJWTSecret).
+	// It depends on both TGT_MCP_JWT_SECRET and AuthToken, so rotating
+	// either env var invalidates every outstanding token (see
+	// deriveJWTSecret).
 	JWTSecret []byte
-	// RedirectHosts, from the comma-separated TGT_MCP_REDIRECT_HOSTS, limits
-	// OAuth redirect URIs to these hosts (lowercase; loopback is always
-	// allowed). Empty allows any https host.
-	RedirectHosts []string
 }
 
 // resolvedDir returns p with symlinks resolved, or p itself when it does
@@ -80,9 +76,18 @@ func loadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("TGT_MCP_PUBLIC_URL is required when TGT_MCP_TOKEN is set")
 	}
 
+	// The signing key must not come from the login secret alone: /register
+	// hands any caller a client_id signed with it, so a key derived only
+	// from a human-typed secret lets that secret be brute-forced offline,
+	// past every login rate limit. HTTP mode therefore needs a high-entropy
+	// TGT_MCP_JWT_SECRET (e.g. `openssl rand -base64 48`).
 	var jwtSecret []byte
 	if authToken != "" {
-		jwtSecret = deriveJWTSecret(authToken, os.Getenv("TGT_MCP_JWT_SECRET"))
+		key := os.Getenv("TGT_MCP_JWT_SECRET")
+		if len(key) < minJWTSecretLen {
+			return Config{}, fmt.Errorf("TGT_MCP_JWT_SECRET must be set to at least %d random characters when TGT_MCP_TOKEN is set (e.g. openssl rand -base64 48)", minJWTSecretLen)
+		}
+		jwtSecret = deriveJWTSecret(authToken, key)
 	}
 
 	return Config{
@@ -98,7 +103,6 @@ func loadConfig() (Config, error) {
 		AudiobookshelfLibraryID: os.Getenv("TGT_AUDIOBOOKSHELF_LIBRARY_ID"),
 		AuthToken:               authToken,
 		PublicBaseURL:           publicURL,
-		RedirectHosts:           parseHostList(os.Getenv("TGT_MCP_REDIRECT_HOSTS")),
 		JWTSecret:               jwtSecret,
 	}, nil
 }
@@ -107,30 +111,18 @@ func loadConfig() (Config, error) {
 // login secret.
 const jwtSecretLabel = "tgtorrentbot-mcp/jwt\x00"
 
-// deriveJWTSecret returns the JWT signing key. Without an explicit JWT secret
-// it is SHA-256(label || authToken); with one it is
-// HMAC-SHA256(key=jwtSecret, label || authToken). Either way it depends on the
-// login secret, so rotating TGT_MCP_TOKEN after a leak revokes every token
-// even when TGT_MCP_JWT_SECRET is set, and rotating TGT_MCP_JWT_SECRET
-// revokes them without changing the login secret.
+// minJWTSecretLen is the shortest TGT_MCP_JWT_SECRET accepted: 32
+// characters, at least 192 bits from a base64 random string.
+const minJWTSecretLen = 32
+
+// deriveJWTSecret returns the JWT signing key,
+// HMAC-SHA256(key=jwtSecret, label || authToken). It depends on both: the
+// high-entropy jwtSecret keeps the login secret from being guessed offline
+// from a signed token, and mixing in authToken means rotating
+// TGT_MCP_TOKEN after a leak revokes every token, as rotating
+// TGT_MCP_JWT_SECRET does.
 func deriveJWTSecret(authToken, jwtSecret string) []byte {
-	if jwtSecret == "" {
-		h := sha256.Sum256([]byte(jwtSecretLabel + authToken))
-		return h[:]
-	}
 	mac := hmac.New(sha256.New, []byte(jwtSecret))
 	mac.Write([]byte(jwtSecretLabel + authToken))
 	return mac.Sum(nil)
-}
-
-// parseHostList splits a comma-separated host list, lowercasing and dropping
-// empty entries.
-func parseHostList(s string) []string {
-	var hosts []string
-	for _, h := range strings.Split(s, ",") {
-		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
-			hosts = append(hosts, h)
-		}
-	}
-	return hosts
 }

@@ -110,8 +110,7 @@ The MCP server needs only `TGT_DOWNLOADPATH`; Transmission, Jellyfin and Audiobo
 |---|---|---|
 | `TGT_MCP_TOKEN` | No | When set, serve MCP over HTTP on `:8080` behind OAuth 2.1; it is the secret typed into the login form. Unset → stdio |
 | `TGT_MCP_PUBLIC_URL` | With `TGT_MCP_TOKEN` | Public HTTPS base URL, used as OAuth issuer and audience |
-| `TGT_MCP_REDIRECT_HOSTS` | No | Comma-separated hosts allowed as OAuth redirect targets (e.g. `claude.ai,claude.com`) |
-| `TGT_MCP_JWT_SECRET` | No | Extra key material for token signing; rotate it to revoke every token |
+| `TGT_MCP_JWT_SECRET` | With `TGT_MCP_TOKEN` | At least 32 random characters (`openssl rand -base64 48`) for token signing; rotate it to revoke every token |
 | `TGT_AUDIOBOOKSHELF_LIBRARY_ID` | No | Default library for `abs_remove_issues` |
 
 ### Settings File (`settings.json`)
@@ -205,6 +204,7 @@ Compose environment variables:
 | `AUDIOBOOKSHELF_API_KEY` | No | Audiobookshelf API token; enables the Audiobookshelf source and the MCP `abs_*` tools |
 | `MCP_TOKEN` | For `tgt-mcp` | MCP login secret; without it the `tgt-mcp` container exits with an error |
 | `MCP_PUBLIC_URL` | For `tgt-mcp` | Public HTTPS URL of the MCP server |
+| `MCP_JWT_SECRET` | For `tgt-mcp` | Token signing secret, at least 32 random characters (`openssl rand -base64 48`); without it `tgt-mcp` exits with an error |
 | `DUFS_USER` | For `tgt-dufs` | dufs login user |
 | `DUFS_PASSWORD` | For `tgt-dufs` | dufs login password |
 | `LOGLEVEL` | No | Log level for the bot, webapp and MCP server (`info`, `debug`, …) |
