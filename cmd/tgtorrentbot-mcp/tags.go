@@ -98,7 +98,7 @@ func (s *server) readTags(ctx context.Context, _ *mcp.CallToolRequest, in readTa
 	out := readTagsOutput{Files: make([]fileTags, 0, len(files))}
 	for _, f := range files {
 		ft := fileTags{Path: displayPath(s.config.DownloadPath, f)}
-		tag, err := id3v2.Open(f, id3v2.Options{Parse: true})
+		tag, err := openSupportedTag(f)
 		if err != nil {
 			ft.Error = err.Error()
 			out.Failed++
@@ -204,7 +204,7 @@ func mustJSON(v any) string {
 // applyTags opens path, applies fix encoding then explicit overrides, and
 // saves if anything changed.
 func applyTags(path string, decoder *encoding.Decoder, overrides map[string]string) (bool, error) {
-	tag, err := id3v2.Open(path, id3v2.Options{Parse: true})
+	tag, err := openSupportedTag(path)
 	if err != nil {
 		return false, err
 	}
@@ -320,6 +320,64 @@ func id3TagSize(f *os.File) (int64, error) {
 	raw := binary.BigEndian.Uint32(hdr[6:])
 	size := int64(raw&0x7f) | int64(raw>>8&0x7f)<<7 | int64(raw>>16&0x7f)<<14 | int64(raw>>24&0x7f)<<21
 	return 10 + size, nil
+}
+
+// openSupportedTag opens the ID3 tag at path after checkID3Layout, so a tag
+// the library would misread is refused instead of read as empty or garbled
+// values, or saved back with frames lost.
+func openSupportedTag(path string) (*id3v2.Tag, error) {
+	if err := checkID3Layout(path); err != nil {
+		return nil, err
+	}
+	return id3v2.Open(path, id3v2.Options{Parse: true})
+}
+
+// checkID3Layout refuses ID3v2 tags that use features github.com/bogem/id3v2
+// does not implement: it reads the header flags byte but ignores it, and
+// writes every flag as 0. An extended header (0x40) makes it see no frames
+// at all, so a save drops every frame; unsynchronisation (0x80) and frame
+// flags (v2.4 data-length indicator, unsync, compression, encryption,
+// grouping) make it keep the raw bytes as text. A file without an ID3v2 tag
+// is fine (a new tag is written).
+func checkID3Layout(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var hdr [10]byte
+	if n, _ := f.ReadAt(hdr[:], 0); n < len(hdr) || string(hdr[:3]) != "ID3" {
+		return nil
+	}
+	version := hdr[3]
+	if flags := hdr[5]; flags != 0 {
+		return fmt.Errorf("ID3v2.%d tag uses header flags 0x%02x (unsynchronisation, extended header or footer), which this tool cannot read or write safely", version, flags)
+	}
+	size := synchsafe(hdr[6:10])
+	body := make([]byte, size)
+	if _, err := f.ReadAt(body, 10); err != nil && err != io.EOF {
+		return err
+	}
+	for off := 0; off+10 <= len(body); {
+		fh := body[off : off+10]
+		if fh[0] == 0 {
+			break // padding
+		}
+		frameSize := int(binary.BigEndian.Uint32(fh[4:8]))
+		if version == 4 {
+			frameSize = int(synchsafe(fh[4:8]))
+		}
+		if fh[8] != 0 || fh[9] != 0 {
+			return fmt.Errorf("ID3v2.%d frame %s uses frame flags 0x%02x%02x (data length, unsynchronisation, compression, encryption or grouping), which this tool cannot read or write safely", version, string(fh[:4]), fh[8], fh[9])
+		}
+		off += 10 + frameSize
+	}
+	return nil
+}
+
+func synchsafe(b []byte) int64 {
+	raw := binary.BigEndian.Uint32(b)
+	return int64(raw&0x7f) | int64(raw>>8&0x7f)<<7 | int64(raw>>16&0x7f)<<14 | int64(raw>>24&0x7f)<<21
 }
 
 // setOverride applies a single explicit override, returning whether it changed
