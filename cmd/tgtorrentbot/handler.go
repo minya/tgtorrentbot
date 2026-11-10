@@ -15,6 +15,9 @@ import (
 
 type UpdatesHandler struct {
 	notify func()
+	// inFlight holds the chats of authorized updates being handled, for
+	// shutdown (see inFlightChats).
+	inFlight inFlightChats
 	environment.Env
 	commandsList []commands.CommandFactory
 }
@@ -62,6 +65,9 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 		return nil
 	}
 	logger.Debug("Authorized user: id=%d username=%s", user.ID, user.Username)
+	if chatID, ok := replyChatID(upd); ok {
+		defer handler.inFlight.track(chatID)()
+	}
 
 	// Every callback command replies into the chat of the message carrying
 	// the button. Telegram omits that message for buttons on inline-mode

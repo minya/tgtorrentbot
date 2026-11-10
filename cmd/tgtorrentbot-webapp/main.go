@@ -114,6 +114,8 @@ type App struct {
 	hub                  *wsHub
 	// rutracker is the one logged-in rutracker client of the process.
 	rutracker *rutrackersession.Session
+	// refresher runs the library refreshes after deletions.
+	refresher libraryRefresher
 }
 
 type httpHandlerFunc func(http.ResponseWriter, *http.Request)
@@ -227,7 +229,9 @@ func main() {
 		rutracker:            rutrackersession.New(config.RutrackerUsername, config.RutrackerPassword),
 	}
 
-	go app.startTorrentPoller(context.Background())
+	// Done at SIGTERM/SIGINT: stops the WebSocket poller and the server.
+	ctx := graceful.SignalContext()
+	go app.startTorrentPoller(ctx)
 
 	http.HandleFunc("/api/ws", app.handleWS)
 	http.HandleFunc("/api/torrents", app.makeHandler([]string{http.MethodGet}, app.handleTorrents))
@@ -258,8 +262,13 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 	// On SIGTERM, let in-flight requests (a deletion between RemoveTorrents
-	// and RemoveAll, a torrent add and its labels) finish before exiting.
-	if err := graceful.Serve(srv, nil); err != nil {
+	// and RemoveAll, a torrent add and its labels) and a library refresh
+	// started by a deletion finish before exiting.
+	if err := graceful.Serve(ctx, srv, func(ctx context.Context) {
+		if err := app.refresher.Wait(ctx); err != nil {
+			logger.Warn("Shutdown deadline passed with a library refresh still running")
+		}
+	}); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
 	}
@@ -787,7 +796,7 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	// After the response: the data is already gone, so a slow or hung
 	// Jellyfin/ABS must not turn the deletion into a client-side failure.
 	// Both clients log their own failures.
-	go app.refreshLibraries()
+	app.refresher.trigger(app.refreshLibraries)
 }
 
 // torrentUsing returns a torrent, other than those in except, whose data is
@@ -817,9 +826,7 @@ func (app *App) torrentUsing(torrents, except []*transmission.Torrent, dir strin
 	return nil
 }
 
-func (app *App) refreshLibraries() {
-	ctx, cancel := context.WithTimeout(context.Background(), refreshTimeout)
-	defer cancel()
+func (app *App) refreshLibraries(ctx context.Context) {
 	_ = app.jellyfinClient.RefreshLibrary(ctx)
 	_, _ = app.audiobookshelfClient.RefreshLibrary(ctx)
 }

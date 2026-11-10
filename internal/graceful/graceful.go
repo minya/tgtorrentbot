@@ -20,12 +20,25 @@ import (
 // Docker's default 10 s stop grace period, after which Docker sends SIGKILL.
 const Timeout = 8 * time.Second
 
-// Serve runs srv until the process receives SIGTERM or SIGINT, then shuts
-// it down (see ServeContext). It returns nil after a clean shutdown and the
-// listener's error if the server fails to start or run.
-func Serve(srv *http.Server, drain func(context.Context)) error {
+// SignalContext returns a context that is done when the process receives
+// SIGTERM or SIGINT. Only the first signal is caught: once the context is
+// done, signals have their default effect again, so a second Ctrl-C or a
+// supervisor's repeated SIGTERM ends a shutdown that is still waiting.
+// Each binary creates it once and passes it to Serve and to its background
+// work.
+func SignalContext() context.Context {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
-	defer stop()
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+	return ctx
+}
+
+// Serve runs srv until ctx is done, usually SignalContext, then shuts it
+// down within Timeout (see ServeContext). It returns nil after a clean
+// shutdown and the listener's error if the server fails to start or run.
+func Serve(ctx context.Context, srv *http.Server, drain func(context.Context)) error {
 	return ServeContext(ctx, srv, drain, Timeout)
 }
 

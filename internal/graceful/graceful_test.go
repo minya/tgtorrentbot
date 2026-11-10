@@ -1,11 +1,14 @@
 package graceful
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -118,13 +121,14 @@ func TestServeContextReportsListenError(t *testing.T) {
 	}
 }
 
-// Serve itself reacts to a real SIGTERM, as docker stop sends it.
+// Serve under SignalContext reacts to a real SIGTERM, as docker stop sends it.
 func TestServeStopsOnSIGTERM(t *testing.T) {
 	addr := freeAddr(t)
 	srv := &http.Server{Addr: addr, Handler: http.NotFoundHandler()}
 	served := make(chan error, 1)
-	go func() { served <- Serve(srv, nil) }()
-	waitUp(t, addr) // Serve registers for signals before it listens
+	ctx := SignalContext()
+	go func() { served <- Serve(ctx, srv, nil) }()
+	waitUp(t, addr)
 	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
@@ -135,5 +139,67 @@ func TestServeStopsOnSIGTERM(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Serve did not return after SIGTERM")
+	}
+}
+
+// F123: a second SIGINT during the shutdown wait ends the process instead
+// of being swallowed. The process under test is this test binary, re-run as
+// a helper that serves one request which never finishes.
+func TestSecondSignalForcesExit(t *testing.T) {
+	if os.Getenv("GRACEFUL_HELPER") == "1" {
+		addr := freeAddr(t)
+		entered := make(chan struct{})
+		srv := &http.Server{Addr: addr, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(entered)
+			select {} // outlives any shutdown timeout
+		})}
+		ctx := SignalContext()
+		go func() { _ = ServeContext(ctx, srv, nil, time.Minute) }()
+		waitUp(t, addr)
+		go http.Get("http://" + addr)
+		<-entered
+		os.Stdout.WriteString("ready\n")
+		<-ctx.Done()
+		os.Stdout.WriteString("stopping\n")
+		select {}
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestSecondSignalForcesExit$")
+	cmd.Env = append(os.Environ(), "GRACEFUL_HELPER=1")
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	lines := bufio.NewScanner(out)
+	expect := func(want string) {
+		t.Helper()
+		for lines.Scan() {
+			if lines.Text() == want {
+				return
+			}
+		}
+		cmd.Process.Kill()
+		t.Fatalf("helper never printed %q", want)
+	}
+	expect("ready")
+	cmd.Process.Signal(os.Interrupt)
+	expect("stopping") // shutting down, waiting on the hung request
+	time.Sleep(50 * time.Millisecond) // let SignalContext restore the default
+	cmd.Process.Signal(os.Interrupt)
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) || ee.Sys().(syscall.WaitStatus).Signal() != syscall.SIGINT {
+			t.Fatalf("helper ended with %v, want killed by SIGINT", err)
+		}
+	case <-time.After(5 * time.Second):
+		cmd.Process.Kill()
+		t.Fatal("second SIGINT did not end the process")
 	}
 }

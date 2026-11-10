@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -131,7 +132,9 @@ func TestCheckerPollsWithoutNotify(t *testing.T) {
 	ft := &fakeTorrent{}
 	ft.set(1, time.Now().Unix()+1)
 	var sent atomic.Int32
-	CreateCompletedCheckRoutine(fakeTransmission(t, ft), fakeTelegram(t, &sent))
+	ctx, cancel := context.WithCancel(context.Background())
+	_, done := CreateCompletedCheckRoutine(ctx, fakeTransmission(t, ft), fakeTelegram(t, &sent))
+	t.Cleanup(func() { cancel(); <-done })
 
 	deadline := time.Now().Add(5 * time.Second)
 	for sent.Load() == 0 && time.Now().Before(deadline) {
@@ -192,5 +195,21 @@ func TestCompletionNoticeNotRetriedOnPermanentFailure(t *testing.T) {
 
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("sendMessage calls = %d, want 1", got)
+	}
+}
+
+// F124: the checker stops when its context is done, so shutdown can wait
+// for it and tests do not leak it.
+func TestCheckerStopsOnCancel(t *testing.T) {
+	ft := &fakeTorrent{}
+	ft.set(0.5, 0)
+	var sent atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	_, done := CreateCompletedCheckRoutine(ctx, fakeTransmission(t, ft), fakeTelegram(t, &sent))
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("checker did not stop after its context was cancelled")
 	}
 }

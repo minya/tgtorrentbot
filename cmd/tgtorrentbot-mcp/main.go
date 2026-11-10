@@ -112,7 +112,7 @@ func main() {
 		// torrent, then renames) before exiting; open event streams, which
 		// would never finish, are ended first.
 		httpSrv.RegisterOnShutdown(streams.closeAll)
-		if err := graceful.Serve(httpSrv, nil); err != nil {
+		if err := graceful.Serve(graceful.SignalContext(), httpSrv, nil); err != nil {
 			logger.Error(err, "MCP HTTP server exited with error")
 			os.Exit(1)
 		}

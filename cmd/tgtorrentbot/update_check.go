@@ -21,10 +21,15 @@ import (
 //
 // Completions that happen while the bot is not running are not notified:
 // the first check only reports torrents that completed after the bot started.
-func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *telegram.API) func() {
+//
+// The checker stops when ctx is done, after finishing a check in progress
+// (its notices are not cut mid-send); done is closed when it has stopped.
+func CreateCompletedCheckRoutine(ctx context.Context, transmissionClient *transmission.Client, api *telegram.API) (notify func(), done <-chan struct{}) {
 	chanNotify := make(chan int, 1)
+	stopped := make(chan struct{})
 
 	updateFn := func() {
+		defer close(stopped)
 		var state transmission.TorrentMap
 		lastPoll := time.Now().Unix()
 		checkTorrents := func() {
@@ -44,6 +49,8 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 		checkTorrents()
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-chanNotify:
 				logger.Debug("[UpdatesChecker] Check requested")
 				checkTorrents()
@@ -62,7 +69,7 @@ func CreateCompletedCheckRoutine(transmissionClient *transmission.Client, api *t
 		}
 	}
 
-	return notifyFunc
+	return notifyFunc, stopped
 }
 
 // updateCheckRoutine fetches the torrents, notifies the chat of every torrent

@@ -51,8 +51,11 @@ func main() {
 		logger.Fatal(err, "Can't create transmission client")
 	}
 
+	// Done at SIGTERM/SIGINT: stops the completion checker and the server.
+	ctx := graceful.SignalContext()
+
 	api := telegram.NewAPI(settings.BotToken)
-	notify := CreateCompletedCheckRoutine(transmissionClient, api)
+	notify, checkerDone := CreateCompletedCheckRoutine(ctx, transmissionClient, api)
 	var fileIDLookup internal.FileIDLookup
 
 	env := environment.Env{
@@ -103,12 +106,12 @@ func main() {
 		}
 	}
 
-	startListen(80, webhookSecret, handler.HandleUpdate)
+	startListen(ctx, 80, webhookSecret, handler, api, checkerDone)
 }
 
-func startListen(port int, webhookSecret string, handleUpdate func(context.Context, *telegram.Update) error) {
+func startListen(ctx context.Context, port int, webhookSecret string, handler *UpdatesHandler, api *telegram.API, checkerDone <-chan struct{}) {
 	logger.Info("Bot started")
-	webhook := newWebhookHandler(webhookSecret, handleUpdate)
+	webhook := newWebhookHandler(webhookSecret, handler.HandleUpdate)
 	http.Handle("/", webhook)
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
@@ -117,15 +120,35 @@ func startListen(port int, webhookSecret string, handleUpdate func(context.Conte
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	// On SIGTERM, stop taking updates and let the ones being handled finish
-	// (an add is two RPCs, AddTorrent then the labels). Updates Telegram
-	// has not delivered yet are redelivered to the next instance.
-	if err := graceful.Serve(srv, func(ctx context.Context) {
-		if err := webhook.Wait(ctx); err != nil {
-			logger.Warn("Shutdown deadline passed with updates still being handled")
-		}
+	// On SIGTERM, stop taking updates and let the ones being handled (an
+	// add is two RPCs, AddTorrent then the labels) and a completion notice
+	// being sent finish. Telegram never redelivers an update the webhook
+	// acknowledged, so the chats of updates still running near the deadline
+	// are told to send them again.
+	if err := graceful.Serve(ctx, srv, func(ctx context.Context) {
+		drain(ctx, webhook, checkerDone, &handler.inFlight, api)
 	}); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
+	}
+}
+
+// drain waits for the webhook's updates and the completion checker until
+// noticeBudget before ctx's deadline, then tells the chats of the updates
+// still being handled that they were interrupted.
+func drain(ctx context.Context, webhook interface{ Wait(context.Context) error }, checkerDone <-chan struct{}, inFlight *inFlightChats, api *telegram.API) {
+	waitCtx := ctx
+	if deadline, ok := ctx.Deadline(); ok {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithDeadline(ctx, deadline.Add(-noticeBudget))
+		defer cancel()
+	}
+	if err := webhook.Wait(waitCtx); err != nil {
+		tellInterrupted(ctx, api, inFlight.list())
+	}
+	select {
+	case <-checkerDone:
+	case <-ctx.Done():
+		logger.Warn("Shutdown deadline passed with a completion check still running")
 	}
 }
