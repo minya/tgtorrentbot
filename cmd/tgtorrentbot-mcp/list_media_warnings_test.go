@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/minya/tgtorrentbot/internal/media"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/odwrtw/transmission"
 )
 
@@ -69,5 +70,27 @@ func TestListMediaNoWarningsWhenAllIsWell(t *testing.T) {
 	_, out, _ := s.listMedia(context.Background(), nil, listMediaInput{})
 	if len(out.Warnings) != 0 {
 		t.Fatalf("warnings = %q, want none", out.Warnings)
+	}
+}
+
+// F104: a mistyped category is an error naming the valid ones, not an
+// empty library.
+func TestListMediaRejectsUnknownCategory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "shows", "Some Show"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := &server{config: Config{DownloadPath: root}, scan: &media.FilesystemScanner{DownloadPath: root},
+		jf: media.NewJellyfinClient("", ""), abs: media.NewAudiobookshelfClient("", "")}
+	for _, c := range []string{"show", "tv"} {
+		res, _, _ := s.listMedia(context.Background(), nil, listMediaInput{Category: c})
+		if !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "shows") {
+			t.Errorf("category %q: want an error naming the valid categories, got %+v", c, res.Content)
+		}
+	}
+	for _, c := range []string{"shows", "Shows", "incomplete", ""} {
+		if res, _, _ := s.listMedia(context.Background(), nil, listMediaInput{Category: c}); res.IsError {
+			t.Errorf("category %q refused", c)
+		}
 	}
 }

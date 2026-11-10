@@ -6,6 +6,7 @@ import (
 	"github.com/minya/logger"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -65,6 +66,11 @@ type listMediaOutput struct {
 var listMediaSourceTimeout = 15 * time.Second
 
 func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listMediaInput) (*mcp.CallToolResult, listMediaOutput, error) {
+	// A typo ("show", "tv") would otherwise filter everything out and look
+	// like an empty library.
+	if c := strings.ToLower(strings.TrimSpace(in.Category)); c != "" && c != mcplib.IncompleteCategory && !slices.Contains(knownCategories, c) {
+		return formatError("unknown category %q; use one of %s, or %s", in.Category, strings.Join(knownCategories, ", "), mcplib.IncompleteCategory), listMediaOutput{}, nil
+	}
 	// Torrents (optional — runs without transmission).
 	// Every source is optional: one that fails is skipped and reported in
 	// warnings, so the rest of the library stays listable (e.g. paths for
