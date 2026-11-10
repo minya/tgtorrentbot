@@ -270,7 +270,7 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 		Name: "read_tags",
 		Description: "Read ID3 tags from one .mp3 file or every .mp3 file under a " +
 			"directory (other formats are not supported and are skipped). Input path is relative to the configured download path (or " +
-			"absolute under it). Returns per-file title/artist/album/album_artist/" +
+			"absolute under it or under the incomplete directory, as list_media reports it). Returns per-file title/artist/album/album_artist/" +
 			"composer/year/genre/track/disc/comment plus an 'encoding_hint' flag " +
 			"suggesting cp1251-as-latin1 mojibake so Claude knows when to call " +
 			"write_tags with fix_encoding='cp1251'. For multi-CD audiobooks, check " +

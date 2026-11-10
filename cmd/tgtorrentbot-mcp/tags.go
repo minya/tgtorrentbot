@@ -17,7 +17,7 @@ import (
 )
 
 type readTagsInput struct {
-	Path      string `json:"path" jsonschema:"path to an .mp3 file or a directory, relative to the download path or absolute under it"`
+	Path      string `json:"path" jsonschema:"path to an .mp3 file or a directory, relative to the download path, or absolute under it or under the incomplete directory"`
 	Recursive bool   `json:"recursive,omitempty" jsonschema:"when path is a directory, recurse into subdirectories (default false)"`
 }
 
@@ -43,7 +43,7 @@ type readTagsOutput struct {
 }
 
 type writeTagsInput struct {
-	Path        string            `json:"path" jsonschema:"path to an .mp3 file or a directory, relative to the download path or absolute under it"`
+	Path        string            `json:"path" jsonschema:"path to an .mp3 file or a directory, relative to the download path, or absolute under it or under the incomplete directory"`
 	Recursive   bool              `json:"recursive,omitempty" jsonschema:"when path is a directory, recurse into subdirectories (default false)"`
 	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (only 'cp1251' is supported), re-decode text (T***, TXXX), comment and lyrics (USLT) frames from this codepage to Unicode before applying overrides; only values that look like cp1251 mojibake are rewritten"`
 	Tags        map[string]string `json:"tags,omitempty" jsonschema:"optional explicit tag overrides; keys: title, artist, album, album_artist, composer, year, genre, track, disc, comment"`
@@ -86,7 +86,7 @@ var overrideKeys = map[string]bool{
 }
 
 func (s *server) readTags(ctx context.Context, _ *mcp.CallToolRequest, in readTagsInput) (*mcp.CallToolResult, readTagsOutput, error) {
-	resolved, err := resolvePath(s.config.DownloadPath, in.Path)
+	resolved, err := resolvePath(s.config.DownloadPath, in.Path, s.extraRoots()...)
 	if err != nil {
 		return formatError("%v", err), readTagsOutput{}, nil
 	}
@@ -156,7 +156,7 @@ func (s *server) writeTags(ctx context.Context, _ *mcp.CallToolRequest, in write
 		}
 	}
 
-	resolved, err := resolvePath(s.config.DownloadPath, in.Path)
+	resolved, err := resolvePath(s.config.DownloadPath, in.Path, s.extraRoots()...)
 	if err != nil {
 		return formatError("%v", err), writeTagsOutput{}, nil
 	}

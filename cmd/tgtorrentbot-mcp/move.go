@@ -15,8 +15,8 @@ import (
 )
 
 type moveMediaInput struct {
-	Source      string `json:"source" jsonschema:"path of the file or directory to move, relative to the download path or absolute under it; must exist"`
-	Destination string `json:"destination" jsonschema:"new path, relative to the download path or absolute under it; must not already exist (parent dirs are created automatically)"`
+	Source      string `json:"source" jsonschema:"path of the file or directory to move, relative to the download path, or absolute under it or under the incomplete directory; must exist"`
+	Destination string `json:"destination" jsonschema:"new path, relative to the download path, or absolute under it or under the incomplete directory; must not already exist (parent dirs are created automatically)"`
 	TorrentID   *int   `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item being moved (the torrent_id field from list_media); when set, the torrent is removed from Transmission (files kept) before the move; refused when that torrent's data is not at the source path or it is still downloading. Required when a torrent tracks the source: a move without it is refused then. Omit for filesystem-only items"`
 }
 
@@ -35,11 +35,11 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	if fi, err := os.Lstat(lexicalPath(s.config.DownloadPath, in.Source)); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		return formatError("source %q is a symlink; move the item it points to by its own path", in.Source), moveMediaOutput{}, nil
 	}
-	src, err := resolvePath(s.config.DownloadPath, in.Source)
+	src, err := resolvePath(s.config.DownloadPath, in.Source, s.extraRoots()...)
 	if err != nil {
 		return formatError("source: %v", err), moveMediaOutput{}, nil
 	}
-	dst, err := resolveDestPath(s.config.DownloadPath, in.Destination)
+	dst, err := resolveDestPath(s.config.DownloadPath, in.Destination, s.extraRoots()...)
 	if err != nil {
 		return formatError("destination: %v", err), moveMediaOutput{}, nil
 	}
@@ -329,6 +329,18 @@ func (s *server) structuralDirs() []string {
 		dirs = append(dirs, evalOrClean(filepath.Join(s.config.DownloadPath, c)))
 	}
 	return append(dirs, evalOrClean(s.incompletePath()))
+}
+
+// extraRoots are the directories besides DownloadPath that the file tools
+// may touch: the incomplete directory when it lies outside DownloadPath
+// (Transmission's own default keeps them apart), since list_media reports
+// in-progress downloads and orphans there.
+func (s *server) extraRoots() []string {
+	inc := s.incompletePath()
+	if withinAny(filepath.Clean(inc), []string{filepath.Clean(s.config.DownloadPath)}) {
+		return nil
+	}
+	return []string{inc}
 }
 
 func (s *server) incompletePath() string {
