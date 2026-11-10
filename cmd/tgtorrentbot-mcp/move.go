@@ -17,7 +17,7 @@ import (
 type moveMediaInput struct {
 	Source      string `json:"source" jsonschema:"path of the file or directory to move, relative to the download path or absolute under it; must exist"`
 	Destination string `json:"destination" jsonschema:"new path, relative to the download path or absolute under it; must not already exist (parent dirs are created automatically)"`
-	TorrentID   *int   `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item being moved (the torrent_id field from list_media); when set, the torrent is removed from Transmission (files kept) before the move; refused when that torrent's data is not at the source path. Required when a torrent tracks the source: a move without it is refused then. Omit for filesystem-only items"`
+	TorrentID   *int   `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item being moved (the torrent_id field from list_media); when set, the torrent is removed from Transmission (files kept) before the move; refused when that torrent's data is not at the source path or it is still downloading. Required when a torrent tracks the source: a move without it is refused then. Omit for filesystem-only items"`
 }
 
 type moveMediaOutput struct {
@@ -157,6 +157,11 @@ func (s *server) untrackTorrent(id *int, src string) (removed bool, note string,
 	}
 	if named == nil {
 		return false, fmt.Sprintf("no torrent with id %d (already removed?); moved without it", *id), nil
+	}
+	// Untracking a download in progress abandons it: its partial data would
+	// be moved and nothing would finish it.
+	if named.PercentDone < 1 {
+		return false, "", fmt.Errorf("torrent %d (%q) is still downloading (%.0f%%); move it once it is complete", named.ID, named.Name, named.PercentDone*100)
 	}
 	if err := s.trans.RemoveTorrents([]*transmission.Torrent{named}, false); err != nil {
 		return false, "", fmt.Errorf("removing torrent %d before move: %v", *id, err)

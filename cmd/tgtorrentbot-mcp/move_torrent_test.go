@@ -54,7 +54,7 @@ func intPtr(i int) *int { return &i }
 
 // showTorrent is torrent 7, whose data is the setupShow source.
 func showTorrent(root string) *transmission.Torrent {
-	return &transmission.Torrent{ID: 7, Name: "Proslushka.S01.2002", DownloadDir: filepath.Join(root, "shows")}
+	return &transmission.Torrent{ID: 7, Name: "Proslushka.S01.2002", DownloadDir: filepath.Join(root, "shows"), PercentDone: 1}
 }
 
 func TestMoveMediaRemovesTorrentFirst(t *testing.T) {
@@ -249,7 +249,7 @@ func TestMoveMediaRefusesTrackedDataWithoutTorrentID(t *testing.T) {
 // F91: when two torrents track the source, naming one is not enough.
 func TestMoveMediaRefusesWhenAnotherTorrentAlsoOwnsSource(t *testing.T) {
 	s, root, src := setupShow(t)
-	second := &transmission.Torrent{ID: 9, Name: "Proslushka.S01.2002", DownloadDir: filepath.Join(root, "shows")}
+	second := &transmission.Torrent{ID: 9, Name: "Proslushka.S01.2002", DownloadDir: filepath.Join(root, "shows"), PercentDone: 1}
 	fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root), second}, src: src}
 	s.trans = fake
 
@@ -281,5 +281,24 @@ func TestMoveMediaUncheckedWhenTransmissionDown(t *testing.T) {
 	})
 	if res.IsError || !out.Moved || !strings.Contains(out.TorrentNote, "without checking") {
 		t.Fatalf("result %+v, want a move with a note", out)
+	}
+}
+
+// F111: a download still in progress is not untracked and moved.
+func TestMoveMediaRefusesDownloadInProgress(t *testing.T) {
+	s, root, src := setupShow(t)
+	downloading := showTorrent(root)
+	downloading.PercentDone = 0.4
+	fake := &fakeTorrents{torrents: []*transmission.Torrent{downloading}, src: src}
+	s.trans = fake
+
+	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
+		Source: "shows/Proslushka.S01.2002", Destination: "shows/The Wire (2002)", TorrentID: intPtr(7),
+	})
+	if !res.IsError || out.Moved || len(fake.removed) != 0 {
+		t.Fatalf("an in-progress download was untracked or moved: %+v, removed %v", out, fake.removed)
+	}
+	if text := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, "still downloading") {
+		t.Errorf("error %q does not say it is still downloading", text)
 	}
 }

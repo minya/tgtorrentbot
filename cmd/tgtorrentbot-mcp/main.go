@@ -326,6 +326,7 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"If the item's list_media sources include 'torrent', pass its " +
 			"torrent_id: the torrent is removed from Transmission (files kept) " +
 			"before the move, so Transmission doesn't error on the vanished path. " +
+			"A torrent that is still downloading is refused: move it once complete. " +
 			"A move of data a torrent still tracks is refused without its torrent_id " +
 			"(the error names the torrent); if several torrents track it, remove the " +
 			"others with remove_torrent first. " +

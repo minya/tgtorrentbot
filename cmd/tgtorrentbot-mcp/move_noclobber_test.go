@@ -18,7 +18,7 @@ type racingTorrents struct {
 }
 
 func (r *racingTorrents) GetTorrents() ([]*transmission.Torrent, error) {
-	return []*transmission.Torrent{{ID: 1, Name: filepath.Base(r.src), DownloadDir: filepath.Dir(r.src)}}, nil
+	return []*transmission.Torrent{{ID: 1, Name: filepath.Base(r.src), DownloadDir: filepath.Dir(r.src), PercentDone: 1}}, nil
 }
 
 func (r *racingTorrents) RemoveTorrents([]*transmission.Torrent, bool) error {
