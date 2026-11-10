@@ -270,10 +270,7 @@ func main() {
 func listedTorrents(torrents []*transmission.Torrent) []media.TorrentInfo {
 	var result []media.TorrentInfo
 	for _, t := range torrents {
-		category := "others"
-		if len(t.Labels) >= 2 {
-			category = t.Labels[1]
-		}
+		category := labelCategory(t.Labels)
 		result = append(result, media.TorrentInfo{
 			ID:               t.ID,
 			Name:             t.Name,
@@ -589,15 +586,27 @@ func itemTorrents(torrents []*transmission.Torrent, category, name string) []*tr
 		if t.Name != name {
 			continue
 		}
-		torrentCategory := "others"
-		if len(t.Labels) >= 2 {
-			torrentCategory = t.Labels[1]
-		}
+		torrentCategory := labelCategory(t.Labels)
 		if torrentCategory == category {
 			item = append(item, t)
 		}
 	}
 	return item
+}
+
+// safePathComponent reports whether s can be used as one path component:
+// not empty, not "." or "..", and without separators.
+func safePathComponent(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, `/\`)
+}
+
+// labelCategory is a torrent's category label, "others" when missing or
+// empty (legacy single-label torrents, labels cleared in Transmission).
+func labelCategory(labels []string) string {
+	if len(labels) >= 2 && labels[1] != "" {
+		return labels[1]
+	}
+	return "others"
 }
 
 // handleItemDelete routes DELETE /api/items/{id} and DELETE /api/items/{id}/torrent.
@@ -624,7 +633,12 @@ func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !slices.Contains(validCategories, category) && category != media.IncompleteCategory {
+	// Any category is accepted, not only the known ones: an item whose
+	// torrent carries an unknown label (a category since removed, a label
+	// set in the Transmission UI) is shown under "Other" and must stay
+	// removable. Like the name, it must be a single path component, since
+	// "Remove data" deletes under {DownloadPath}/{category}.
+	if !safePathComponent(category) {
 		http.Error(w, `{"error": "invalid category"}`, http.StatusBadRequest)
 		return
 	}
@@ -632,7 +646,7 @@ func (app *App) handleItemDelete(userID int64, w http.ResponseWriter, r *http.Re
 	// Reject path traversal: the name must be a single path component, and
 	// only "." and ".." themselves traverse ("Wait..." is an ordinary name).
 	// handleRemoveItemData checks the joined path stays under its base too.
-	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+	if !safePathComponent(name) {
 		http.Error(w, `{"error": "invalid item name"}`, http.StatusBadRequest)
 		return
 	}
@@ -700,6 +714,12 @@ func (app *App) handleRemoveItemData(userID int64, w http.ResponseWriter, catego
 	// category live only in the incomplete directory.
 	primary := filepath.Join(app.config.DownloadPath, category, name)
 	candidates := []string{primary, filepath.Join(app.config.IncompletePath, name)}
+	// An unknown category is no download directory, so it never owns a
+	// folder in the shared incomplete dir by name alone: only its own
+	// torrents' in-progress data there is removed with it.
+	if !slices.Contains(validCategories, category) && category != media.IncompleteCategory && len(mine) == 0 {
+		candidates = []string{primary}
+	}
 	if category == media.IncompleteCategory {
 		primary = filepath.Join(app.config.IncompletePath, name)
 		candidates = []string{primary}
@@ -784,10 +804,7 @@ func (app *App) torrentUsing(torrents, except []*transmission.Torrent, dir strin
 		downloadDir := t.DownloadDir
 		if downloadDir == "" {
 			// Not reported: assume the bot's layout, {DownloadPath}/{category}.
-			category := "others"
-			if len(t.Labels) >= 2 {
-				category = t.Labels[1]
-			}
+			category := labelCategory(t.Labels)
 			downloadDir = filepath.Join(app.config.DownloadPath, category)
 		}
 		if filepath.Clean(filepath.Join(downloadDir, t.Name)) == dir {

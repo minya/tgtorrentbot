@@ -208,6 +208,8 @@ Everything else derives from `internal/category`: the bot's category keyboards, 
 2. `docker-compose.yaml` — a `/media/{category}` volume on jellyfin and a `/data/{category}` volume on dufs (`TestComposeMountsCoverAllCategories` in `internal/category` fails when one is missing)
 3. `README.md` — the category → directory table
 
+Torrents labelled with a removed category stay listed and removable in the webapp under that label (`DELETE /api/items/{id}` accepts any single path component as category; an empty label counts as `others`), but nothing can be downloaded into it any more; move their data with `move_media` if they should land in another category.
+
 ### Torrent Labels Convention
 
 Transmission torrent labels are used to store metadata (layout defined in `internal/torrentlabels`; write them with `torrentlabels.New`):

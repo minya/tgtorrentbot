@@ -351,3 +351,31 @@ func fakeTorrentsServer(t *testing.T, torrentsJSON string) string {
 	t.Cleanup(ts.Close)
 	return ts.URL
 }
+
+// F97: an item whose category label is not a known category (one removed
+// since, or a label written by hand) can still be removed, torrent and
+// data; a torrent with an empty category label counts as "others".
+func TestRemoveUnknownCategoryItem(t *testing.T) {
+	app, root, _, removed := newDeleteTestApp(t,
+		`[{"id":7,"name":"Doc","labels":["42","documentaries"],"percentDone":1},
+		  {"id":8,"name":"Bare","labels":["42",""],"percentDone":1}]`)
+	mustWriteFile(t, filepath.Join(root, "documentaries", "Doc", "a.mkv"))
+
+	if rec := deleteTorrentOnly(app, 42, "documentaries", "Doc", ""); rec.Code != http.StatusOK {
+		t.Fatalf("remove torrent: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	if !removed.Load() {
+		t.Fatal("torrent was not removed")
+	}
+	removed.Store(false)
+	if rec := deleteItem(app, 42, "documentaries", "Doc"); rec.Code != http.StatusOK {
+		t.Fatalf("remove data: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	if exists(filepath.Join(root, "documentaries", "Doc")) {
+		t.Error("data of the unknown category was not deleted")
+	}
+	removed.Store(false)
+	if rec := deleteTorrentOnly(app, 42, "others", "Bare", ""); rec.Code != http.StatusOK || !removed.Load() {
+		t.Errorf("empty label as others: status %d, removed %v", rec.Code, removed.Load())
+	}
+}

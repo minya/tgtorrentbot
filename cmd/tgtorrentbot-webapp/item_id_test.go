@@ -51,7 +51,6 @@ func TestItemDeleteRejectsTraversal(t *testing.T) {
 		"dotdot path":        "movies:../secret.txt",
 		"slash in name":      "movies:Keep/a.mkv",
 		"backslash in name":  `movies:Keep\a.mkv`,
-		"unknown category":   "secret:Keep",
 		"traversal category": "../..:Keep",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -62,6 +61,14 @@ func TestItemDeleteRejectsTraversal(t *testing.T) {
 				t.Fatalf("status %d, want 400", rec.Code)
 			}
 		})
+	}
+	// An unknown category with no torrent and no folder deletes nothing,
+	// in particular not another item's incomplete folder of that name.
+	rec := httptest.NewRecorder()
+	app.handleItemDelete(42, rec, httptest.NewRequest(http.MethodDelete,
+		"/api/items/"+base64.URLEncoding.EncodeToString([]byte("secret:Keep")), nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("unknown category without data: status %d, want 404", rec.Code)
 	}
 	for _, p := range []string{filepath.Join(root, "secret.txt"), filepath.Join(root, "movies", "Keep"), filepath.Join(inc, "Keep")} {
 		if _, err := os.Stat(p); err != nil {
