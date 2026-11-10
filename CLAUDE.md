@@ -204,7 +204,7 @@ Categories determine the download subdirectory: `{DownloadPath}/{category}/`
 Everything else derives from `internal/category`: the bot's category keyboards, the webapp's `validCategories`, the MCP server's `knownCategories` and `list_media` description, and the webapp frontend, which loads the list from `/categories.js` (served unauthenticated by `cmd/tgtorrentbot-webapp/categories.go`) and builds its category grid cards, `categoryNames`, `counts` and download-modal buttons from it. The virtual `incomplete` category is the one frontend-only entry and is never in the list.
 
 **When adding/removing a category, update these locations:**
-1. `internal/category/category.go` — constant, `All()`, `DisplayName()`
+1. `internal/category/category.go` — constant, `All()`, `DisplayName()`. Keep the name at most 16 bytes: it goes into the bot's `/dlfilecat <category> <uuid>` callbacks, which Telegram caps at 64 bytes (`TestCategoryCallbacksFitTelegramLimit` in `commands`)
 2. `docker-compose.yaml` — a `/media/{category}` volume on jellyfin and a `/data/{category}` volume on dufs (`TestComposeMountsCoverAllCategories` in `internal/category` fails when one is missing)
 3. `README.md` — the category → directory table
 
