@@ -38,8 +38,10 @@ The bot uses a webhook-based update flow. Downloads are organized into category 
 | `/search <query>` | Same as plain text search |
 | `/list` | List all torrents in Transmission, paginated (5 per page) |
 | `/remove <id>` | Remove a torrent and delete its local data |
+| `magnet:?…` link | Add the magnet link to Transmission (asks for the category) |
+| `.torrent` file upload | Add the uploaded torrent to Transmission (asks for the category) |
 
-Downloading is initiated via inline keyboard buttons in search results.
+A search result's "Download" button asks for the category and then adds the torrent.
 
 ## Download Categories
 
@@ -76,7 +78,7 @@ All endpoints require `X-Telegram-Init-Data` header with valid Telegram HMAC:
 
 ## Configuration
 
-Settings are loaded from environment variables or a JSON file (`settings.json` by default), never a mix: if any required `TGT_*` variable is set, the environment is used exclusively and must be complete (a missing variable is a startup error); otherwise the file is used. The file is read as plain JSON, so 1Password `op://` references in it must be resolved first (`op inject -i settings.json -o settings.resolved.json`); unresolved ones are refused at startup.
+The bot loads its settings from environment variables or a JSON file (`settings.json` by default, `-settings` flag), never a mix: if any required `TGT_*` variable is set, the environment is used exclusively and must be complete (a missing variable is a startup error); otherwise the file is used. The file is read as plain JSON, so 1Password `op://` references in it must be resolved first (`op inject -i settings.json -o settings.resolved.json`); unresolved ones are refused at startup. The webapp and the MCP server read environment variables only.
 
 ### Environment Variables
 
@@ -99,6 +101,7 @@ Settings are loaded from environment variables or a JSON file (`settings.json` b
 | `TGT_AUDIOBOOKSHELF_API_KEY` | No | Audiobookshelf API token (Settings → Users → user → API Token) |
 | `TGT_INCOMPLETE_PATH` | No | Path to Transmission's incomplete downloads directory; defaults to `{downloadPath}/incomplete` |
 | `TGT_WEBHOOK_SECRET` | No | Bot only. Webhook `secret_token`; defaults to a value derived from the bot token |
+| `PORT` | No | Webapp only. Listen port, default `8080` |
 
 The bot needs every required variable. The webapp needs `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (plus the Transmission and Rutracker variables for the features that use them).
 
@@ -199,7 +202,7 @@ Compose environment variables:
 | `RUTRACKER_USERNAME` | Yes | Rutracker username |
 | `RUTRACKER_PASSWORD` | Yes | Rutracker password |
 | `TUNNEL_TOKEN` | Yes | Cloudflare tunnel token |
-| `WEBAPP_URL` | No | Mini App public URL; enables the chat menu button and Mini App sidecar |
+| `WEBAPP_URL` | No | Mini App public URL; the bot registers it as the chat menu button and adds it to `/list` (the webapp service runs either way) |
 | `JELLYFIN_API_KEY` | No | Jellyfin API key; enables unified media items with Jellyfin source |
 | `AUDIOBOOKSHELF_API_KEY` | No | Audiobookshelf API token; enables the Audiobookshelf source and the MCP `abs_*` tools |
 | `MCP_TOKEN` | For `tgt-mcp` | MCP login secret; without it the `tgt-mcp` container exits with an error |

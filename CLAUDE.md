@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Telegram bot for managing torrents via a Transmission RPC client. Users can search for torrents on Rutracker, download them to Transmission, list active torrents with pagination, and receive notifications when downloads complete. It also supports an optional Telegram Mini Web App for browsing torrents and an optional MCP server (stdio or HTTP+bearer-token transport) that exposes the media library to Claude Code for tag fixes and library maintenance.
+This is a Telegram bot for managing torrents via a Transmission RPC client. Users can search for torrents on Rutracker, download them to Transmission, list active torrents with pagination, and receive notifications when downloads complete. It also supports an optional Telegram Mini Web App for browsing torrents and an optional MCP server (stdio, or Streamable HTTP behind OAuth 2.1) that exposes the media library to Claude Code for tag fixes and library maintenance.
 
 ## Build and Run
 
@@ -67,11 +67,12 @@ The bot is configured either by environment variables or by a JSON settings file
 - `TGT_RUTRACKER_PASSWORD` - Rutracker password
 - `TGT_ALLOWED_USERS` - Comma-separated Telegram user IDs allowed to use the bot and the webapp (e.g. `123456789,987654321`). Settings-file key: `allowedUsers` (JSON array of numbers); startup fails when it is empty
 
-The webapp requires `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (plus the Transmission/Rutracker variables for the features that use them). The MCP server requires only `TGT_DOWNLOADPATH`.
+The webapp requires `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (plus the Transmission/Rutracker variables for the features that use them). The MCP server requires only `TGT_DOWNLOADPATH`. Both read environment variables only; the settings file is the bot's.
 
 ### Optional environment variables:
 - `TGT_LOGLEVEL` - Log level (e.g., "info", "debug")
 - `TGT_WEBAPP_URL` - URL for the Telegram Mini Web App (enables web app menu button)
+- `PORT` - Webapp only, optional. Listen port, default `8080` (compose sets it)
 - `TGT_WEBHOOK_SECRET` - Bot only, optional. The `secret_token` registered with `setWebhook`; Telegram sends it in `X-Telegram-Bot-Api-Secret-Token` and the bot rejects webhook requests without it (401). Defaults to a value derived from the bot token, so it only needs setting to rotate it independently. 1-256 chars of `A-Za-z0-9_-`. Settings-file key: `webhookSecret`
 - `TGT_JELLYFIN_URL` - Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it
 - `TGT_JELLYFIN_API_KEY` - Jellyfin API key (generated from Jellyfin admin dashboard)
@@ -277,7 +278,7 @@ The completion checker uses Transmission labels to track which chat initiated ea
 
 ### MCP Server
 
-Optional binary (`cmd/tgtorrentbot-mcp/`) that exposes media-library tools to Claude Code over stdio. Deployed alongside the bot for remote tag fixing ("my cyrillic audiobook tags are mojibake — fix them") without SSH'ing in manually. Current tools:
+Optional binary (`cmd/tgtorrentbot-mcp/`) that exposes media-library tools to Claude Code over stdio, or to claude.ai over Streamable HTTP behind OAuth 2.1 (see Transports). Deployed alongside the bot for remote tag fixing ("my cyrillic audiobook tags are mojibake — fix them") without SSH'ing in manually. Current tools:
 
 - `list_media(category?, query?, recursive?)` — reuses `internal/media.MergeItems` to return torrents + filesystem + Jellyfin + Audiobookshelf items with the resolved filesystem path when present: the path the scan actually found (`UnifiedItem.Paths`), i.e. the completed `{DownloadPath}/{category}/{name}` when it exists, else `{IncompletePath}/{name}` for in-progress downloads and orphans of the virtual `incomplete` category (accepted as a `category` filter). Each item carries recency fields: `added_date` (Transmission `addedDate`, torrents only) and `mtime` (newest top-level filesystem mtime, on-disk items only), both RFC 3339 UTC — `torrent_id` is not a recency signal since filesystem-only items have none. Every source is optional: one that fails (Transmission down, Jellyfin/ABS errors or timeouts, an unreadable directory) is skipped, logged and named in a `warnings` list, so the rest stays listable and a missing source on an item is not mistaken for "unknown to that service". `recursive=true` adds a `files` list (path/size/mtime) per item, e.g. individual show episodes; capped at `maxListedFiles` total with `files_truncated` set when hit.
 - `read_tags(path, recursive?)` — reads ID3v2 tags from `.mp3` files via `github.com/bogem/id3v2/v2`. Returns title/artist/album/album_artist/composer/year/genre/track/disc/comment. Emits an `encoding_hint: "cp1251"` flag when any value `fix_encoding` would repair (every T*** frame, TXXX, COMM and USLT, descriptions included, not only the fields shown) looks like cp1251 bytes mis-decoded as Latin-1 (common for rutracker cyrillic downloads), telling Claude when to call `write_tags` with `fix_encoding`.
@@ -295,7 +296,7 @@ Optional binary (`cmd/tgtorrentbot-mcp/`) that exposes media-library tools to Cl
 
 All tool descriptions are in `main.go:registerTools` — keep them specific enough that Claude can pick the right tool from a natural-language request and knows when to chain calls (e.g., after `write_tags` on audiobooks, always call `abs_rescan`; after `write_tags` on music/musicvideos and after `move_media` on shows, call `jellyfin_rescan`), and state the real limits (only `.mp3`, only `cp1251`) so Claude does not make calls bound to fail.
 
-**Only `TGT_DOWNLOADPATH` is required.** Transmission, Jellyfin, and Audiobookshelf env vars are optional — missing ones just reduce what `list_media` returns and disable `abs_rescan`.
+**Only `TGT_DOWNLOADPATH` is required.** Transmission, Jellyfin, and Audiobookshelf env vars are optional — missing ones reduce what `list_media` returns and make that service's tools return a "not configured" error (`remove_torrent` and `move_media`/`write_tags` with `torrent_id` without Transmission, `jellyfin_rescan` without Jellyfin, the `abs_*` tools without Audiobookshelf).
 
 Logs go to **stderr**, not stdout — stdout is reserved for MCP JSON-RPC framing.
 
