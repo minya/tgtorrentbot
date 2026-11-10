@@ -28,7 +28,7 @@ internal/                — Shared internals: categories, torrent labels, media
 
 [CLAUDE.md](CLAUDE.md) has the detailed architecture, every MCP tool and the OAuth flow.
 
-The bot uses a webhook-based update flow. Downloads are organized into category subdirectories under the configured download path. Transmission torrent labels store the originating chat ID and category for completion tracking.
+The bot uses a webhook-based update flow. Downloads are organized into category subdirectories under the configured download path. Transmission torrent labels store the originating chat ID (for the completion notice), the category and the ID of the user who added the torrent (informational: downloads are shared between allowed users).
 
 ## Bot Commands
 

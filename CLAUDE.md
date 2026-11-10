@@ -237,11 +237,11 @@ The completion checker uses Transmission labels to track which chat initiated ea
 1. User sends text (plain or `/search <query>`)
 2. `SearchCommand` gets the shared Rutracker client (`Env.Rutracker`, logged in once per process)
 3. Results are parsed, sorted by seeders (descending)
-4. Top 10 results sent as messages with "Добавить" inline button
+4. Top 10 results sent as messages with a "Download" inline button
 5. Button triggers `/dl <url>` callback
 
 ### Download Flow
-1. User clicks "Добавить" button → triggers `/dl <url>` callback
+1. User clicks the "Download" button → triggers `/dl <url>` callback
 2. `DownloadCommand` presents category selection keyboard
 3. User selects category → triggers `/dlcat <category> <url>` callback
 4. `DownloadWithCategoryCommand` gets the shared Rutracker client
@@ -255,7 +255,7 @@ The completion checker uses Transmission labels to track which chat initiated ea
 2. `DownloadByFileCommand` registers the Telegram `file_id` in `internal.FileIDLookup` and receives a short UUID key
 3. Category selection keyboard is sent with callbacks of the form `/dlfilecat <category> <uuid>`
 4. User picks a category → `DownloadFileWithCategoryCommand.Accepts` resolves the UUID back to the real `file_id`; if the UUID is missing (bot restart), it returns an `expiredFileButtonCommand` that tells the user to re-upload
-5. The real file is fetched via `GetFile`/`DownloadFile` and handed to `DownloadCommand.addTorrentAndReply`, which sets labels `[chatID, category]` and adds it to Transmission
+5. The real file is fetched via `GetFile`/`DownloadFile` and handed to `DownloadCommand.addTorrentAndReply`, which adds it to Transmission; then `finalizeTorrent` sets labels `[chatID, category, userID]` (and removes the torrent again if that fails)
 
 **Why the UUID indirection:** Telegram `callback_data` is capped at 64 bytes. Telegram `file_id` values alone are routinely 60+ chars, so embedding the raw `file_id` plus a category prefix overflows the limit and the button silently does nothing. `FileIDLookup` keeps the `file_id` in process memory and puts only a 36-char UUID in the callback. It is a `sync.Mutex`-guarded map used concurrently from webhook handlers, and `Add` bounds memory by evicting entries older than 1 hour.
 
@@ -264,15 +264,15 @@ The completion checker uses Transmission labels to track which chat initiated ea
 2. `DownloadByMagnetCommand` stores the magnet URI in `FileIDLookup` and receives a short UUID key (same indirection as the file-upload flow — magnet URIs exceed the 64-byte callback data limit)
 3. Category selection keyboard is sent with callbacks of the form `/dlmagnet <category> <uuid>`
 4. User picks a category → `DownloadMagnetWithCategoryCommand.Accepts` resolves the UUID back to the magnet URI; if the UUID is missing (bot restart), it returns an `expiredFileButtonCommand` that tells the user to re-send the link
-5. The magnet URI is passed to Transmission via `AddTorrentArg{Filename: magnetURI}` (Transmission RPC accepts magnet URIs in the `filename` field); labels `[chatID, category]` are set via `DownloadCommand.addMagnetAndReply`
+5. The magnet URI is passed to Transmission via `AddTorrentArg{Filename: magnetURI}` (Transmission RPC accepts magnet URIs in the `filename` field); `DownloadCommand.addMagnetAndReply` adds it, then `finalizeTorrent` sets labels `[chatID, category, userID]`
 6. Transmission resolves torrent metadata asynchronously over DHT/peers
 
 ### List with Pagination
 1. User sends `/list`
 2. Torrents are fetched from Transmission and sorted by ID descending (most recent first)
-3. Results are paginated (5 per page) with navigation buttons ("← Назад" / "Вперёд →")
-4. Page header shows "Страница X/Y (всего: Z)"
-5. If `WebAppURL` is configured, an "Открыть приложение" button links to the web app
+3. Results are paginated (5 per page) with navigation buttons ("← Back" / "Next →")
+4. Page header shows "Page X/Y (total: Z)"
+5. If `WebAppURL` is configured, an "Open app" button links to the web app
 6. Pagination callbacks use `/list_page <page_number>`
 
 ### MCP Server
@@ -392,7 +392,7 @@ Key external packages:
 
 ## Notes
 
-- UI text is in Russian (search for `// TODO: translate` comments)
+- UI text is in English
 - Completion checker polls every 1 minute
 - Search returns max 10 results sorted by seeders
 - Plain text messages without slash are treated as search queries, unless they start with `magnet:?` (routed to magnet download)
