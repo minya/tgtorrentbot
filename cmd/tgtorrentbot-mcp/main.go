@@ -92,9 +92,7 @@ func main() {
 	ctx := context.Background()
 	if cfg.AuthToken != "" {
 		const addr = ":8080"
-		mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-			return mcpServer
-		}, nil)
+		mcpHandler := newMCPHandler(mcpServer)
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("/.well-known/oauth-authorization-server", srv.handleAuthServerMetadata)
@@ -179,6 +177,20 @@ func stdinIsDevNull() bool {
 		return false
 	}
 	return os.SameFile(in, null)
+}
+
+// mcpSessionIdleTimeout closes an MCP session after this long without a
+// request. Without it every session a client abandons (a closed chat, a
+// reloaded connector) keeps its goroutine and state until the process
+// restarts. A client whose session expired gets 404 and starts a new one,
+// as the MCP spec requires; its OAuth tokens are unaffected. A variable so
+// tests can shorten it.
+var mcpSessionIdleTimeout = 30 * time.Minute
+
+// newMCPHandler serves server over Streamable HTTP.
+func newMCPHandler(server *mcp.Server) *mcp.StreamableHTTPHandler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{SessionTimeout: mcpSessionIdleTimeout})
 }
 
 // readHeaderTimeout bounds how long a client may take to send its request
