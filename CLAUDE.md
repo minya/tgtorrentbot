@@ -121,7 +121,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - Sets up Telegram API with webhook
 - Configures Telegram chat menu button for web app (if `WebAppURL` is set)
 - Starts completion check routine (monitors torrent progress)
-- Starts HTTP server on port 80 to receive webhook updates, authenticated by the webhook `secret_token` (`cmd/tgtorrentbot/webhook.go`, served via `telegram.WebhookHandler`)
+- Starts HTTP server on port 80 to receive webhook updates, authenticated by the webhook `secret_token` (`cmd/tgtorrentbot/webhook.go`, served via `telegram.WebhookHandler`, which acknowledges each update at once and handles one chat's updates one after another, in `update_id` order, at most 40 at once)
 
 **cmd/tgtorrentbot/handler.go** - `UpdatesHandler` processes incoming Telegram updates:
 - Routes messages/callbacks to appropriate command factories

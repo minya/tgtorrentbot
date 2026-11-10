@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/minya/logger v0.0.0-20261110221104-2360a64aecd9
 	github.com/minya/rutracker v0.0.0-20261103195257-226b03a9301e
-	github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19
+	github.com/minya/telegram v0.0.0-20261110222439-d3b40b7b4880
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759
 	golang.org/x/sys v0.47.0

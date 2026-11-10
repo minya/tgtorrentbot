@@ -37,7 +37,8 @@ func validWebhookSecret(s string) bool {
 // 401 (checked in constant time by telegram.WebhookHandler, which also
 // accepts only POST and caps the body), so updates cannot be forged by
 // anyone who learns the webhook URL. telegram.WebhookHandler acknowledges
-// each update at once and handles it in its own goroutine, with a context
+// each update at once and handles it in the background (one chat's updates
+// one after another in update_id order, at most 40 at once), with a context
 // that survives Telegram disconnecting; the returned Webhook's Wait lets
 // shutdown finish the updates still being handled. Failures and panics in a
 // command are logged and never take the bot down.

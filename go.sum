@@ -20,8 +20,8 @@ github.com/minya/logger v0.0.0-20261110221104-2360a64aecd9 h1:9ZiJo38O51XhQfvqJM
 github.com/minya/logger v0.0.0-20261110221104-2360a64aecd9/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
 github.com/minya/rutracker v0.0.0-20261103195257-226b03a9301e h1:FSns4MiHEURT1vbR7UQhB0V4OX2NpapK5q8lj1sZFus=
 github.com/minya/rutracker v0.0.0-20261103195257-226b03a9301e/go.mod h1:rZF8E7TrGA55kRYc+6LMUJnaAOL0dMkynlquVAx/HAs=
-github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19 h1:CMQP/vXZb7MLXvVNAHY9gTJtOP2SFpV5UyTi+4hN/os=
-github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19/go.mod h1:NF/NuUYrilpDV0ywHxfPoUyxUb/YB24NzPiia+GTX1o=
+github.com/minya/telegram v0.0.0-20261110222439-d3b40b7b4880 h1:Q9dnotr4HuzdbRNU6Z7z1IEWNsdLGqBhrFsBI/rEZ0s=
+github.com/minya/telegram v0.0.0-20261110222439-d3b40b7b4880/go.mod h1:NF/NuUYrilpDV0ywHxfPoUyxUb/YB24NzPiia+GTX1o=
 github.com/modelcontextprotocol/go-sdk v1.5.0 h1:CHU0FIX9kpueNkxuYtfYQn1Z0slhFzBZuq+x6IiblIU=
 github.com/modelcontextprotocol/go-sdk v1.5.0/go.mod h1:gggDIhoemhWs3BGkGwd1umzEXCEMMvAnhTrnbXJKKKA=
 github.com/odwrtw/transmission v0.0.0-20221028215408-b11d7d55c759 h1:r3iRIEQq8R+uCW0PY+ude4yerchKyYhO003kQk0g4pE=
