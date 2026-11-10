@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -76,5 +77,29 @@ func TestFetchLibrariesIsConcurrent(t *testing.T) {
 	FetchLibraries(context.Background(), NewJellyfinClient(jfURL, "k"), NewAudiobookshelfClient(absURL, "k"))
 	if took := time.Since(start); took > 550*time.Millisecond {
 		t.Fatalf("took %s for two 300 ms sources; they were fetched sequentially", took)
+	}
+}
+
+// F109: one failing Audiobookshelf library keeps the items of the others
+// and is reported, instead of being dropped silently.
+func TestFetchLibrariesReportsFailedABSLibrary(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/libraries":
+			w.Write([]byte(`{"libraries":[{"id":"ok","mediaType":"book"},{"id":"bad","mediaType":"book"}]}`))
+		case "/api/libraries/ok/items":
+			w.Write([]byte(`{"results":[{"id":"li_1","relPath":"Author - Book","path":"/audiobooks/Author - Book"}]}`))
+		default:
+			http.Error(w, "boom", http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	_, abs, errs := FetchLibraries(context.Background(), NewJellyfinClient("", ""), NewAudiobookshelfClient(srv.URL, "k"))
+	if len(abs) != 1 {
+		t.Fatalf("got %d ABS items, want the working library's 1", len(abs))
+	}
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "audiobookshelf partly unavailable") || !strings.Contains(errs[0].Error(), "library bad") {
+		t.Fatalf("errs = %v, want the failed library reported", errs)
 	}
 }

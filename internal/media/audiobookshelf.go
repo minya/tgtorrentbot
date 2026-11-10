@@ -76,6 +76,10 @@ func (c *AudiobookshelfClient) doRequest(ctx context.Context, method, path strin
 	return c.client.Do(req)
 }
 
+// GetItems returns the items of every library. When some libraries fail,
+// it returns the items of the others together with an error naming the
+// failed ones, so a caller can list what it got and still say the view is
+// incomplete.
 func (c *AudiobookshelfClient) GetItems(ctx context.Context) ([]AudiobookshelfItem, error) {
 	if c.url == "" || c.apiKey == "" {
 		return nil, nil
@@ -97,18 +101,20 @@ func (c *AudiobookshelfClient) GetItems(ctx context.Context) ([]AudiobookshelfIt
 	}
 
 	var items []AudiobookshelfItem
+	var failed []error
 	for _, lib := range libResp.Libraries {
 		if err := ctx.Err(); err != nil {
-			return items, err
+			return items, errors.Join(append(failed, err)...)
 		}
 		libItems, err := c.getLibraryItems(ctx, lib.ID)
 		if err != nil {
 			logger.Error(err, "Failed to get items for library %s", lib.ID)
+			failed = append(failed, fmt.Errorf("library %s: %w", lib.ID, err))
 			continue
 		}
 		items = append(items, libItems...)
 	}
-	return items, nil
+	return items, errors.Join(failed...)
 }
 
 func (c *AudiobookshelfClient) getLibraryItems(ctx context.Context, libraryID string) ([]AudiobookshelfItem, error) {

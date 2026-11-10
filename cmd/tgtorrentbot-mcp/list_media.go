@@ -123,7 +123,7 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 	jfItems, absItems, srcErrs := mcplib.FetchLibraries(srcCtx, s.jf, s.abs)
 	cancel()
 	for _, err := range srcErrs {
-		warnings = append(warnings, err.Error()+"; its source is missing from every item") // already logged
+		warnings = append(warnings, err.Error()) // already logged
 	}
 
 	merged := mcplib.MergeItems(torrents, fsItems, incompleteItems, jfItems, absItems)
