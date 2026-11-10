@@ -186,7 +186,7 @@ func TestSecondSignalForcesExit(t *testing.T) {
 	}
 	expect("ready")
 	cmd.Process.Signal(os.Interrupt)
-	expect("stopping") // shutting down, waiting on the hung request
+	expect("stopping")                // shutting down, waiting on the hung request
 	time.Sleep(50 * time.Millisecond) // let SignalContext restore the default
 	cmd.Process.Signal(os.Interrupt)
 
