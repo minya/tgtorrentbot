@@ -111,7 +111,7 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 }
 
 // untrackTorrent makes sure Transmission no longer tracks the data at src
-// before it is moved. Every torrent whose data is at src, inside it or
+// before it is moved or rewritten (move_media, write_tags). Every torrent whose data is at src, inside it or
 // containing it (torrentDataPaths) owns it; the move is refused unless the
 // caller named the one owner with id, which is then removed from
 // Transmission with its files kept. Moving data a torrent still tracks
@@ -123,16 +123,16 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 func (s *server) untrackTorrent(id *int, src string) (removed bool, note string, err error) {
 	if s.trans == nil {
 		if id != nil {
-			return false, "", fmt.Errorf("Transmission is not configured (set TGT_RPC_ADDR, TGT_RPC_USER, TGT_RPC_PASSWORD); omit torrent_id to move without it")
+			return false, "", fmt.Errorf("Transmission is not configured (set TGT_RPC_ADDR, TGT_RPC_USER, TGT_RPC_PASSWORD); omit torrent_id to go ahead without it")
 		}
 		return false, "", nil
 	}
 	all, err := s.trans.GetTorrents()
 	if err != nil {
 		if id != nil {
-			return false, "", fmt.Errorf("removing torrent %d before move: failed to fetch torrents: %v", *id, err)
+			return false, "", fmt.Errorf("removing torrent %d: failed to fetch torrents: %v", *id, err)
 		}
-		return false, fmt.Sprintf("could not ask Transmission whether a torrent tracks %s (%v); moved without checking", src, err), nil
+		return false, fmt.Sprintf("could not ask Transmission whether a torrent tracks %s (%v); went ahead without checking", src, err), nil
 	}
 
 	var named *transmission.Torrent
@@ -153,7 +153,7 @@ func (s *server) untrackTorrent(id *int, src string) (removed bool, note string,
 	if len(others) > 0 {
 		hint := "pass its torrent_id"
 		if id != nil || len(others) > 1 {
-			hint = "remove the other torrents with remove_torrent (delete_data=false) first, then move with the remaining one's torrent_id"
+			hint = "remove the other torrents with remove_torrent (delete_data=false) first, then retry with the remaining one's torrent_id"
 		}
 		return false, "", fmt.Errorf("%s is still tracked by torrent %s; %s", src, strings.Join(others, ", "), hint)
 	}
@@ -161,15 +161,15 @@ func (s *server) untrackTorrent(id *int, src string) (removed bool, note string,
 		return false, "", nil
 	}
 	if named == nil {
-		return false, fmt.Sprintf("no torrent with id %d (already removed?); moved without it", *id), nil
+		return false, fmt.Sprintf("no torrent with id %d (already removed?); went ahead without it", *id), nil
 	}
 	// Untracking a download in progress abandons it: its partial data would
 	// be moved and nothing would finish it.
 	if named.PercentDone < 1 {
-		return false, "", fmt.Errorf("torrent %d (%q) is still downloading (%.0f%%); move it once it is complete", named.ID, named.Name, named.PercentDone*100)
+		return false, "", fmt.Errorf("torrent %d (%q) is still downloading (%.0f%%); retry once it is complete", named.ID, named.Name, named.PercentDone*100)
 	}
 	if err := s.trans.RemoveTorrents([]*transmission.Torrent{named}, false); err != nil {
-		return false, "", fmt.Errorf("removing torrent %d before move: %v", *id, err)
+		return false, "", fmt.Errorf("removing torrent %d: %v", *id, err)
 	}
 	return true, "", nil
 }

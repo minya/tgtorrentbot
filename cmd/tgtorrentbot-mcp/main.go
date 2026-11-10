@@ -277,6 +277,10 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"read_tags recursively on the directory, inspect filenames and parent " +
 			"folders, decide the correct TRCK/TPOS per file, and send those as " +
 			"explicit overrides (one write_tags call per file).\n" +
+			"If the item's list_media sources include 'torrent', pass its torrent_id: " +
+			"rewriting the files breaks the torrent's piece hashes, so the torrent is " +
+			"removed from Transmission first (files kept, seeding stops); without it the " +
+			"write is refused, and a torrent still downloading is refused too.\n" +
 			"Writes are restricted to the configured download path. After writing " +
 			"audiobooks, call abs_rescan so Audiobookshelf picks up the change; after " +
 			"writing music or musicvideos, call jellyfin_rescan (abs_rescan does not " +

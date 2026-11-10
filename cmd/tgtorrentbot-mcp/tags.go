@@ -47,6 +47,7 @@ type writeTagsInput struct {
 	Recursive   bool              `json:"recursive,omitempty" jsonschema:"when path is a directory, recurse into subdirectories (default false)"`
 	FixEncoding string            `json:"fix_encoding,omitempty" jsonschema:"if set (only 'cp1251' is supported), re-decode text (T***, TXXX), comment and lyrics (USLT) frames from this codepage to Unicode before applying overrides; only values that look like cp1251 mojibake are rewritten"`
 	Tags        map[string]string `json:"tags,omitempty" jsonschema:"optional explicit tag overrides; keys: title, artist, album, album_artist, composer, year, genre, track, disc, comment"`
+	TorrentID   *int              `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item whose files are rewritten (the torrent_id field from list_media). Required when a torrent tracks the files: rewriting them breaks the torrent's piece hashes, so it is removed from Transmission (files kept) first. Refused while it is still downloading. Omit for filesystem-only items"`
 }
 
 type writeTagsResult struct {
@@ -56,6 +57,8 @@ type writeTagsResult struct {
 }
 
 type writeTagsOutput struct {
+	TorrentRemoved bool   `json:"torrent_removed,omitempty"`
+	TorrentNote    string `json:"torrent_note,omitempty"`
 	// Summary leads the result ("3 of 120 files failed to save, 117
 	// changed") so per-file errors cannot hide in a long files list.
 	Summary string            `json:"summary"`
@@ -165,7 +168,17 @@ func (s *server) writeTags(ctx context.Context, _ *mcp.CallToolRequest, in write
 		return formatError("no audio files found at %q (only .mp3 is supported in this version)", in.Path), writeTagsOutput{}, nil
 	}
 
-	out := writeTagsOutput{Files: make([]writeTagsResult, 0, len(files))}
+	// Rewriting a torrent's files changes their bytes, so they no longer
+	// match its piece hashes: peers reject what it seeds, and the next
+	// verify downloads the pieces again, undoing the tags. Like move_media,
+	// refuse while a torrent tracks the files unless it is named, and untrack
+	// it first (files kept).
+	removed, note, err := s.untrackTorrent(in.TorrentID, resolved)
+	if err != nil {
+		return formatError("%v (no file was changed)", err), writeTagsOutput{}, nil
+	}
+
+	out := writeTagsOutput{Files: make([]writeTagsResult, 0, len(files)), TorrentRemoved: removed, TorrentNote: note}
 	for _, f := range files {
 		res := writeTagsResult{Path: displayPath(s.config.DownloadPath, f)}
 		changed, err := applyTags(f, decoder, in.Tags)

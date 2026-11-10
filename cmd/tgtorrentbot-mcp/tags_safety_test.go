@@ -10,6 +10,7 @@ import (
 
 	"github.com/bogem/id3v2/v2"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/odwrtw/transmission"
 )
 
 // audioPayload is recognisable "audio" placed after the tag, so tests can
@@ -467,4 +468,45 @@ func TestEncodingHintCoversAllFixableFrames(t *testing.T) {
 			t.Errorf("%s: encoding_hint = %q, want %q", f.Path, f.EncodingHint, want)
 		}
 	}
+}
+
+// F108: files a torrent still seeds are not rewritten unless that torrent is
+// named, which untracks it first (files kept); a download in progress is
+// refused.
+func TestWriteTagsOnTorrentData(t *testing.T) {
+	setup := func(t *testing.T, percent float64) (*server, *fakeTorrents, string) {
+		root := t.TempDir()
+		mp3 := filepath.Join(root, "audiobooks", "Book", "01.mp3")
+		seedMP3(t, mp3, 0o644, func(tag *id3v2.Tag) { tag.SetTitle("old") })
+		fake := &fakeTorrents{src: mp3, torrents: []*transmission.Torrent{
+			{ID: 3, Name: "Book", DownloadDir: filepath.Join(root, "audiobooks"), PercentDone: percent},
+		}}
+		return &server{config: Config{DownloadPath: root}, trans: fake}, fake, mp3
+	}
+	title := func(t *testing.T, mp3 string) string {
+		tag := openTag(t, mp3)
+		return tag.Title()
+	}
+
+	t.Run("seeding, no torrent_id", func(t *testing.T) {
+		s, fake, mp3 := setup(t, 1)
+		res, _, _ := s.writeTags(context.Background(), nil, writeTagsInput{Path: "audiobooks/Book", Tags: map[string]string{"title": "new"}})
+		if !res.IsError || len(fake.removed) != 0 || title(t, mp3) != "old" {
+			t.Fatalf("rewrote a seeding torrent's file: IsError=%v removed=%v title=%q", res.IsError, fake.removed, title(t, mp3))
+		}
+	})
+	t.Run("seeding, torrent named", func(t *testing.T) {
+		s, fake, mp3 := setup(t, 1)
+		res, out, _ := s.writeTags(context.Background(), nil, writeTagsInput{Path: "audiobooks/Book", Tags: map[string]string{"title": "new"}, TorrentID: intPtr(3)})
+		if res.IsError || !out.TorrentRemoved || len(fake.removed) != 1 || !fake.keptData || title(t, mp3) != "new" {
+			t.Fatalf("IsError=%v out=%+v removed=%v keptData=%v title=%q", res.IsError, out, fake.removed, fake.keptData, title(t, mp3))
+		}
+	})
+	t.Run("still downloading", func(t *testing.T) {
+		s, fake, mp3 := setup(t, 0.5)
+		res, _, _ := s.writeTags(context.Background(), nil, writeTagsInput{Path: "audiobooks/Book/01.mp3", Tags: map[string]string{"title": "new"}, TorrentID: intPtr(3)})
+		if !res.IsError || len(fake.removed) != 0 || title(t, mp3) != "old" {
+			t.Fatalf("rewrote a downloading torrent's file: IsError=%v removed=%v", res.IsError, fake.removed)
+		}
+	})
 }
