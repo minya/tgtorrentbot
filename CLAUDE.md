@@ -213,7 +213,7 @@ Torrents labelled with a removed category stay listed and removable in the webap
 
 ### Torrent Labels Convention
 
-Transmission torrent labels are used to store metadata (layout defined in `internal/torrentlabels`; write them with `torrentlabels.New`):
+Transmission torrent labels are used to store metadata (layout defined in `internal/torrentlabels`; write them with `torrentlabels.New`, read the category with `torrentlabels.Category`, which is `others` when the label is missing or empty and the label as is when it is not a known category, so the bot, the webapp and the MCP server show a torrent under the same category):
 - `Labels[0]` - chatID (string) - Telegram chat that initiated the download and gets the completion notification
 - `Labels[1]` - category (string) - Download category (e.g., "movies", "shows")
 - `Labels[2]` - userID (string) - Telegram user who added the torrent. Differs from the chat ID for a bot download started in a group chat (the chat ID is then the negative group ID). The webapp writes `[userID, category, userID]`. It only records who added a torrent: **downloads are shared** — every allowed user sees and manages every torrent, in the bot and in the webapp, so no access decision is made on any label. Torrents labelled before `Labels[2]` existed carry only the first two

@@ -11,6 +11,7 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/commands"
+	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/odwrtw/transmission"
 )
 
@@ -171,10 +172,5 @@ func getTorrentChatID(torrent *transmission.Torrent) (int64, error) {
 }
 
 func getTorrentCategory(torrent *transmission.Torrent) string {
-	if len(torrent.Labels) >= 2 {
-		if cat, ok := commands.ParseCategory(torrent.Labels[1]); ok {
-			return cat.DisplayName()
-		}
-	}
-	return "Unknown"
+	return torrentlabels.Category(torrent.Labels).DisplayName()
 }

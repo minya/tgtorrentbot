@@ -588,7 +588,7 @@ func (app *App) findItemTorrents(category, name string) ([]*transmission.Torrent
 }
 
 // itemTorrents returns the torrents named name in category, whoever added
-// them (legacy single-label torrents count as "others").
+// them (see labelCategory).
 func itemTorrents(torrents []*transmission.Torrent, category, name string) []*transmission.Torrent {
 	var item []*transmission.Torrent
 	for _, t := range torrents {
@@ -609,13 +609,9 @@ func safePathComponent(s string) bool {
 	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, `/\`)
 }
 
-// labelCategory is a torrent's category label, "others" when missing or
-// empty (legacy single-label torrents, labels cleared in Transmission).
+// labelCategory is a torrent's category label (torrentlabels.Category).
 func labelCategory(labels []string) string {
-	if len(labels) >= 2 && labels[1] != "" {
-		return labels[1]
-	}
-	return "others"
+	return torrentlabels.Category(labels).String()
 }
 
 // handleItemDelete routes DELETE /api/items/{id} and DELETE /api/items/{id}/torrent.

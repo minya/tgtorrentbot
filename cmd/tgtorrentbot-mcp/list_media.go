@@ -13,6 +13,7 @@ import (
 
 	"github.com/minya/tgtorrentbot/internal/category"
 	mcplib "github.com/minya/tgtorrentbot/internal/media"
+	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -88,10 +89,7 @@ func (s *server) listMedia(ctx context.Context, _ *mcp.CallToolRequest, in listM
 			warn(fmt.Sprintf("transmission unavailable, torrents not listed: %v", err))
 		}
 		for _, t := range rawTorrents {
-			category := "others"
-			if len(t.Labels) >= 2 {
-				category = t.Labels[1]
-			}
+			category := torrentlabels.Category(t.Labels).String()
 			torrents = append(torrents, mcplib.TorrentInfo{
 				ID:          t.ID,
 				Name:        t.Name,

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/minya/logger"
+	"github.com/minya/tgtorrentbot/internal/category"
 )
 
 // JellyfinItem represents a media item from the Jellyfin library.
@@ -140,5 +141,5 @@ func categoryFromPath(p string) string {
 			return strings.ToLower(parts[i+1])
 		}
 	}
-	return "others"
+	return string(category.Others)
 }

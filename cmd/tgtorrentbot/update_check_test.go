@@ -213,3 +213,17 @@ func TestCheckerStopsOnCancel(t *testing.T) {
 		t.Fatal("checker did not stop after its context was cancelled")
 	}
 }
+
+// F105: the completion notice names a legacy single-label torrent's
+// category as the webapp and MCP server do ("Other"), not "Unknown".
+func TestCompletionCategoryMatchesWebapp(t *testing.T) {
+	for labels, want := range map[string]string{"": "Other", "movies": "Movies", "documentaries": "documentaries"} {
+		tl := []string{"42"}
+		if labels != "" {
+			tl = append(tl, labels)
+		}
+		if got := getTorrentCategory(&transmission.Torrent{Labels: tl}); got != want {
+			t.Errorf("getTorrentCategory(%q) = %q, want %q", tl, got, want)
+		}
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/environment"
+	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/odwrtw/transmission"
 )
 
@@ -156,16 +157,7 @@ func formatTorrentsList(torrents []*transmission.Torrent, page, totalPages, tota
 	var sb strings.Builder
 
 	for _, torrent := range torrents {
-		categoryLabel := "Unknown"
-		logger.Debug("Torrent %v has %d labels: %v", torrent.ID, len(torrent.Labels), torrent.Labels)
-		if len(torrent.Labels) >= 2 {
-			// labels[0] is chatID, labels[1] is category
-			if cat, ok := ParseCategory(torrent.Labels[1]); ok {
-				categoryLabel = cat.DisplayName()
-			} else {
-				logger.Debug("Failed to parse category from label: %s", torrent.Labels[1])
-			}
-		}
+		categoryLabel := torrentlabels.Category(torrent.Labels).DisplayName()
 		fmt.Fprintf(&sb, "%v [%s] %v %.0f%%\n\n", torrent.ID, categoryLabel, torrent.Name, torrent.PercentDone*100)
 	}
 
