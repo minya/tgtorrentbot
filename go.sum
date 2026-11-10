@@ -14,10 +14,10 @@ github.com/mattn/go-colorable v0.1.14 h1:9A9LHSqF/7dyVVX6g0U9cwm9pG3kP9gSzcuIPHP
 github.com/mattn/go-colorable v0.1.14/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/mattn/go-isatty v0.0.21 h1:xYae+lCNBP7QuW4PUnNG61ffM4hVIfm+zUzDuSzYLGs=
 github.com/mattn/go-isatty v0.0.21/go.mod h1:ZXfXG4SQHsB/w3ZeOYbR0PrPwLy+n6xiMrJlRFqopa4=
-github.com/minya/goutils v0.0.0-20261103195158-c6b6735401cd h1:fQnCgh3V6KeawvMph68Iwnuk8b6PHTfJEmDY0rOnSVI=
-github.com/minya/goutils v0.0.0-20261103195158-c6b6735401cd/go.mod h1:KzLvhe9dGH06Yh9zjotBMZ7j6Eo+8lY97RdsvrIu2w4=
-github.com/minya/logger v0.0.0-20261103194241-62f8b0e71b44 h1:0jPgB5YX0EdD8b/Ehh8WEDYQoQk1x7C7xzubJ1/1EB0=
-github.com/minya/logger v0.0.0-20261103194241-62f8b0e71b44/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
+github.com/minya/goutils v0.0.0-20261110221136-604daa9748ca h1:gm9/4s58S9BFMqrVbZyaCdKBNAHMTcHVGWE8Vf83dRs=
+github.com/minya/goutils v0.0.0-20261110221136-604daa9748ca/go.mod h1:KzLvhe9dGH06Yh9zjotBMZ7j6Eo+8lY97RdsvrIu2w4=
+github.com/minya/logger v0.0.0-20261110221104-2360a64aecd9 h1:9ZiJo38O51XhQfvqJM09tCCohpMoMBFAX0bq/HMIH8c=
+github.com/minya/logger v0.0.0-20261110221104-2360a64aecd9/go.mod h1:qp64lElurAdFF9Yic9TATogFFrGfH3LpwxJ2raFyIB8=
 github.com/minya/rutracker v0.0.0-20261103195257-226b03a9301e h1:FSns4MiHEURT1vbR7UQhB0V4OX2NpapK5q8lj1sZFus=
 github.com/minya/rutracker v0.0.0-20261103195257-226b03a9301e/go.mod h1:rZF8E7TrGA55kRYc+6LMUJnaAOL0dMkynlquVAx/HAs=
 github.com/minya/telegram v0.0.0-20261103165030-b8acb429ae19 h1:CMQP/vXZb7MLXvVNAHY9gTJtOP2SFpV5UyTi+4hN/os=
