@@ -51,3 +51,22 @@ func TestStatusRecorderFlusher(t *testing.T) {
 		t.Fatal("Flush was not forwarded")
 	}
 }
+
+// F90: the preflight allows what Streamable HTTP clients send: DELETE to end
+// a session and Last-Event-ID to resume a stream.
+func TestCORSPreflightAllowsStreamableHTTP(t *testing.T) {
+	h := corsMiddleware(http.NotFoundHandler())
+	req := httptest.NewRequest(http.MethodOptions, "/", nil)
+	req.Header.Set("Origin", "https://claude.ai")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if m := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(m, "DELETE") {
+		t.Errorf("Allow-Methods = %q, want DELETE", m)
+	}
+	if hd := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(hd, "Last-Event-ID") {
+		t.Errorf("Allow-Headers = %q, want Last-Event-ID", hd)
+	}
+	if e := rec.Header().Get("Access-Control-Expose-Headers"); !strings.Contains(e, "Mcp-Protocol-Version") {
+		t.Errorf("Expose-Headers = %q, want Mcp-Protocol-Version", e)
+	}
+}

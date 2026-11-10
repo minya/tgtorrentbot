@@ -14,6 +14,9 @@ import (
 //
 // We don't gate on Origin: the endpoints are already authenticated (JWT on
 // /mcp, PKCE+secret on /authorize, DCR is public-by-design).
+// corsExposedHeaders are the response headers browser MCP clients must read.
+const corsExposedHeaders = "WWW-Authenticate, Mcp-Session-Id, Mcp-Protocol-Version"
+
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -22,15 +25,17 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
+		// Streamable HTTP uses DELETE to end a session and Last-Event-ID to
+		// resume an SSE stream; browsers block both unless allowed here.
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version")
-			w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, Mcp-Session-Id")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID")
+			w.Header().Set("Access-Control-Expose-Headers", corsExposedHeaders)
 			w.Header().Set("Access-Control-Max-Age", "3600")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, Mcp-Session-Id")
+		w.Header().Set("Access-Control-Expose-Headers", corsExposedHeaders)
 		next.ServeHTTP(w, r)
 	})
 }
