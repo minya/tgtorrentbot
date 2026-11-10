@@ -60,7 +60,7 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	}
 	// Everything the rename itself would reject is checked here, before the
 	// torrent is untracked, so a move that cannot happen does not cost it.
-	if isWithin(dst, src) {
+	if insideSource(dst, src) {
 		return formatError("destination %q is inside the source %q; a directory cannot be moved into itself", in.Destination, in.Source), moveMediaOutput{}, nil
 	}
 	if same, ok := sameDevice(src, existingAncestor(dst)); ok && !same {
@@ -256,11 +256,41 @@ func torrentRemovedSuffix(out moveMediaOutput) string {
 // directory.
 func (s *server) isStructuralDir(p string) bool {
 	for _, d := range s.structuralDirs() {
-		if p == d {
+		if p == d || sameExistingFile(p, d) {
 			return true
 		}
 	}
 	return false
+}
+
+// sameExistingFile reports whether a and b both exist and are the same file.
+// On a case-insensitive filesystem (macOS, Windows, some NAS shares)
+// "Shows" and "shows" are one directory although the strings differ, so
+// the guards compare file identity as well as paths.
+func sameExistingFile(a, b string) bool {
+	fa, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	fb, err := os.Stat(b)
+	return err == nil && os.SameFile(fa, fb)
+}
+
+// insideSource reports whether dst would land inside src: textually, or
+// because an existing ancestor of dst is the same directory as src under
+// another spelling (case-insensitive filesystems).
+func insideSource(dst, src string) bool {
+	if isWithin(dst, src) {
+		return true
+	}
+	for p := existingAncestor(dst); ; p = filepath.Dir(p) {
+		if sameExistingFile(p, src) {
+			return true
+		}
+		if filepath.Dir(p) == p {
+			return false
+		}
+	}
 }
 
 func (s *server) structuralDirs() []string {
