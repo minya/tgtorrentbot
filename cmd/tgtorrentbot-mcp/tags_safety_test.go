@@ -430,3 +430,41 @@ func TestWriteTagsReportsFailures(t *testing.T) {
 		t.Fatalf("all failed: IsError=%v failed=%d, want a tool error", res.IsError, out.Failed)
 	}
 }
+
+// F110: encoding_hint flags mojibake in any frame fix_encoding repairs, not
+// only in the seven fields read_tags shows.
+func TestEncodingHintCoversAllFixableFrames(t *testing.T) {
+	root := t.TempDir()
+	cases := map[string]func(tag *id3v2.Tag){
+		"txxx.mp3": func(tag *id3v2.Tag) {
+			tag.SetTitle("Correct Title")
+			tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{Encoding: id3v2.EncodingISO, Description: "NARRATOR", Value: "Ïðèâåò Ìèð"})
+		},
+		"uslt.mp3": func(tag *id3v2.Tag) {
+			tag.AddUnsynchronisedLyricsFrame(id3v2.UnsynchronisedLyricsFrame{Encoding: id3v2.EncodingISO, Language: "rus", Lyrics: "Ïðèâåò Ìèð"})
+		},
+		"tpub.mp3": func(tag *id3v2.Tag) {
+			tag.AddTextFrame("TPUB", id3v2.EncodingISO, "Ïðèâåò Ìèð")
+		},
+	}
+	for name, build := range cases {
+		seedMP3(t, filepath.Join(root, name), 0o644, build)
+	}
+	seedMP3(t, filepath.Join(root, "clean.mp3"), 0o644, func(tag *id3v2.Tag) {
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{Encoding: id3v2.EncodingUTF8, Description: "NARRATOR", Value: "Beyoncé"})
+	})
+
+	_, out, err := (&server{config: Config{DownloadPath: root}}).readTags(context.Background(), nil, readTagsInput{Path: "."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range out.Files {
+		want := ""
+		if _, ok := cases[filepath.Base(f.Path)]; ok {
+			want = "cp1251"
+		}
+		if f.EncodingHint != want {
+			t.Errorf("%s: encoding_hint = %q, want %q", f.Path, f.EncodingHint, want)
+		}
+	}
+}

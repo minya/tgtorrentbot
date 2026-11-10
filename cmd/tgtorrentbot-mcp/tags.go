@@ -115,11 +115,11 @@ func (s *server) readTags(ctx context.Context, _ *mcp.CallToolRequest, in readTa
 		ft.Track = tag.GetTextFrame(tag.CommonID("Track number/Position in set")).Text
 		ft.Disc = tag.GetTextFrame(tag.CommonID("Part of a set")).Text
 		ft.Comment = userComment(tag)
+		// The hint covers every frame fix_encoding would repair, not only the
+		// fields shown here (TXXX narrator or series, USLT lyrics, described
+		// comments, other text frames).
+		ft.EncodingHint = encodingHint(textFieldValues(tag)...)
 		tag.Close()
-
-		if hint := encodingHint(ft.Title, ft.Artist, ft.Album, ft.AlbumArtist, ft.Composer, ft.Genre, ft.Comment); hint != "" {
-			ft.EncodingHint = hint
-		}
 		out.Files = append(out.Files, ft)
 	}
 	summary := fmt.Sprintf("read %d files", len(files))
@@ -494,6 +494,28 @@ func unicodeEncoding(tag *id3v2.Tag) id3v2.Encoding {
 		return id3v2.EncodingUTF8
 	}
 	return id3v2.EncodingUTF16
+}
+
+// textFieldValues returns every text value fixAllEncoding examines: text
+// frames (T***), user-defined text (TXXX), comments (COMM) and lyrics (USLT),
+// descriptions included.
+func textFieldValues(tag *id3v2.Tag) []string {
+	var values []string
+	for _, frames := range tag.AllFrames() {
+		for _, f := range frames {
+			switch frame := f.(type) {
+			case id3v2.TextFrame:
+				values = append(values, frame.Text)
+			case id3v2.CommentFrame:
+				values = append(values, frame.Description, frame.Text)
+			case id3v2.UserDefinedTextFrame:
+				values = append(values, frame.Description, frame.Value)
+			case id3v2.UnsynchronisedLyricsFrame:
+				values = append(values, frame.ContentDescriptor, frame.Lyrics)
+			}
+		}
+	}
+	return values
 }
 
 // fixFields re-decodes, in place, each of fields that looks like mojibake.
