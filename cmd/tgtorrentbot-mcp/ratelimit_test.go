@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -167,5 +169,36 @@ func TestRateLimiterDropsEmptyKey(t *testing.T) {
 	}
 	if n := rl.size(); n != 0 {
 		t.Fatalf("limiter holds %d keys after the only key went stale, want 0", n)
+	}
+}
+
+// F89: a burst of concurrent wrong guesses from many IPs cannot get more
+// comparisons than the global cap: each attempt reserves its slot before
+// the secret is compared.
+func TestFailedLoginCapHoldsUnderConcurrency(t *testing.T) {
+	srv, ts := newTestHTTPServer(t)
+	defer ts.Close()
+	srv.loginLimiter = newRateLimiter(100000, time.Minute)
+	srv.failedLoginLimiter = newRateLimiter(20, time.Minute)
+	cid := registerTestClient(t, ts)
+
+	for run := range 5 {
+		srv.failedLoginLimiter = newRateLimiter(20, time.Minute)
+		var compared atomic.Int32
+		var wg sync.WaitGroup
+		for i := range 1000 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ip := fmt.Sprintf("10.%d.%d.%d", run, i/256, i%256)
+				if authorizeAttempt(t, ts, cid, "wrong", "CF-Connecting-IP", ip) == http.StatusUnauthorized {
+					compared.Add(1)
+				}
+			}()
+		}
+		wg.Wait()
+		if got := compared.Load(); got > 20 {
+			t.Fatalf("run %d: the secret was compared %d times, cap is 20", run, got)
+		}
 	}
 }

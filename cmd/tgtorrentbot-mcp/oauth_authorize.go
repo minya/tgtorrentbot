@@ -130,6 +130,16 @@ func (rl *rateLimiter) exceeded(key string) bool {
 	return len(rl.recentLocked(key, time.Now().Add(-rl.window))) >= rl.limit
 }
 
+// release gives back one hit recorded for key, for an attempt that turned
+// out not to count (a correct login).
+func (rl *rateLimiter) release(key string) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	if hits := rl.hits[key]; len(hits) > 0 {
+		rl.hits[key] = hits[:len(hits)-1]
+	}
+}
+
 // size returns the number of keys tracked (for tests).
 func (rl *rateLimiter) size() int {
 	rl.mu.Lock()
@@ -287,7 +297,11 @@ func (s *server) handleAuthorizePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.failedLoginLimiter.exceeded(failedLoginKey) || !s.loginLimiter.allow(clientIP(r)) {
+	// Every attempt reserves a slot of the global failed-login budget before
+	// the secret is compared, and a correct secret gives it back. Checking
+	// first and recording after the comparison let a burst of concurrent
+	// guesses from many IPs all pass the check before any was recorded.
+	if !s.loginLimiter.allow(clientIP(r)) || !s.failedLoginLimiter.allow(failedLoginKey) {
 		data.Error = "Too many attempts. Try again in a minute."
 		renderAuthorizeForm(w, http.StatusTooManyRequests, data)
 		return
@@ -295,11 +309,11 @@ func (s *server) handleAuthorizePost(w http.ResponseWriter, r *http.Request) {
 
 	secret := r.PostForm.Get("secret")
 	if subtle.ConstantTimeCompare([]byte(secret), []byte(s.config.AuthToken)) != 1 {
-		s.failedLoginLimiter.allow(failedLoginKey)
 		data.Error = "Incorrect secret."
 		renderAuthorizeForm(w, http.StatusUnauthorized, data)
 		return
 	}
+	s.failedLoginLimiter.release(failedLoginKey)
 
 	code, err := randomToken(32)
 	if err != nil {
