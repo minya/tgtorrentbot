@@ -949,6 +949,10 @@
 
             const hasFs = (item.sources || []).includes('filesystem');
             const itemId = generateItemId(item.category, item.name);
+            // Same-named torrents of one category are separate items with one
+            // itemId; the row key tells their rows apart for busy state, the
+            // reopened menu and focus. The DELETE URL keeps the itemId.
+            const rowKey = itemId + '#' + (item.torrentId ?? '');
             let menuHtml = '';
             if (hasTorrent || hasFs) {
                 let menuItems = '';
@@ -960,7 +964,7 @@
             }
 
             return `
-                <div class="torrent-item${busyItemIds.has(itemId) ? ' is-busy' : ''}" data-id="${item.torrentId || ''}" data-item-id="${escapeAttr(itemId)}">
+                <div class="torrent-item${busyRows.has(rowKey) ? ' is-busy' : ''}" data-id="${item.torrentId || ''}" data-row-key="${escapeAttr(rowKey)}">
                     <div class="torrent-header">
                         <div class="torrent-name">${escapeHtml(item.name)}</div>
                         ${menuHtml}
@@ -1045,14 +1049,14 @@
         function renderItemList(container, html) {
             const focused = container.contains(document.activeElement) ? document.activeElement : null;
             const openMenu = container.querySelector('.popup-menu.open');
-            const focusedItemId = focused?.closest('.torrent-item')?.dataset.itemId;
-            const openItemId = openMenu?.closest('.torrent-item')?.dataset.itemId;
+            const focusedItemId = focused?.closest('.torrent-item')?.dataset.rowKey;
+            const openItemId = openMenu?.closest('.torrent-item')?.dataset.rowKey;
             const focusedMenuIndex = focused?.classList.contains('popup-menu-item')
                 ? [...focused.parentElement.children].indexOf(focused) : -1;
 
             container.innerHTML = html;
 
-            const findItem = id => [...container.querySelectorAll('.torrent-item')].find(el => el.dataset.itemId === id);
+            const findItem = id => [...container.querySelectorAll('.torrent-item')].find(el => el.dataset.rowKey === id);
             const reopened = openItemId && findItem(openItemId)?.querySelector('.more-btn');
             if (reopened) openPopupMenu(reopened);
             const item = focusedItemId && findItem(focusedItemId);
@@ -1562,65 +1566,72 @@
 
         // Items with a remove request in flight. Kept outside the DOM because
         // WebSocket updates re-render lists and would drop a plain class.
-        const busyItemIds = new Set();
+        // Keyed by row key (see renderItem).
+        const busyRows = new Set();
 
-        function setItemBusy(itemId, btn, busy) {
-            if (busy) busyItemIds.add(itemId); else busyItemIds.delete(itemId);
+        function rowKeyOf(btn) {
+            return btn.closest('.torrent-item')?.dataset.rowKey ?? '';
+        }
+
+        function setItemBusy(rowKey, btn, busy) {
+            if (busy) busyRows.add(rowKey); else busyRows.delete(rowKey);
             const item = btn.closest('.torrent-item');
             if (item) item.classList.toggle('is-busy', busy);
         }
 
-        function refreshAfterRemove(itemId) {
+        function refreshAfterRemove(rowKey) {
             setTimeout(async () => {
                 if (currentView === 'main') {
                     await loadMainScreen();
                 } else if (currentView === 'category' && currentCategory) {
                     await refreshCategoryView(currentCategory);
                 }
-                busyItemIds.delete(itemId);
+                busyRows.delete(rowKey);
             }, 300);
         }
 
         // torrentId picks the right torrent when several share a name and
         // category (each is shown as its own item).
         async function removeItemTorrent(itemId, torrentId, btn) {
+            const rowKey = rowKeyOf(btn);
             closeAllPopupMenus();
             tg.showConfirm('Remove torrent? Files will be kept.', async function(confirmed) {
                 if (!confirmed) return;
-                setItemBusy(itemId, btn, true);
+                setItemBusy(rowKey, btn, true);
                 try {
                     const query = torrentId ? '?torrentId=' + encodeURIComponent(torrentId) : '';
                     const response = await doFetch('/api/items/' + encodeURIComponent(itemId) + '/torrent' + query, { method: 'DELETE' });
                     if (response.ok) {
-                        refreshAfterRemove(itemId);
+                        refreshAfterRemove(rowKey);
                     } else {
                         const data = await response.json().catch(() => ({}));
-                        setItemBusy(itemId, btn, false);
+                        setItemBusy(rowKey, btn, false);
                         tg.showAlert(data.error || 'Failed to remove torrent');
                     }
                 } catch (err) {
-                    setItemBusy(itemId, btn, false);
+                    setItemBusy(rowKey, btn, false);
                     tg.showAlert('Failed to remove torrent');
                 }
             });
         }
 
         async function removeItemData(itemId, btn) {
+            const rowKey = rowKeyOf(btn);
             closeAllPopupMenus();
             tg.showConfirm('Delete all files? This cannot be undone.', async function(confirmed) {
                 if (!confirmed) return;
-                setItemBusy(itemId, btn, true);
+                setItemBusy(rowKey, btn, true);
                 try {
                     const response = await doFetch('/api/items/' + encodeURIComponent(itemId), { method: 'DELETE' });
                     if (response.ok) {
-                        refreshAfterRemove(itemId);
+                        refreshAfterRemove(rowKey);
                     } else {
                         const data = await response.json().catch(() => ({}));
-                        setItemBusy(itemId, btn, false);
+                        setItemBusy(rowKey, btn, false);
                         tg.showAlert(data.error || 'Failed to remove data');
                     }
                 } catch (err) {
-                    setItemBusy(itemId, btn, false);
+                    setItemBusy(rowKey, btn, false);
                     tg.showAlert('Failed to remove data');
                 }
             });
