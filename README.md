@@ -86,7 +86,7 @@ The bot loads its settings from environment variables or a JSON file (`settings.
 |---|---|---|
 | `TGT_BOTTOKEN` | Yes | Telegram bot token |
 | `TGT_WEBHOOKURL` | Yes | Webhook URL for Telegram updates |
-| `TGT_DOWNLOADPATH` | Yes | Base path for downloads |
+| `TGT_DOWNLOADPATH` | Yes | Base path for downloads, as Transmission sees it (the bot only passes it to Transmission; the webapp and MCP server must see the files at the same path) |
 | `TGT_RPC_ADDR` | Yes | Transmission RPC address |
 | `TGT_RPC_USER` | Yes | Transmission RPC user |
 | `TGT_RPC_PASSWORD` | Yes | Transmission RPC password |

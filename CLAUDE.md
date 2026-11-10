@@ -59,7 +59,7 @@ The bot is configured either by environment variables or by a JSON settings file
 ### Required environment variables:
 - `TGT_BOTTOKEN` - Telegram bot token
 - `TGT_WEBHOOKURL` - Webhook URL for Telegram updates
-- `TGT_DOWNLOADPATH` - Path for downloads
+- `TGT_DOWNLOADPATH` - Path for downloads. For the bot this is the path as Transmission sees it (it is only passed to Transmission as `download-dir`; the bot container does not mount the downloads); the webapp and MCP server read the files there, so their mount must use the same path
 - `TGT_RPC_ADDR` - Transmission RPC address
 - `TGT_RPC_USER` - Transmission RPC user
 - `TGT_RPC_PASSWORD` - Transmission RPC password
@@ -133,7 +133,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 **environment/environment.go** - `Env` struct provides shared dependencies:
 - `TransmissionClient` - RPC client for torrent operations
 - `TgApi` - Telegram bot API
-- `DownloadPath` - Local download directory
+- `DownloadPath` - Download directory as Transmission sees it
 - `RutrackerConfig` - Credentials for Rutracker
 - `WebAppURL` - Optional URL for Telegram Mini Web App
 - `AllowedUsers` - Whitelist of Telegram user IDs permitted to use the bot
