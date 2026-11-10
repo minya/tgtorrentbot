@@ -147,6 +147,10 @@ func (rl *rateLimiter) size() int {
 	return len(rl.hits)
 }
 
+// beforeSecretCompare runs just before the login secret is compared. A no-op
+// in production; tests widen the race window with it.
+var beforeSecretCompare = func() {}
+
 // failedLoginKey is the single key failedLoginLimiter counts under.
 const failedLoginKey = "all"
 
@@ -307,6 +311,7 @@ func (s *server) handleAuthorizePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	beforeSecretCompare()
 	secret := r.PostForm.Get("secret")
 	if subtle.ConstantTimeCompare([]byte(secret), []byte(s.config.AuthToken)) != 1 {
 		data.Error = "Incorrect secret."

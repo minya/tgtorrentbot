@@ -181,17 +181,33 @@ func TestFailedLoginCapHoldsUnderConcurrency(t *testing.T) {
 	srv.loginLimiter = newRateLimiter(100000, time.Minute)
 	srv.failedLoginLimiter = newRateLimiter(20, time.Minute)
 	cid := registerTestClient(t, ts)
+	// Hold every attempt that got this far, so all of a burst would be
+	// in flight at once if the slot were taken only after the comparison.
+	beforeSecretCompare = func() { time.Sleep(20 * time.Millisecond) }
+	t.Cleanup(func() { beforeSecretCompare = func() {} })
 
-	for run := range 5 {
+	for run := range 3 {
 		srv.failedLoginLimiter = newRateLimiter(20, time.Minute)
 		var compared atomic.Int32
 		var wg sync.WaitGroup
-		for i := range 1000 {
+		sum := sha256.Sum256([]byte("verifier"))
+		form := url.Values{
+			"client_id": {cid}, "redirect_uri": {"https://c.example.com/cb"}, "state": {"s"},
+			"code_challenge": {base64.RawURLEncoding.EncodeToString(sum[:])}, "code_challenge_method": {"S256"},
+			"response_type": {"code"}, "secret": {"wrong"},
+		}.Encode()
+		for i := range 500 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				ip := fmt.Sprintf("10.%d.%d.%d", run, i/256, i%256)
-				if authorizeAttempt(t, ts, cid, "wrong", "CF-Connecting-IP", ip) == http.StatusUnauthorized {
+				// The handler directly, so the burst is not limited by a
+				// listener's connection backlog.
+				req := httptest.NewRequest(http.MethodPost, "/authorize", strings.NewReader(form))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.Header.Set("CF-Connecting-IP", fmt.Sprintf("10.%d.%d.%d", run, i/256, i%256))
+				rec := httptest.NewRecorder()
+				srv.handleAuthorize(rec, req)
+				if rec.Code == http.StatusUnauthorized {
 					compared.Add(1)
 				}
 			}()
