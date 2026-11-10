@@ -75,3 +75,22 @@ func TestSettingsFileRejectsUnresolvedOpReferences(t *testing.T) {
 		t.Fatalf("err = %v, want botToken flagged as an unresolved 1Password reference", err)
 	}
 }
+
+// F127: optional values are checked for op:// references too.
+func TestSettingsFileRejectsUnresolvedOptionalReferences(t *testing.T) {
+	clearTGTEnv(t)
+	body := strings.Replace(fullSettingsJSON, `"allowedUsers": [1]`,
+		`"allowedUsers": [1], "webAppURL": "op://Private/tgt/webapp", "logLevel": "op://Private/tgt/loglevel", "webhookSecret": "op://Private/tgt/secret"`, 1)
+	_, err := ReadSettings(writeSettings(t, body))
+	if err == nil {
+		t.Fatal("ReadSettings accepted unresolved optional references")
+	}
+	for _, want := range []string{"webAppURL", "logLevel", "webhookSecret"} {
+		if !strings.Contains(err.Error(), want+"/") {
+			t.Errorf("error %q does not name %s", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "must be 1-256") {
+		t.Errorf("an op:// webhookSecret is reported as a bad charset too: %v", err)
+	}
+}

@@ -136,16 +136,34 @@ func validateSettings(s Settings) []string {
 	} {
 		if strings.TrimSpace(f.value) == "" {
 			problems = append(problems, f.name+" is not set")
-		} else if strings.HasPrefix(f.value, "op://") {
-			// The settings file is read as plain JSON; a 1Password
-			// reference would be used literally, e.g. as the bot token.
+		}
+	}
+	// Every string value, the optional ones too: the settings file is read
+	// as plain JSON, so a 1Password reference would be used literally, e.g.
+	// as the bot token or the web app URL.
+	for _, f := range []struct {
+		value, name string
+	}{
+		{s.BotToken, "botToken/TGT_BOTTOKEN"},
+		{s.WebHookURL, "webHookURL/TGT_WEBHOOKURL"},
+		{s.DownloadPath, "downloadPath/TGT_DOWNLOADPATH"},
+		{s.TransmissionRPC.Address, "transmissionRPC.address/TGT_RPC_ADDR"},
+		{s.TransmissionRPC.User, "transmissionRPC.user/TGT_RPC_USER"},
+		{s.TransmissionRPC.Password, "transmissionRPC.password/TGT_RPC_PASSWORD"},
+		{s.RutrackerConfig.Username, "rutrackerConfig.username/TGT_RUTRACKER_USERNAME"},
+		{s.RutrackerConfig.Password, "rutrackerConfig.password/TGT_RUTRACKER_PASSWORD"},
+		{s.LogLevel, "logLevel/TGT_LOGLEVEL"},
+		{s.WebAppURL, "webAppURL/TGT_WEBAPP_URL"},
+		{s.WebhookSecret, "webhookSecret/TGT_WEBHOOK_SECRET"},
+	} {
+		if strings.HasPrefix(strings.TrimSpace(f.value), "op://") {
 			problems = append(problems, f.name+" is an unresolved 1Password reference; resolve the file with `op inject` first")
 		}
 	}
 	if len(s.AllowedUsers) == 0 {
 		problems = append(problems, "allowedUsers/TGT_ALLOWED_USERS is not set")
 	}
-	if s.WebhookSecret != "" && !validWebhookSecret(s.WebhookSecret) {
+	if s.WebhookSecret != "" && !strings.HasPrefix(s.WebhookSecret, "op://") && !validWebhookSecret(s.WebhookSecret) {
 		problems = append(problems, "webhookSecret/TGT_WEBHOOK_SECRET must be 1-256 characters of A-Z, a-z, 0-9, _ and -")
 	}
 	return problems
