@@ -5,8 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/odwrtw/transmission"
 )
 
@@ -218,5 +220,66 @@ func TestMoveMediaTorrentOwnershipVariants(t *testing.T) {
 				t.Fatalf("torrent 7 must be removed, got %v", fake.removed)
 			}
 		})
+	}
+}
+
+// F91: data a torrent still tracks is not moved unless that torrent is named.
+func TestMoveMediaRefusesTrackedDataWithoutTorrentID(t *testing.T) {
+	s, root, src := setupShow(t)
+	fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root)}, src: src}
+	s.trans = fake
+
+	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
+		Source: "shows/Proslushka.S01.2002", Destination: "shows/The Wire (2002)",
+	})
+	if !res.IsError || out.Moved {
+		t.Fatalf("moved data torrent 7 still tracks: %+v", out)
+	}
+	if text := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, "7") {
+		t.Errorf("error %q does not name the owning torrent", text)
+	}
+	if len(fake.removed) != 0 {
+		t.Fatalf("removed %v, want nothing", fake.removed)
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("source must be untouched: %v", err)
+	}
+}
+
+// F91: when two torrents track the source, naming one is not enough.
+func TestMoveMediaRefusesWhenAnotherTorrentAlsoOwnsSource(t *testing.T) {
+	s, root, src := setupShow(t)
+	second := &transmission.Torrent{ID: 9, Name: "Proslushka.S01.2002", DownloadDir: filepath.Join(root, "shows")}
+	fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root), second}, src: src}
+	s.trans = fake
+
+	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
+		Source: "shows/Proslushka.S01.2002", Destination: "shows/The Wire (2002)", TorrentID: intPtr(7),
+	})
+	if !res.IsError || out.Moved || len(fake.removed) != 0 {
+		t.Fatalf("moved with torrent 9 still tracking the source: %+v, removed %v", out, fake.removed)
+	}
+	if text := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, "9") {
+		t.Errorf("error %q does not name torrent 9", text)
+	}
+}
+
+type unreachableTorrents struct{}
+
+func (unreachableTorrents) GetTorrents() ([]*transmission.Torrent, error) {
+	return nil, errors.New("connection refused")
+}
+func (unreachableTorrents) RemoveTorrents([]*transmission.Torrent, bool) error { return nil }
+
+// With Transmission down and no torrent named, the move still happens, with
+// a note that it was not checked.
+func TestMoveMediaUncheckedWhenTransmissionDown(t *testing.T) {
+	s, _, _ := setupShow(t)
+	s.trans = unreachableTorrents{}
+	res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{
+		Source: "shows/Proslushka.S01.2002", Destination: "shows/The Wire (2002)",
+	})
+	if res.IsError || !out.Moved || !strings.Contains(out.TorrentNote, "without checking") {
+		t.Fatalf("result %+v, want a move with a note", out)
 	}
 }

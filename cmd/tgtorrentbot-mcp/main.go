@@ -326,6 +326,9 @@ func (s *server) registerTools(mcpServer *mcp.Server) {
 			"If the item's list_media sources include 'torrent', pass its " +
 			"torrent_id: the torrent is removed from Transmission (files kept) " +
 			"before the move, so Transmission doesn't error on the vanished path. " +
+			"A move of data a torrent still tracks is refused without its torrent_id " +
+			"(the error names the torrent); if several torrents track it, remove the " +
+			"others with remove_torrent first. " +
 			"A torrent_id that no longer exists is not an error — the move still " +
 			"happens. Omit torrent_id for filesystem-only items. After moving, " +
 			"call jellyfin_rescan so Jellyfin re-identifies from the new name.",

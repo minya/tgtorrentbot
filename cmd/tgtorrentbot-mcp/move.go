@@ -17,7 +17,7 @@ import (
 type moveMediaInput struct {
 	Source      string `json:"source" jsonschema:"path of the file or directory to move, relative to the download path or absolute under it; must exist"`
 	Destination string `json:"destination" jsonschema:"new path, relative to the download path or absolute under it; must not already exist (parent dirs are created automatically)"`
-	TorrentID   *int   `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item being moved (the torrent_id field from list_media); when set, the torrent is removed from Transmission (files kept) before the move; refused when that torrent's data is not at the source path. Omit for filesystem-only items"`
+	TorrentID   *int   `json:"torrent_id,omitempty" jsonschema:"Transmission torrent id of the item being moved (the torrent_id field from list_media); when set, the torrent is removed from Transmission (files kept) before the move; refused when that torrent's data is not at the source path. Required when a torrent tracks the source: a move without it is refused then. Omit for filesystem-only items"`
 }
 
 type moveMediaOutput struct {
@@ -72,14 +72,12 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	// Drop the torrent before touching the files: once Transmission no longer
 	// tracks the path, the move is a plain rename and Transmission can't error
 	// or re-check when the files disappear from under it.
-	if in.TorrentID != nil {
-		removed, note, err := s.untrackTorrent(*in.TorrentID, src)
-		if err != nil {
-			return formatError("removing torrent %d before move (nothing was moved): %v", *in.TorrentID, err), moveMediaOutput{}, nil
-		}
-		out.TorrentRemoved = removed
-		out.TorrentNote = note
+	removed, note, err := s.untrackTorrent(in.TorrentID, src)
+	if err != nil {
+		return formatError("%v (nothing was moved)", err), moveMediaOutput{}, nil
 	}
+	out.TorrentRemoved = removed
+	out.TorrentNote = note
 
 	created, err := mkdirAllTracked(filepath.Dir(dst))
 	if err != nil {
@@ -107,36 +105,61 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	}, out, nil
 }
 
-// untrackTorrent removes a torrent from Transmission while keeping its files.
-// It refuses a torrent whose data is not at src (resolved): a wrong id from
-// the caller would otherwise untrack an unrelated torrent and leave the one
-// that owns src to see its files vanish. A torrent that is already gone is
-// not an error: it returns removed=false with an explanatory note so the
-// move can proceed.
-func (s *server) untrackTorrent(id int, src string) (removed bool, note string, err error) {
+// untrackTorrent makes sure Transmission no longer tracks the data at src
+// before it is moved. Every torrent whose data is at src, inside it or
+// containing it (torrentDataPaths) owns it; the move is refused unless the
+// caller named the one owner with id, which is then removed from
+// Transmission with its files kept. Moving data a torrent still tracks
+// would leave that torrent pointing at vanished files.
+//
+// A named torrent that no longer exists is not an error (removed=false and
+// a note). Without Transmission configured, or when it cannot be reached
+// and no id was named, the move goes ahead unchecked, with a note.
+func (s *server) untrackTorrent(id *int, src string) (removed bool, note string, err error) {
 	if s.trans == nil {
-		return false, "", fmt.Errorf("Transmission is not configured (set TGT_RPC_ADDR, TGT_RPC_USER, TGT_RPC_PASSWORD); omit torrent_id to move without it")
+		if id != nil {
+			return false, "", fmt.Errorf("Transmission is not configured (set TGT_RPC_ADDR, TGT_RPC_USER, TGT_RPC_PASSWORD); omit torrent_id to move without it")
+		}
+		return false, "", nil
 	}
 	all, err := s.trans.GetTorrents()
 	if err != nil {
-		return false, "", fmt.Errorf("failed to fetch torrents: %v", err)
+		if id != nil {
+			return false, "", fmt.Errorf("removing torrent %d before move: failed to fetch torrents: %v", *id, err)
+		}
+		return false, fmt.Sprintf("could not ask Transmission whether a torrent tracks %s (%v); moved without checking", src, err), nil
 	}
-	var match []*transmission.Torrent
+
+	var named *transmission.Torrent
+	var others []string
 	for _, t := range all {
-		if t.ID == id {
-			match = append(match, t)
+		owns := anyOverlaps(s.torrentDataPaths(t), src)
+		if id != nil && t.ID == *id {
+			if !owns {
+				return false, "", fmt.Errorf("torrent %d (%q) does not own %s: its data is at %v; pass the torrent_id list_media reports for this item, or omit it", t.ID, t.Name, src, s.torrentDataPaths(t))
+			}
+			named = t
+			continue
+		}
+		if owns {
+			others = append(others, fmt.Sprintf("%d (%q)", t.ID, t.Name))
 		}
 	}
-	if len(match) == 0 {
-		return false, fmt.Sprintf("no torrent with id %d (already removed?); moved without it", id), nil
-	}
-	for _, t := range match {
-		if paths := s.torrentDataPaths(t); !anyOverlaps(paths, src) {
-			return false, "", fmt.Errorf("torrent %d (%q) does not own %s: its data is at %v; pass the torrent_id list_media reports for this item, or omit it", id, t.Name, src, paths)
+	if len(others) > 0 {
+		hint := "pass its torrent_id"
+		if id != nil || len(others) > 1 {
+			hint = "remove the other torrents with remove_torrent (delete_data=false) first, then move with the remaining one's torrent_id"
 		}
+		return false, "", fmt.Errorf("%s is still tracked by torrent %s; %s", src, strings.Join(others, ", "), hint)
 	}
-	if err := s.trans.RemoveTorrents(match, false); err != nil {
-		return false, "", err
+	if id == nil {
+		return false, "", nil
+	}
+	if named == nil {
+		return false, fmt.Sprintf("no torrent with id %d (already removed?); moved without it", *id), nil
+	}
+	if err := s.trans.RemoveTorrents([]*transmission.Torrent{named}, false); err != nil {
+		return false, "", fmt.Errorf("removing torrent %d before move: %v", *id, err)
 	}
 	return true, "", nil
 }
