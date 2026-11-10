@@ -52,6 +52,11 @@ func (s *server) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveM
 	if s.isStructuralDir(dst) {
 		return formatError("destination %q is the download root, a category directory or the incomplete directory; move into it with a name, e.g. %q", in.Destination, filepath.Join(in.Destination, filepath.Base(src))), moveMediaOutput{}, nil
 	}
+	// Outside every category the item would vanish from list_media and from
+	// the media servers, which mount only the category directories.
+	if !s.inCategoryDir(dst) {
+		return formatError("destination %q is not inside a category directory; it must start with one of %s", in.Destination, strings.Join(s.categoryPrefixes(), ", ")), moveMediaOutput{}, nil
+	}
 	if src == dst {
 		return formatError("source and destination are the same path"), moveMediaOutput{}, nil
 	}
@@ -261,6 +266,30 @@ func (s *server) isStructuralDir(p string) bool {
 		}
 	}
 	return false
+}
+
+// inCategoryDir reports whether p (resolved) lies strictly inside a
+// category directory or the incomplete directory.
+func (s *server) inCategoryDir(p string) bool {
+	dirs := []string{evalOrClean(s.incompletePath())}
+	for _, c := range knownCategories {
+		dirs = append(dirs, evalOrClean(filepath.Join(s.config.DownloadPath, c)))
+	}
+	for _, d := range dirs {
+		if isWithin(p, d) || isWithin(p, filepath.Clean(d)) {
+			return true
+		}
+	}
+	return false
+}
+
+// categoryPrefixes are the valid destination prefixes, for error messages.
+func (s *server) categoryPrefixes() []string {
+	var out []string
+	for _, c := range knownCategories {
+		out = append(out, c+"/")
+	}
+	return append(out, "incomplete/")
 }
 
 // sameExistingFile reports whether a and b both exist and are the same file.

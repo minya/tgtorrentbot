@@ -86,3 +86,22 @@ func TestMoveMediaStillMovesItems(t *testing.T) {
 		t.Fatalf("normal move refused: %+v", res.Content)
 	}
 }
+
+// F93: a destination outside every category (a typo, or the download root
+// itself) is refused, so the item cannot vanish from list_media and the
+// media servers.
+func TestMoveMediaRequiresCategoryDestination(t *testing.T) {
+	for _, dst := range []string{"The Wire (2002)", "showz/The Wire (2002)", "tv/The Wire (2002)"} {
+		s, root := newMoveServer(t)
+		if err := os.MkdirAll(filepath.Join(root, "shows", "Old.Name"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		res, out, _ := s.moveMedia(context.Background(), nil, moveMediaInput{Source: "shows/Old.Name", Destination: dst})
+		if !res.IsError || out.Moved {
+			t.Errorf("destination %q: moved outside every category: %+v", dst, out)
+		}
+		if _, err := os.Stat(filepath.Join(root, "shows", "Old.Name")); err != nil {
+			t.Errorf("destination %q: source changed: %v", dst, err)
+		}
+	}
+}
