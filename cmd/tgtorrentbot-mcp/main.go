@@ -106,9 +106,12 @@ func main() {
 		mux.Handle("/", srv.jwtAuth(mcpHandler))
 
 		logger.Info("starting MCP HTTP server on %s (OAuth 2.1)", addr)
-		httpSrv := newHTTPServer(addr, accessLog(corsMiddleware(mux)))
+		streams := newStreamCloser()
+		httpSrv := newHTTPServer(addr, accessLog(corsMiddleware(streams.streams(mux))))
 		// On SIGTERM, let in-flight tool calls finish (move_media removes the
-		// torrent, then renames) before exiting.
+		// torrent, then renames) before exiting; open event streams, which
+		// would never finish, are ended first.
+		httpSrv.RegisterOnShutdown(streams.closeAll)
 		if err := graceful.Serve(httpSrv, nil); err != nil {
 			logger.Error(err, "MCP HTTP server exited with error")
 			os.Exit(1)

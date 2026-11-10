@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/minya/logger"
@@ -76,4 +78,56 @@ func accessLog(next http.Handler) http.Handler {
 			r.Method, r.URL.RequestURI(), rec.status,
 			time.Since(start).Round(time.Millisecond), r.Header.Get("User-Agent"))
 	})
+}
+
+// streamCloser ends long-lived event streams when the server shuts down.
+// A Streamable HTTP client holds a GET event stream open for as long as it
+// is connected; http.Server.Shutdown waits for every active request, so
+// that stream made every shutdown run into its deadline and then
+// force-close the connections, in-flight tool calls included. Wrap the
+// handler with streams() and register closeAll with RegisterOnShutdown:
+// GET streams then end at once while POST requests (tool calls) finish.
+type streamCloser struct {
+	mu      sync.Mutex
+	cancels map[*context.CancelFunc]struct{}
+	closed  bool
+}
+
+func newStreamCloser() *streamCloser {
+	return &streamCloser{cancels: map[*context.CancelFunc]struct{}{}}
+}
+
+func (c *streamCloser) streams(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		c.mu.Lock()
+		if c.closed {
+			c.mu.Unlock()
+			http.Error(w, "shutting down", http.StatusServiceUnavailable)
+			return
+		}
+		c.cancels[&cancel] = struct{}{}
+		c.mu.Unlock()
+		defer func() {
+			c.mu.Lock()
+			delete(c.cancels, &cancel)
+			c.mu.Unlock()
+		}()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// closeAll ends every open stream and refuses new ones.
+func (c *streamCloser) closeAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	for cancel := range c.cancels {
+		(*cancel)()
+	}
 }
