@@ -1,0 +1,98 @@
+<style>
+body{margin:0;padding:10px 12px max(10px,env(safe-area-inset-bottom))}
+#n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m{color:var(--tg-theme-hint-color);font-size:.85em}
+#b{height:6px;border-radius:3px;margin:8px 0 6px;background:var(--tg-theme-secondary-bg-color);overflow:hidden}
+#f{height:100%;width:0;border-radius:3px;background:var(--tg-theme-button-color);transition:width .4s}
+.done #f{background:var(--tg-theme-accent-text-color)}
+.bad #f{background:var(--tg-theme-destructive-text-color)}
+#r{display:flex;align-items:center;gap:8px}
+#s{flex:1}
+#e{color:var(--tg-theme-destructive-text-color)}
+button{padding:2px 10px;font-size:.85em}
+</style>
+<div id="n"></div>
+<div class="m" id="c"></div>
+<div id="b"><div id="f"></div></div>
+<div id="r"><div class="m" id="s"></div><button id="u">Refresh</button></div>
+<div class="m" id="e"></div>
+<script>
+// State (chat_data and the bot's answers) is {h,n,c,z,p,s,r,e,x}: hash,
+// name, category, size, fraction done, status, download rate, ETA seconds,
+// Transmission error. See widgetState in widget_progress.go.
+const W = window.TelegramWidget, $ = (i) => document.getElementById(i);
+let st = null, busy = false;
+// take adopts a new state. The bot's state of a removed torrent has no
+// name: keep the one shown, also across re-creation (localStorage is per
+// message).
+function take(j) {
+  let a = null;
+  try { a = JSON.parse(j); } catch (e) {}
+  if (!a || !a.h) return;
+  let o = st;
+  if (!o) try { o = JSON.parse(localStorage.getItem('s')); } catch (e) {}
+  if (!a.n && o && o.h === a.h) { a.n = o.n; a.c = o.c; a.z = o.z; }
+  st = a;
+  try { localStorage.setItem('s', JSON.stringify({ h: a.h, n: a.n, c: a.c, z: a.z })); } catch (e) {}
+}
+take(W.chatData);
+
+function size(b) {
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return (i ? b.toFixed(b < 10 ? 1 : 0) : b) + ' ' + u[i];
+}
+function eta(s) {
+  if (s < 60) return s + ' s';
+  if (s < 3600) return Math.round(s / 60) + ' min';
+  if (s < 86400) return Math.floor(s / 3600) + ' h ' + Math.round(s % 3600 / 60) + ' min';
+  return Math.round(s / 86400) + ' d';
+}
+const final = () => st && (st.s === 'done' || st.s === 'gone');
+
+function render() {
+  if (!st) { $('n').textContent = 'Torrent'; return; }
+  const pct = Math.floor((st.p || 0) * 100);
+  $('n').textContent = st.n || st.h;
+  $('c').textContent = (st.c || '') + (st.z ? ' · ' + size(st.z) : '');
+  $('f').style.width = (st.s === 'gone' ? 0 : pct) + '%';
+  document.body.className = st.s === 'done' ? 'done' : (st.x || st.s === 'gone') ? 'bad' : '';
+  let s;
+  switch (st.s) {
+    case 'done': s = '✓ Downloaded'; break;
+    case 'gone': s = 'Removed from Transmission'; break;
+    case 'stop': s = pct + '% · Paused'; break;
+    case 'wait': s = pct + '% · Queued'; break;
+    case 'check': s = pct + '% · Verifying'; break;
+    default:
+      s = pct + '%';
+      if (st.r) s += ' · ↓ ' + size(st.r) + '/s';
+      if (st.e > 0) s += ' · ' + eta(st.e) + ' left';
+  }
+  $('s').textContent = s;
+  $('e').textContent = st.x || '';
+  $('u').hidden = final();
+}
+
+function ask() {
+  if (busy || !st || final()) return;
+  busy = true;
+  W.request('p:' + st.h).then((a) => {
+    busy = false;
+    take(a.result);
+    render();
+  }, (e) => {
+    busy = false;
+    // Background polls may be refused off screen or rate limited: keep
+    // the last state and only say so for real failures.
+    if (e.code === 'TIMEOUT' || e.code === 'FAILED') $('e').textContent = 'Bot unreachable';
+  });
+}
+
+$('u').onclick = ask;
+W.onEvent('chatDataChanged', () => { take(W.chatData); render(); });
+render();
+ask();
+setInterval(ask, 5000);
+</script>

@@ -214,3 +214,49 @@ func TestUnmatchedCallbacksAreAnswered(t *testing.T) {
 		}
 	}
 }
+
+func widgetQuery(from int64, data string) *telegram.Update {
+	return &telegram.Update{WidgetQuery: &telegram.WidgetQuery{
+		ID: "wq", From: &telegram.User{ID: from}, Chat: &telegram.Chat{ID: from, Type: "private"}, MessageID: 5, Data: data,
+	}}
+}
+
+// A progress widget asks every 5 s while on screen: it must reach its
+// command only for allowed users and never trigger a completion check.
+func TestWidgetQueryAllowlistAndNoNotify(t *testing.T) {
+	h, stub, tg, notified := newTestHandler(t, 42)
+	if err := h.HandleUpdate(context.Background(), widgetQuery(7, "p:x")); err != nil {
+		t.Fatal(err)
+	}
+	if stub.accepted.Load() != 0 || len(tg.calls()) != 0 {
+		t.Fatalf("unknown user's widget query reached a command or Telegram: %v", tg.calls())
+	}
+	if err := h.HandleUpdate(context.Background(), widgetQuery(42, "p:x")); err != nil {
+		t.Fatal(err)
+	}
+	if stub.accepted.Load() != 1 || notified.Load() != 0 {
+		t.Fatalf("accepted = %d, notified = %d", stub.accepted.Load(), notified.Load())
+	}
+}
+
+// An unknown widget query is answered at once (not left to time out after
+// 15 s) and gets no chat message.
+func TestUnmatchedWidgetQueryIsAnswered(t *testing.T) {
+	tg, api := newRecordingTelegram(t)
+	h := NewUpdatesHandler(environment.Env{TgApi: api, AllowedUsers: []int64{42}, FileIDLookup: &internal.FileIDLookup{}}, func() {})
+	if err := h.HandleUpdate(context.Background(), widgetQuery(42, "nonsense")); err != nil {
+		t.Fatal(err)
+	}
+	if calls := tg.calls(); !slices.Equal(calls, []string{"answerWidgetQuery"}) {
+		t.Fatalf("Telegram calls %v, want only answerWidgetQuery", calls)
+	}
+}
+
+func TestWidgetQueriesAreNotOrderedBehindTheChat(t *testing.T) {
+	if _, ok := updateOrderKey(widgetQuery(42, "p:x")); ok {
+		t.Error("a widget query must not wait behind the chat's other updates")
+	}
+	if key, ok := updateOrderKey(&telegram.Update{Message: &telegram.Message{Chat: telegram.Chat{ID: 42}}}); !ok || key != 42 {
+		t.Errorf("messages must still be ordered per chat, got %d, %v", key, ok)
+	}
+}

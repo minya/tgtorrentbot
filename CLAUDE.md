@@ -173,6 +173,7 @@ Registered command factories (`NewUpdatesHandler` in `cmd/tgtorrentbot/handler.g
 - `DownloadMagnetWithCategoryCommandFactory` - `/dlmagnet <category> <uuid>` downloads magnet with category (callback only)
 - `DownloadCommandFactory` - `/dl <url>` prompts for category selection (callback only)
 - `DownloadByFileCommandFactory` - handles `.torrent` file uploads (by file name or `application/x-bittorrent` MIME type), prompts for category; other documents fall through to the fallback reply
+- `WidgetProgressCommandFactory` - answers `widget_query` updates `p:<info hash>` from the download progress widget (see Progress Widget)
 
 **Command ordering matters:** Commands are matched in order. More specific patterns (e.g., `/dlcat`) must come before general ones (e.g., `/dl`) to avoid incorrect matching. `DownloadByMagnetCommandFactory` must come before `SearchCommandFactory` so magnet URIs aren't treated as search queries.
 
@@ -249,7 +250,7 @@ The completion checker uses Transmission labels to track which chat initiated ea
 5. Downloads .torrent file as bytes
 6. Base64-encodes and sends to Transmission RPC with download dir `{DownloadPath}/{category}/`
 7. Sets torrent labels: `[chatID, category, userID]`. If that fails, the torrent is removed again (data kept) and the user is told, as the webapp does; an unlabelled torrent would get no notification and be invisible in the webapp
-8. Sends confirmation message. An add Transmission rejects is reported to the user too, a duplicate as "already in Transmission" (`replyAddFailed`)
+8. Sends confirmation: in the private chat the progress widget (see Progress Widget), else, or when `sendWidget` fails, the text "Added: …" message. An add Transmission rejects is reported to the user too, a duplicate as "already in Transmission" (`replyAddFailed`)
 
 ### Download-by-File Flow
 1. User uploads a `.torrent` file directly to the bot
@@ -267,6 +268,15 @@ The completion checker uses Transmission labels to track which chat initiated ea
 4. User picks a category → `DownloadMagnetWithCategoryCommand.Accepts` resolves the UUID back to the magnet URI; if the UUID is missing (bot restart), it returns an `expiredFileButtonCommand` that tells the user to re-send the link
 5. The magnet URI is passed to Transmission via `AddTorrentArg{Filename: magnetURI}` (Transmission RPC accepts magnet URIs in the `filename` field); `DownloadCommand.addMagnetAndReply` adds it, then `finalizeTorrent` sets labels `[chatID, category, userID]`
 6. Transmission resolves torrent metadata asynchronously over DHT/peers
+
+### Progress Widget
+
+A Bot API 10.4 widget (`commands/widget_progress.go`, HTML in `commands/progress_widget.html`, embedded): `finalizeTorrent` sends it instead of the "Added" text when the chat is the user's private chat (chat ID == user ID; production Telegram allows widgets only there), with the text as fallback when `sendWidget` fails. It shows name, category, size, a progress bar, speed and ETA.
+
+- The torrent is named by its info hash, not its Transmission id (ids are renumbered when Transmission restarts). The widget's `chat_data` and the bot's answers share one JSON format, `widgetState` (`{h,n,c,z,p,s,r,e,x}`; keep it in sync with the script)
+- While on screen the widget sends a background `widget_query` `p:<hash>` at start and every 5 s; `WidgetProgressCommand` answers it from `GetTorrents` within Telegram's 15 s. When the torrent is done or no longer in Transmission, it also writes that final state into the message's `chat_data` (`editMessageWidgetData`), so a redrawn widget shows it without asking, and the widget stops asking. A removed torrent's state carries only the hash; the widget keeps the name it shows (and in `localStorage`, which is per message)
+- Widget queries skip the completion-check trigger (`handler.notify`), are not ordered behind the chat's other updates (`updateOrderKey` in `cmd/tgtorrentbot/webhook.go`, so a slow search cannot make them miss the 15 s deadline), and an unmatched one gets an empty answer. They go through the same `AllowedUsers` check
+- Limits (`TestProgressWidgetFitsTelegramLimits`, `TestWidgetStateFitsTelegramLimit`): HTML ≤ 32 KB and ≤ 4 KB after zlib level 9; `chat_data` and answers ≤ 1024 bytes. The widget runs in Telegram's QuickJS sandbox: no network, no form controls, theme colours from `--tg-theme-*` variables only (https://core.telegram.org/bots/widgets)
 
 ### List with Pagination
 1. User sends `/list`

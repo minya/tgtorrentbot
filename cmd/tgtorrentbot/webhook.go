@@ -38,12 +38,24 @@ func validWebhookSecret(s string) bool {
 // accepts only POST and caps the body), so updates cannot be forged by
 // anyone who learns the webhook URL. telegram.WebhookHandler acknowledges
 // each update at once and handles it in the background (one chat's updates
-// one after another in update_id order, at most 40 at once), with a context
+// one after another in update_id order, widget queries excepted, at most 40
+// at once), with a context
 // that survives Telegram disconnecting; the returned Webhook's Wait lets
 // shutdown finish the updates still being handled. Failures and panics in a
 // command are logged and never take the bot down.
 func newWebhookHandler(secret string, handleUpdate func(context.Context, *telegram.Update) error) *telegram.Webhook {
 	return telegram.WebhookHandler(secret, handleUpdate, func(upd *telegram.Update, err error) {
 		logger.Error(err, "Failed to handle update %d", upd.UpdateID)
-	})
+	}, telegram.WithOrderKey(updateOrderKey))
+}
+
+// updateOrderKey orders a chat's updates (telegram.UpdateChatID), except
+// widget queries: a progress widget asks every 5 s and must be answered
+// within 15 s, so it must not wait behind a search in the same chat, and it
+// changes nothing that the chat's commands depend on.
+func updateOrderKey(upd *telegram.Update) (int64, bool) {
+	if upd.WidgetQuery != nil || upd.SharedWidgetQuery != nil {
+		return 0, false
+	}
+	return telegram.UpdateChatID(upd)
 }

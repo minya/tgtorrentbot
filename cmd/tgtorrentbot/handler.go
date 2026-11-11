@@ -38,6 +38,7 @@ func NewUpdatesHandler(env environment.Env, notifyFunc func()) *UpdatesHandler {
 			&commands.DownloadMagnetWithCategoryCommandFactory{Env: env},
 			&commands.DownloadCommandFactory{Env: env},
 			&commands.DownloadByFileCommandFactory{Env: env},
+			&commands.WidgetProgressCommandFactory{Env: env},
 		},
 	}
 }
@@ -48,6 +49,9 @@ func extractUser(upd *telegram.Update) *telegram.User {
 	}
 	if upd.CallbackQuery != nil {
 		return upd.CallbackQuery.From
+	}
+	if upd.WidgetQuery != nil {
+		return upd.WidgetQuery.From
 	}
 	return nil
 }
@@ -87,7 +91,9 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 		if accepts {
 			logger.Debug("Command accepted: %T", cmd)
 			handleErr := cmd.Handle(ctx, upd)
-			if handleErr == nil {
+			// A widget asks every 5 s while on screen and changes nothing:
+			// it must not trigger a completion check each time.
+			if handleErr == nil && upd.WidgetQuery == nil {
 				handler.notify()
 			} else if !commands.IsReplied(handleErr) {
 				// Most failure paths return without messaging the chat;
@@ -104,8 +110,13 @@ func (handler *UpdatesHandler) HandleUpdate(ctx context.Context, upd *telegram.U
 	}
 
 	// Answer an unmatched button press too, or its spinner runs until
-	// Telegram times it out. Nil-safe for plain messages.
+	// Telegram times it out. Nil-safe for plain messages. An unknown widget
+	// query gets an empty answer instead of a TIMEOUT after 15 s.
 	commands.AnswerCallbackQuery(ctx, upd, handler.TgApi)
+	if upd.WidgetQuery != nil {
+		commands.AnswerWidget(ctx, handler.TgApi, upd.WidgetQuery.ID, "")
+		return nil
+	}
 	chatID, ok := replyChatID(upd)
 	if !ok {
 		return nil

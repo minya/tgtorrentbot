@@ -139,6 +139,16 @@ func (cmd *DownloadCommand) finalizeTorrent(ctx context.Context, torrent *transm
 
 	logger.Debug("Torrent %v labels set successfully", torrent.ID)
 
+	// In the private chat (its id is the user's), show a live progress
+	// widget. Widgets are refused in groups in production, and an app or
+	// server without them gets the plain message.
+	if chatID == userID {
+		err := sendProgressWidget(ctx, cmd.TgApi, chatID, torrent, category)
+		if err == nil {
+			return nil
+		}
+		logger.Warn("Progress widget for torrent %v not sent (%v), sending text", torrent.ID, err)
+	}
 	SendMessage(ctx, cmd.TgApi, telegram.SendMessageParams{
 		ChatID: chatID,
 		Text:   fmt.Sprintf("Added: %v [%s]", torrent.ID, category.DisplayName()),
