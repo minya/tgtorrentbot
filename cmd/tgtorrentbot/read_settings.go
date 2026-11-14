@@ -79,6 +79,16 @@ func readSettingsFromEnv() (Settings, error) {
 	settings.LogLevel = os.Getenv("TGT_LOGLEVEL")
 	settings.WebAppURL = os.Getenv("TGT_WEBAPP_URL")
 	settings.WebhookSecret = os.Getenv("TGT_WEBHOOK_SECRET")
+	settings.Autofix = AutofixSettings{
+		AnthropicAPIKey:         os.Getenv("ANTHROPIC_API_KEY"),
+		Model:                   os.Getenv("TGT_AUTOFIX_MODEL"),
+		IncompletePath:          os.Getenv("TGT_INCOMPLETE_PATH"),
+		JellyfinURL:             os.Getenv("TGT_JELLYFIN_URL"),
+		JellyfinAPIKey:          os.Getenv("TGT_JELLYFIN_API_KEY"),
+		AudiobookshelfURL:       os.Getenv("TGT_AUDIOBOOKSHELF_URL"),
+		AudiobookshelfAPIKey:    os.Getenv("TGT_AUDIOBOOKSHELF_API_KEY"),
+		AudiobookshelfLibraryID: os.Getenv("TGT_AUDIOBOOKSHELF_LIBRARY_ID"),
+	}
 
 	var problems []string
 	if allowedUsersRaw := os.Getenv("TGT_ALLOWED_USERS"); strings.TrimSpace(allowedUsersRaw) != "" {
@@ -155,6 +165,14 @@ func validateSettings(s Settings) []string {
 		{s.LogLevel, "logLevel/TGT_LOGLEVEL"},
 		{s.WebAppURL, "webAppURL/TGT_WEBAPP_URL"},
 		{s.WebhookSecret, "webhookSecret/TGT_WEBHOOK_SECRET"},
+		{s.Autofix.AnthropicAPIKey, "autofix.anthropicApiKey/ANTHROPIC_API_KEY"},
+		{s.Autofix.Model, "autofix.model/TGT_AUTOFIX_MODEL"},
+		{s.Autofix.IncompletePath, "autofix.incompletePath/TGT_INCOMPLETE_PATH"},
+		{s.Autofix.JellyfinURL, "autofix.jellyfinURL/TGT_JELLYFIN_URL"},
+		{s.Autofix.JellyfinAPIKey, "autofix.jellyfinApiKey/TGT_JELLYFIN_API_KEY"},
+		{s.Autofix.AudiobookshelfURL, "autofix.audiobookshelfURL/TGT_AUDIOBOOKSHELF_URL"},
+		{s.Autofix.AudiobookshelfAPIKey, "autofix.audiobookshelfApiKey/TGT_AUDIOBOOKSHELF_API_KEY"},
+		{s.Autofix.AudiobookshelfLibraryID, "autofix.audiobookshelfLibraryId/TGT_AUDIOBOOKSHELF_LIBRARY_ID"},
 	} {
 		if strings.HasPrefix(strings.TrimSpace(f.value), "op://") {
 			problems = append(problems, f.name+" is an unresolved 1Password reference; resolve the file with `op inject` first")

@@ -42,14 +42,25 @@ func withFloodRetry(ctx context.Context, call func() error) error {
 // SendMessage sends a message and logs a failure, which callers used to
 // discard. It returns the error for callers whose result is the message.
 func SendMessage(ctx context.Context, api *telegram.API, params telegram.SendMessageParams) error {
+	_, err := SendMessageGetID(ctx, api, params)
+	return err
+}
+
+// SendMessageGetID is SendMessage that also returns the id of the sent
+// message, e.g. for a later reply to it.
+func SendMessageGetID(ctx context.Context, api *telegram.API, params telegram.SendMessageParams) (int64, error) {
+	var id int64
 	err := withFloodRetry(ctx, func() error {
-		_, err := api.SendMessage(ctx, params)
+		msg, err := api.SendMessage(ctx, params)
+		if err == nil && msg != nil {
+			id = msg.MessageID
+		}
 		return err
 	})
 	if err != nil {
 		logger.Error(err, "Failed to send Telegram message to chat %d", params.ChatID)
 	}
-	return err
+	return id, err
 }
 
 // EditMessageText edits a message and logs a failure. Telegram's "message is

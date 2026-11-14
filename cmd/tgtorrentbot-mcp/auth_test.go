@@ -20,7 +20,6 @@ import (
 func testServer(t *testing.T, base string) *server {
 	t.Helper()
 	cfg := Config{
-		DownloadPath:  t.TempDir(),
 		AuthToken:     "hunter2",
 		PublicBaseURL: base,
 		JWTSecret:     []byte("test-secret-at-least-32-bytes-long!!"),

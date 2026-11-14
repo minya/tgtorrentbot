@@ -86,7 +86,7 @@ The bot loads its settings from environment variables or a JSON file (`settings.
 |---|---|---|
 | `TGT_BOTTOKEN` | Yes | Telegram bot token |
 | `TGT_WEBHOOKURL` | Yes | Webhook URL for Telegram updates |
-| `TGT_DOWNLOADPATH` | Yes | Base path for downloads, as Transmission sees it (the bot only passes it to Transmission; the webapp and MCP server must see the files at the same path) |
+| `TGT_DOWNLOADPATH` | Yes | Base path for downloads, as Transmission sees it; the bot's auto-fixer, the webapp and the MCP server must see the files at the same path |
 | `TGT_RPC_ADDR` | Yes | Transmission RPC address |
 | `TGT_RPC_USER` | Yes | Transmission RPC user |
 | `TGT_RPC_PASSWORD` | Yes | Transmission RPC password |
@@ -95,11 +95,13 @@ The bot loads its settings from environment variables or a JSON file (`settings.
 | `TGT_ALLOWED_USERS` | Yes | Comma-separated Telegram user IDs allowed to use the bot and the webapp |
 | `TGT_LOGLEVEL` | No | Log level (`info`, `debug`, etc.) |
 | `TGT_WEBAPP_URL` | No | Mini App URL; registers it as the Telegram chat menu button |
-| `TGT_JELLYFIN_URL` | No | Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it |
+| `TGT_JELLYFIN_URL` | No | Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp, MCP server and auto-fixer work without it |
 | `TGT_JELLYFIN_API_KEY` | No | Jellyfin API key (generated from Jellyfin admin dashboard) |
-| `TGT_AUDIOBOOKSHELF_URL` | No | Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp and MCP work without it |
+| `TGT_AUDIOBOOKSHELF_URL` | No | Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp, MCP server and auto-fixer work without it |
 | `TGT_AUDIOBOOKSHELF_API_KEY` | No | Audiobookshelf API token (Settings → Users → user → API Token) |
 | `TGT_INCOMPLETE_PATH` | No | Path to Transmission's incomplete downloads directory; defaults to `{downloadPath}/incomplete` |
+| `ANTHROPIC_API_KEY` | No | Bot only. Enables the auto-fixer: after the "Completed" notice, Claude inspects the download (audiobooks, movies, music, music videos, shows), fixes cp1251 tags and release-junk folder names, and replies with what it changed. Needs the downloads mounted at `TGT_DOWNLOADPATH`. Fixing a torrent's files stops it seeding |
+| `TGT_AUTOFIX_MODEL` | No | Bot only. Claude model for the auto-fixer (default `claude-opus-5-5`) |
 | `TGT_WEBHOOK_SECRET` | No | Bot only. Webhook `secret_token`; defaults to a value derived from the bot token |
 | `PORT` | No | Webapp only. Listen port, default `8080` |
 
@@ -134,9 +136,18 @@ The MCP server needs only `TGT_DOWNLOADPATH`; Transmission, Jellyfin and Audiobo
   },
   "logLevel": "info",
   "webAppURL": "https://yourdomain.com/webapp",
-  "allowedUsers": [123456789]
+  "allowedUsers": [123456789],
+  "autofix": {
+    "anthropicApiKey": "...",
+    "jellyfinURL": "http://localhost:8096",
+    "jellyfinApiKey": "...",
+    "audiobookshelfURL": "http://localhost:13378",
+    "audiobookshelfApiKey": "..."
+  }
 }
 ```
+
+`autofix` is optional; the fixer runs when `anthropicApiKey` is set. Its other keys are `model`, `incompletePath` and `audiobookshelfLibraryId`.
 
 ## Build
 
@@ -208,6 +219,8 @@ Compose environment variables:
 | `MCP_TOKEN` | For `tgt-mcp` | MCP login secret; without it the `tgt-mcp` container exits with an error |
 | `MCP_PUBLIC_URL` | For `tgt-mcp` | Public HTTPS URL of the MCP server |
 | `MCP_JWT_SECRET` | For `tgt-mcp` | Token signing secret, at least 32 random characters (`openssl rand -base64 48`); without it `tgt-mcp` exits with an error |
+| `ANTHROPIC_API_KEY` | No | Claude API key; turns on the bot's auto-fixer for completed downloads |
+| `AUTOFIX_MODEL` | No | Claude model for the auto-fixer (default `claude-opus-5-5`) |
 | `DUFS_USER` | For `tgt-dufs` | dufs login user |
 | `DUFS_PASSWORD` | For `tgt-dufs` | dufs login password |
 | `LOGLEVEL` | No | Log level for the bot, webapp and MCP server (`info`, `debug`, …) |

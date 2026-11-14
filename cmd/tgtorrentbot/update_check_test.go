@@ -68,13 +68,13 @@ func TestCompletionNotifiedOnTransition(t *testing.T) {
 	tc, api := fakeTransmission(t, ft), fakeTelegram(t, &sent)
 	start := time.Now().Unix()
 
-	st, err := updateCheckRoutine(tc, api, nil, start)
+	st, err := updateCheckRoutine(tc, api, nil, start, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ft.set(1, start+30)
-	st, _ = updateCheckRoutine(tc, api, st, start+60)
-	_, _ = updateCheckRoutine(tc, api, st, start+120)
+	st, _ = updateCheckRoutine(tc, api, st, start+60, nil)
+	_, _ = updateCheckRoutine(tc, api, st, start+120, nil)
 
 	if got := sent.Load(); got != 1 {
 		t.Fatalf("sent %d notifications, want 1", got)
@@ -91,11 +91,11 @@ func TestCompletionNotifiedWhenFirstSeenComplete(t *testing.T) {
 	var sent atomic.Int32
 	tc, api := fakeTransmission(t, ft), fakeTelegram(t, &sent)
 
-	st, err := updateCheckRoutine(tc, api, nil, since)
+	st, err := updateCheckRoutine(tc, api, nil, since, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = updateCheckRoutine(tc, api, st, since+60)
+	_, _ = updateCheckRoutine(tc, api, st, since+60, nil)
 
 	if got := sent.Load(); got != 1 {
 		t.Fatalf("sent %d notifications, want 1", got)
@@ -111,7 +111,7 @@ func TestNoNotificationForTorrentCompletedBeforeStart(t *testing.T) {
 	var sent atomic.Int32
 	tc, api := fakeTransmission(t, ft), fakeTelegram(t, &sent)
 
-	if _, err := updateCheckRoutine(tc, api, nil, since); err != nil {
+	if _, err := updateCheckRoutine(tc, api, nil, since, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := sent.Load(); got != 0 {
@@ -119,21 +119,12 @@ func TestNoNotificationForTorrentCompletedBeforeStart(t *testing.T) {
 	}
 }
 
-func TestNewlyCompletedIgnoresMissingDoneDate(t *testing.T) {
-	cur := transmission.TorrentMap{"h": {Name: "X", PercentDone: 1}}
-	if got := newlyCompleted(nil, cur, 0); len(got) != 0 {
-		t.Fatalf("got %d, want 0 for a complete torrent without doneDate", len(got))
-	}
-}
-
-// The checker polls by itself from start-up: no bot command is needed for it
-// to observe a torrent added elsewhere.
 func TestCheckerPollsWithoutNotify(t *testing.T) {
 	ft := &fakeTorrent{}
 	ft.set(1, time.Now().Unix()+1)
 	var sent atomic.Int32
 	ctx, cancel := context.WithCancel(context.Background())
-	_, done := CreateCompletedCheckRoutine(ctx, fakeTransmission(t, ft), fakeTelegram(t, &sent))
+	_, done := CreateCompletedCheckRoutine(ctx, fakeTransmission(t, ft), fakeTelegram(t, &sent), nil)
 	t.Cleanup(func() { cancel(); <-done })
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -169,11 +160,11 @@ func TestCompletionNoticeRetriedAfterTransientFailure(t *testing.T) {
 	tc, api := fakeTransmission(t, ft), flakyTelegram(t, 502, 1, &calls)
 	start := time.Now().Unix()
 
-	st, _ := updateCheckRoutine(tc, api, nil, start)
+	st, _ := updateCheckRoutine(tc, api, nil, start, nil)
 	ft.set(1, start+30)
-	st, _ = updateCheckRoutine(tc, api, st, start+60)  // send fails (502)
-	st, _ = updateCheckRoutine(tc, api, st, start+120) // retried, delivered
-	_, _ = updateCheckRoutine(tc, api, st, start+180)  // nothing more
+	st, _ = updateCheckRoutine(tc, api, st, start+60, nil)  // send fails (502)
+	st, _ = updateCheckRoutine(tc, api, st, start+120, nil) // retried, delivered
+	_, _ = updateCheckRoutine(tc, api, st, start+180, nil)  // nothing more
 
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("sendMessage calls = %d, want 2 (one failure, one retry)", got)
@@ -188,10 +179,10 @@ func TestCompletionNoticeNotRetriedOnPermanentFailure(t *testing.T) {
 	tc, api := fakeTransmission(t, ft), flakyTelegram(t, 403, 100, &calls)
 	start := time.Now().Unix()
 
-	st, _ := updateCheckRoutine(tc, api, nil, start)
+	st, _ := updateCheckRoutine(tc, api, nil, start, nil)
 	ft.set(1, start+30)
-	st, _ = updateCheckRoutine(tc, api, st, start+60)
-	_, _ = updateCheckRoutine(tc, api, st, start+120)
+	st, _ = updateCheckRoutine(tc, api, st, start+60, nil)
+	_, _ = updateCheckRoutine(tc, api, st, start+120, nil)
 
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("sendMessage calls = %d, want 1", got)
@@ -205,7 +196,7 @@ func TestCheckerStopsOnCancel(t *testing.T) {
 	ft.set(0.5, 0)
 	var sent atomic.Int32
 	ctx, cancel := context.WithCancel(context.Background())
-	_, done := CreateCompletedCheckRoutine(ctx, fakeTransmission(t, ft), fakeTelegram(t, &sent))
+	_, done := CreateCompletedCheckRoutine(ctx, fakeTransmission(t, ft), fakeTelegram(t, &sent), nil)
 	cancel()
 	select {
 	case <-done:
@@ -225,5 +216,29 @@ func TestCompletionCategoryMatchesWebapp(t *testing.T) {
 		if got := getTorrentCategory(&transmission.Torrent{Labels: tl}); got != want {
 			t.Errorf("getTorrentCategory(%q) = %q, want %q", tl, got, want)
 		}
+	}
+}
+
+// The auto-fixer gets each delivered completion with its notice's id, and
+// none whose notice failed.
+func TestCompletionHandedToFixerAfterNotice(t *testing.T) {
+	ft := &fakeTorrent{}
+	ft.set(0.5, 0)
+	var calls atomic.Int32
+	tc, api := fakeTransmission(t, ft), flakyTelegram(t, 502, 1, &calls)
+	start := time.Now().Unix()
+	type got struct{ chat, msg int64 }
+	var handed []got
+	onCompleted := func(tr *transmission.Torrent, chatID, messageID int64) {
+		handed = append(handed, got{chatID, messageID})
+	}
+
+	st, _ := updateCheckRoutine(tc, api, nil, start, onCompleted)
+	ft.set(1, start+30)
+	st, _ = updateCheckRoutine(tc, api, st, start+60, onCompleted) // send fails
+	_, _ = updateCheckRoutine(tc, api, st, start+120, onCompleted) // delivered
+
+	if len(handed) != 1 || handed[0].chat != 42 || handed[0].msg == 0 {
+		t.Fatalf("handed %+v, want one completion for chat 42 with its message id", handed)
 	}
 }

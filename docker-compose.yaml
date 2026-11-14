@@ -15,10 +15,11 @@ services:
       - TGT_BOTTOKEN=${BOT_TOKEN}
       - TGT_ALLOWED_USERS=${ALLOWED_USERS}
       - TGT_WEBHOOKURL=${WEBHOOKURL}
-      # The path as Transmission sees it: the bot only passes it to
-      # Transmission as download-dir and never touches the files, so the
-      # downloads are not mounted here.
+      # The path as Transmission sees it (the bot passes it to Transmission
+      # as download-dir). The auto-fixer works on the files there, so the
+      # downloads are mounted at the same path below.
       - TGT_DOWNLOADPATH=/downloads
+      - TGT_INCOMPLETE_PATH=/downloads/incomplete
       - TGT_RPC_ADDR=http://tgt-transmission:9091/transmission/rpc
       - TGT_RPC_USER=tgtorrentbot
       - TGT_RPC_PASSWORD=${PASSWD}
@@ -26,6 +27,15 @@ services:
       - TGT_RUTRACKER_PASSWORD=${RUTRACKER_PASSWORD}
       - TGT_LOGLEVEL=${LOGLEVEL}
       - TGT_WEBAPP_URL=${WEBAPP_URL}
+      # Auto-fixer: Claude fixes each completed download (empty key = off)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - TGT_AUTOFIX_MODEL=${AUTOFIX_MODEL:-}
+      - TGT_JELLYFIN_URL=http://tgt-jellyfin:8096
+      - TGT_JELLYFIN_API_KEY=${JELLYFIN_API_KEY}
+      - TGT_AUDIOBOOKSHELF_URL=http://tgt-audiobookshelf:80
+      - TGT_AUDIOBOOKSHELF_API_KEY=${AUDIOBOOKSHELF_API_KEY}
+    volumes:
+      - /var/transmission/downloads:/downloads
     dns:
       - 8.8.8.8
       - 8.8.4.4

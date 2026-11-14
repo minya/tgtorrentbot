@@ -5,25 +5,20 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/minya/tgtorrentbot/internal/mediatools"
 )
 
 // Config is the subset of env config the MCP server needs. It intentionally
 // omits Telegram/Rutracker settings that only the bot+webapp need.
 type Config struct {
-	DownloadPath         string
-	IncompletePath       string
+	// Media is the tools' configuration: download root and the optional
+	// Jellyfin/Audiobookshelf settings.
+	Media                mediatools.Config
 	TransmissionAddr     string
 	TransmissionUser     string
 	TransmissionPassword string
-	JellyfinURL          string
-	JellyfinAPIKey       string
-	AudiobookshelfURL    string
-	AudiobookshelfAPIKey string
-	// AudiobookshelfLibraryID, when set, is the default library for
-	// abs_remove_issues; otherwise the single book-type library is looked up.
-	AudiobookshelfLibraryID string
 	// AuthToken, when non-empty, switches the server to HTTP transport on :8080
 	// and requires OAuth 2.1. The token doubles as the shared secret the user
 	// types into the /authorize login form. Empty means stdio.
@@ -39,35 +34,14 @@ type Config struct {
 	JWTSecret []byte
 }
 
-// resolvedDir returns p with symlinks resolved, or p itself when it does
-// not exist (yet).
-func resolvedDir(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return p
-}
-
 func loadConfig() (Config, error) {
 	dl := os.Getenv("TGT_DOWNLOADPATH")
 	if dl == "" {
 		return Config{}, fmt.Errorf("TGT_DOWNLOADPATH is not set")
 	}
-	abs, err := filepath.Abs(dl)
+	dl, inc, err := mediatools.ResolveRoots(dl, os.Getenv("TGT_INCOMPLETE_PATH"))
 	if err != nil {
 		return Config{}, fmt.Errorf("TGT_DOWNLOADPATH: %w", err)
-	}
-	// Resolve symlinks in the root once. The path guards compare resolved
-	// paths against it and the tools report paths relative to it, so an
-	// unresolved root (e.g. /downloads -> /mnt/disk/downloads) would make
-	// every returned path absolute and then rejected when passed back.
-	dl = resolvedDir(filepath.Clean(abs))
-
-	inc := os.Getenv("TGT_INCOMPLETE_PATH")
-	if inc == "" {
-		inc = filepath.Join(dl, "incomplete")
-	} else if incAbs, err := filepath.Abs(inc); err == nil {
-		inc = resolvedDir(filepath.Clean(incAbs))
 	}
 
 	authToken := os.Getenv("TGT_MCP_TOKEN")
@@ -91,19 +65,21 @@ func loadConfig() (Config, error) {
 	}
 
 	return Config{
-		DownloadPath:            dl,
-		IncompletePath:          inc,
-		TransmissionAddr:        os.Getenv("TGT_RPC_ADDR"),
-		TransmissionUser:        os.Getenv("TGT_RPC_USER"),
-		TransmissionPassword:    os.Getenv("TGT_RPC_PASSWORD"),
-		JellyfinURL:             os.Getenv("TGT_JELLYFIN_URL"),
-		JellyfinAPIKey:          os.Getenv("TGT_JELLYFIN_API_KEY"),
-		AudiobookshelfURL:       os.Getenv("TGT_AUDIOBOOKSHELF_URL"),
-		AudiobookshelfAPIKey:    os.Getenv("TGT_AUDIOBOOKSHELF_API_KEY"),
-		AudiobookshelfLibraryID: os.Getenv("TGT_AUDIOBOOKSHELF_LIBRARY_ID"),
-		AuthToken:               authToken,
-		PublicBaseURL:           publicURL,
-		JWTSecret:               jwtSecret,
+		Media: mediatools.Config{
+			DownloadPath:            dl,
+			IncompletePath:          inc,
+			JellyfinURL:             os.Getenv("TGT_JELLYFIN_URL"),
+			JellyfinAPIKey:          os.Getenv("TGT_JELLYFIN_API_KEY"),
+			AudiobookshelfURL:       os.Getenv("TGT_AUDIOBOOKSHELF_URL"),
+			AudiobookshelfAPIKey:    os.Getenv("TGT_AUDIOBOOKSHELF_API_KEY"),
+			AudiobookshelfLibraryID: os.Getenv("TGT_AUDIOBOOKSHELF_LIBRARY_ID"),
+		},
+		TransmissionAddr:     os.Getenv("TGT_RPC_ADDR"),
+		TransmissionUser:     os.Getenv("TGT_RPC_USER"),
+		TransmissionPassword: os.Getenv("TGT_RPC_PASSWORD"),
+		AuthToken:            authToken,
+		PublicBaseURL:        publicURL,
+		JWTSecret:            jwtSecret,
 	}, nil
 }
 

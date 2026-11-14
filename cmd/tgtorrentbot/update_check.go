@@ -11,6 +11,7 @@ import (
 	"github.com/minya/logger"
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/commands"
+	"github.com/minya/tgtorrentbot/internal/completion"
 	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/odwrtw/transmission"
 )
@@ -23,9 +24,13 @@ import (
 // Completions that happen while the bot is not running are not notified:
 // the first check only reports torrents that completed after the bot started.
 //
+// onCompleted, when set, is called for every completion whose notice was
+// delivered, with the chat and the id of the notice (the auto-fixer starts
+// there and replies to it).
+//
 // The checker stops when ctx is done, after finishing a check in progress
 // (its notices are not cut mid-send); done is closed when it has stopped.
-func CreateCompletedCheckRoutine(ctx context.Context, transmissionClient *transmission.Client, api *telegram.API) (notify func(), done <-chan struct{}) {
+func CreateCompletedCheckRoutine(ctx context.Context, transmissionClient *transmission.Client, api *telegram.API, onCompleted completedFunc) (notify func(), done <-chan struct{}) {
 	chanNotify := make(chan int, 1)
 	stopped := make(chan struct{})
 
@@ -35,7 +40,7 @@ func CreateCompletedCheckRoutine(ctx context.Context, transmissionClient *transm
 		lastPoll := time.Now().Unix()
 		checkTorrents := func() {
 			pollStart := time.Now().Unix()
-			newState, err := updateCheckRoutine(transmissionClient, api, state, lastPoll)
+			newState, err := updateCheckRoutine(transmissionClient, api, state, lastPoll, onCompleted)
 			if err != nil {
 				logger.Error(err, "[UpdatesChecker] Error checking torrents")
 				return
@@ -82,6 +87,7 @@ func updateCheckRoutine(
 	api *telegram.API,
 	state transmission.TorrentMap,
 	since int64,
+	onCompleted completedFunc,
 ) (transmission.TorrentMap, error) {
 	torrents, err := transmissionClient.GetTorrentMap()
 
@@ -90,7 +96,7 @@ func updateCheckRoutine(
 		return state, err
 	}
 
-	for _, torrent := range newlyCompleted(state, torrents, since) {
+	for _, torrent := range completion.NewlyCompleted(state, torrents, since) {
 		chatID, err := getTorrentChatID(torrent)
 		if err != nil {
 			logger.Warn("[UpdatesChecker] No chat ID found for torrent %s, error: %v", torrent.Name, err)
@@ -101,11 +107,14 @@ func updateCheckRoutine(
 
 		category := getTorrentCategory(torrent)
 		ctx, cancel := context.WithTimeout(context.Background(), notifyTimeout)
-		err = commands.SendMessage(ctx, api, telegram.SendMessageParams{
+		messageID, err := commands.SendMessageGetID(ctx, api, telegram.SendMessageParams{
 			ChatID: chatID,
 			Text:   fmt.Sprintf("Completed: %v [%s]", torrent.Name, category),
 		})
 		cancel()
+		if err == nil && onCompleted != nil {
+			onCompleted(torrent, chatID, messageID)
+		}
 		if err != nil && transientSendError(err) {
 			// Record the torrent as still incomplete, so the next check
 			// sees the transition again and retries the notification.
@@ -118,6 +127,10 @@ func updateCheckRoutine(
 
 	return torrents, nil
 }
+
+// completedFunc receives a torrent whose completion notice messageID was
+// delivered to chatID.
+type completedFunc func(torrent *transmission.Torrent, chatID, messageID int64)
 
 // notifyTimeout bounds one completion notification, its flood-control
 // retry included.
@@ -132,31 +145,6 @@ func transientSendError(err error) bool {
 		return tgErr.Code == http.StatusTooManyRequests || tgErr.Code >= 500
 	}
 	return true
-}
-
-// newlyCompleted returns the torrents of current that completed since the
-// previous check. A torrent seen before completes when its PercentDone goes
-// from below 1 to 1. A torrent not seen before (first check, added from the
-// webapp or outside the bot, or added and completed between two checks)
-// counts when Transmission's doneDate is at or after since, so torrents that
-// were already complete before the checker started are not reported.
-func newlyCompleted(previous, current transmission.TorrentMap, since int64) []*transmission.Torrent {
-	var done []*transmission.Torrent
-	for hash, torrent := range current {
-		if torrent.PercentDone < 1 {
-			continue
-		}
-		if prev, ok := previous[hash]; ok {
-			if prev.PercentDone < 1 {
-				done = append(done, torrent)
-			}
-			continue
-		}
-		if torrent.DoneDate > 0 && int64(torrent.DoneDate) >= since {
-			done = append(done, torrent)
-		}
-	}
-	return done
 }
 
 func getTorrentChatID(torrent *transmission.Torrent) (int64, error) {

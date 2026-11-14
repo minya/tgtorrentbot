@@ -59,7 +59,7 @@ The bot is configured either by environment variables or by a JSON settings file
 ### Required environment variables:
 - `TGT_BOTTOKEN` - Telegram bot token
 - `TGT_WEBHOOKURL` - Webhook URL for Telegram updates
-- `TGT_DOWNLOADPATH` - Path for downloads. For the bot this is the path as Transmission sees it (it is only passed to Transmission as `download-dir`; the bot container does not mount the downloads); the webapp and MCP server read the files there, so their mount must use the same path
+- `TGT_DOWNLOADPATH` - Path for downloads. It is the path as Transmission sees it: the bot passes it to Transmission as `download-dir`, and the bot's auto-fixer, the webapp and the MCP server read and write the files there, so every mount must use the same path (`TestBotServiceMountsOnlyDownloads` in `internal/deploycheck` keeps the bot's mount to the downloads alone)
 - `TGT_RPC_ADDR` - Transmission RPC address
 - `TGT_RPC_USER` - Transmission RPC user
 - `TGT_RPC_PASSWORD` - Transmission RPC password
@@ -74,14 +74,16 @@ The webapp requires `TGT_BOTTOKEN`, `TGT_DOWNLOADPATH` and `TGT_ALLOWED_USERS` (
 - `TGT_WEBAPP_URL` - URL for the Telegram Mini Web App (enables web app menu button)
 - `PORT` - Webapp only, optional. Listen port, default `8080` (compose sets it)
 - `TGT_WEBHOOK_SECRET` - Bot only, optional. The `secret_token` registered with `setWebhook`; Telegram sends it in `X-Telegram-Bot-Api-Secret-Token` and the bot rejects webhook requests without it (401). Defaults to a value derived from the bot token, so it only needs setting to rotate it independently. 1-256 chars of `A-Za-z0-9_-`. Settings-file key: `webhookSecret`
-- `TGT_JELLYFIN_URL` - Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp works without it
+- `TGT_JELLYFIN_URL` - Jellyfin server URL (e.g., `http://tgt-jellyfin:8096`); webapp, MCP server and the bot's auto-fixer work without it (settings-file key `autofix.jellyfinURL`, likewise `autofix.jellyfinApiKey`)
 - `TGT_JELLYFIN_API_KEY` - Jellyfin API key (generated from Jellyfin admin dashboard)
-- `TGT_AUDIOBOOKSHELF_URL` - Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp works without it
+- `TGT_AUDIOBOOKSHELF_URL` - Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp, MCP server and the bot's auto-fixer work without it (settings-file key `autofix.audiobookshelfURL`, likewise `autofix.audiobookshelfApiKey`)
 - `TGT_AUDIOBOOKSHELF_API_KEY` - Audiobookshelf API key (from Audiobookshelf Settings → Users → select user → API Token)
-- `TGT_AUDIOBOOKSHELF_LIBRARY_ID` - MCP server only, optional. Default library for `abs_remove_issues`; when unset, the single `mediaType=book` library is looked up once and cached
+- `TGT_AUDIOBOOKSHELF_LIBRARY_ID` - MCP server and the bot's auto-fixer, optional. Default library for `abs_remove_issues`; when unset, the single `mediaType=book` library is looked up once and cached
 - `TGT_INCOMPLETE_PATH` - Path to Transmission's incomplete downloads directory (defaults to `{DownloadPath}/incomplete`)
 - `TGT_MCP_TOKEN` - MCP server only. When set, serves MCP over Streamable HTTP on `:8080` behind OAuth 2.1. The token is the shared secret the user types into the `/authorize` login form. Unset → stdio transport
 - `TGT_MCP_PUBLIC_URL` - MCP server only. Required when `TGT_MCP_TOKEN` is set. Public HTTPS base URL (e.g. `https://mcp.example.com`); used as OAuth issuer/audience and to build absolute endpoint URLs in `.well-known` metadata
+- `ANTHROPIC_API_KEY` - Bot only, optional. Enables the auto-fixer (see Auto-fixer). Settings-file key: `autofix.anthropicApiKey`
+- `TGT_AUTOFIX_MODEL` - Bot only, optional. Claude model of the auto-fixer, default `claude-opus-5-5`. Settings-file key: `autofix.model`
 - `TGT_MCP_JWT_SECRET` - MCP server only, **required with `TGT_MCP_TOKEN`**: at least 32 random characters (e.g. `openssl rand -base64 48`); HTTP mode refuses to start without it. The JWT signing key is HMAC-SHA256(`TGT_MCP_JWT_SECRET`, label plus `TGT_MCP_TOKEN`) (`deriveJWTSecret` in `config.go`). It must not come from the login secret alone: `/register` hands any caller a `client_id` signed with the key, which would let a human-typed secret be guessed offline. Rotating it invalidates every outstanding access+refresh token without changing the login secret; rotating `TGT_MCP_TOKEN` invalidates them too. Compose passes it as `MCP_JWT_SECRET`
 
 The local `settings.json` (git-ignored) holds 1Password secret references (e.g., `op://Private/...`). The bot reads the file as plain JSON and does not resolve them (`op run` resolves only environment variables), so resolve it first: `op inject -i settings.json -o settings.resolved.json && go run ./cmd/tgtorrentbot -settings settings.resolved.json`. A value still starting with `op://` is refused at startup.
@@ -91,9 +93,9 @@ Both sources go through the same `validateSettings` (`cmd/tgtorrentbot/read_sett
 ## Repository Layout
 
 This repo uses a `cmd/` layout for multiple binaries:
-- `cmd/tgtorrentbot/` — Telegram bot binary (main.go, handler.go, webhook.go, update_check.go, read_settings.go, settings.go)
+- `cmd/tgtorrentbot/` — Telegram bot binary (main.go, handler.go, webhook.go, update_check.go, autofix.go, read_settings.go, settings.go)
 - `cmd/tgtorrentbot-webapp/` — Web app binary (main.go, payloads.go, websocket.go, init_data.go, categories.go, static/index.html embedded via go:embed)
-- `cmd/tgtorrentbot-mcp/` — MCP server binary for Claude Code integration (main.go, config.go, middleware.go, path.go, list_media.go, tags.go, abs.go, move.go with rename_noreplace_*.go and samedev_*.go, remove_torrent.go, jellyfin.go; OAuth 2.1: jwt.go, oauth_metadata.go, oauth_register.go, oauth_authorize.go, oauth_token.go)
+- `cmd/tgtorrentbot-mcp/` — MCP server binary for Claude Code integration: transports and auth only (main.go, config.go, middleware.go; OAuth 2.1: jwt.go, oauth_metadata.go, oauth_register.go, oauth_authorize.go, oauth_token.go); the tools are `internal/mediatools`
 - `commands/` — Bot command implementations (shared library)
 - `environment/` — Shared Env struct
 - `commands/tgsend.go` — `SendMessage`, `EditMessageText`, `AnswerCallback`: the bot's Telegram sends go through these, which log failures (they used to be discarded), retry once after a 429's `retry_after` (up to 30 s), and treat "message is not modified" as success. Return their error where the message is the command's result (search results, `/list`)
@@ -104,6 +106,9 @@ This repo uses a `cmd/` layout for multiple binaries:
   - `internal/rutrackersession/` — `Session.Client(ctx)` returns the one logged-in rutracker client of the process (the bot's `Env.Rutracker`, the webapp's `App.rutracker`); it logs in on first use and the library logs in again when the session expires. Do not call `rutracker.NewAuthenticatedRutrackerClient*` per request: every call is a login, and repeated logins trigger rutracker's captcha
   - `internal/graceful/` — `SignalContext()` is done at the first SIGTERM/SIGINT; only that one is caught, so a second signal ends a hung shutdown the default way. Each binary creates it once in `main` and passes it to `Serve(ctx, srv, drain)` and to its background work (the bot's completion checker, the webapp's WebSocket poller), which stops when it is done. `Serve` then `Shutdown`s the server within `graceful.Timeout` (8 s, below Docker's 10 s stop grace) so in-flight requests finish, and `drain` waits for background work under the same deadline: the bot waits for webhook updates still being handled and the checker (`drain` in `cmd/tgtorrentbot/main.go`), and, because the webhook acknowledged those updates and Telegram never redelivers them, tells the chats of updates still running 2 s before the deadline to send them again (`inFlightChats`); the webapp waits for the library refresh a deletion started (`libraryRefresher`, which also coalesces refreshes: one at a time, at most one queued); the MCP server ends its open event streams first (`streamCloser`, registered with `RegisterOnShutdown`), since a connected client's GET stream would otherwise hold every shutdown to its deadline. Start servers through it, not `ListenAndServe`
   - `internal/category/` — dependency-free download category list (`All()`, `Names()`, `Parse()`, `DisplayName()`), the single source of truth for every binary and the webapp frontend
+  - `internal/mediatools/` — the media tools (tools.go: `Tools`, `New`, `Register` with every tool description, `Connect` for an in-process MCP session, `ResolveRoots`; path.go, list_media.go, tags.go, abs.go, move.go with rename_noreplace_*.go and samedev_*.go, remove_torrent.go, jellyfin.go; export.go: the path helpers the auto-fixer's scope guard uses). Served by the MCP server and called by the bot's auto-fixer
+  - `internal/autofix/` — the auto-fixer: `Agent` (Claude loop over the tools, `scopeGuard`, the system prompt) and `Fixer` (queue, one run at a time, report). See Auto-fixer
+  - `internal/completion/` — `NewlyCompleted`, the completion detection of the bot's checker
   - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries. `FetchLibraries(ctx, jf, abs)` fetches both optional sources concurrently; the caller's ctx deadline bounds and cancels them (webapp `/api/items` 8 s, MCP `list_media` 15 s).
 - `Dockerfile.bot` — Docker build for the bot
 - `Dockerfile.webapp` — Docker build for the web app (static assets are embedded, no separate COPY step)
@@ -145,7 +150,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - Sends Telegram notification when torrent completes: PercentDone goes below 1 → 1 between checks, or a torrent not seen before is complete with Transmission `doneDate` at or after the previous poll (catches restarts, webapp adds and torrents that complete between two polls)
 - Completions that happen while the bot is down are not notified (the first check counts from process start)
 - A notification that fails transiently (network, timeout, 429, 5xx) is retried on the next check: the torrent is kept as incomplete in the checker's state. A 400/403 (bad chat, bot blocked) is logged and not retried
-- Sends completion notification only; does not move files between directories
+- Sends the completion notification, then hands the torrent and the notice's message id to the auto-fixer when it is on (`onCompleted`; only after a delivered notice)
 - Uses chatID stored in torrent labels to notify correct user
 
 ### Command Pattern
@@ -230,7 +235,7 @@ Labels are set when adding a torrent (`finalizeTorrent` in `commands/download.go
 The completion checker uses Transmission labels to track which chat initiated each download:
 - When adding torrent, chatID, category and userID are stored in labels (`finalizeTorrent` in `commands/download.go`)
 - Completion routine reads labels to determine where to send notification
-- Compares `PercentDone` between checks to detect transitions to 1, and uses `doneDate` for torrents first seen already complete (`newlyCompleted` in `update_check.go`)
+- Compares `PercentDone` between checks to detect transitions to 1, and uses `doneDate` for torrents first seen already complete (`completion.NewlyCompleted` in `internal/completion`)
 - Sends Telegram notification to the chat stored in label[0]
 
 ## Key Implementation Details
@@ -304,7 +309,7 @@ Optional binary (`cmd/tgtorrentbot-mcp/`) that exposes media-library tools to Cl
 
 **Fixing a mis-identified TV show:** `list_media(category="shows")` → `move_media` to a clean `Show Name (Year)` folder, passing the item's `torrent_id` if its sources include `"torrent"` → `jellyfin_rescan`. Jellyfin treats the renamed path as a new item and re-matches from the clean name, dropping the stale wrong-id entry on scan.
 
-All tool descriptions are in `main.go:registerTools` — keep them specific enough that Claude can pick the right tool from a natural-language request and knows when to chain calls (e.g., after `write_tags` on audiobooks, always call `abs_rescan`; after `write_tags` on music/musicvideos and after `move_media` on shows, call `jellyfin_rescan`), and state the real limits (only `.mp3`, only `cp1251`) so Claude does not make calls bound to fail.
+All tool descriptions are in `internal/mediatools/tools.go:Register` — keep them specific enough that Claude can pick the right tool from a natural-language request and knows when to chain calls (e.g., after `write_tags` on audiobooks, always call `abs_rescan`; after `write_tags` on music/musicvideos and after `move_media` on shows, call `jellyfin_rescan`), and state the real limits (only `.mp3`, only `cp1251`) so Claude does not make calls bound to fail.
 
 **Only `TGT_DOWNLOADPATH` is required.** Transmission, Jellyfin, and Audiobookshelf env vars are optional — missing ones reduce what `list_media` returns and make that service's tools return a "not configured" error (`remove_torrent` and `move_media`/`write_tags` with `torrent_id` without Transmission, `jellyfin_rescan` without Jellyfin, the `abs_*` tools without Audiobookshelf).
 
@@ -339,6 +344,16 @@ Logs go to **stderr**, not stdout — stdout is reserved for MCP JSON-RPC framin
   The containerized `tgt-mcp` service listens on `:8080` inside `tunnel-net`; `cloudflared` exposes it publicly (hostname configured in Cloudflare Zero Trust). Point your claude.ai connector at the public URL — the connector discovers OAuth endpoints via `.well-known`, runs DCR, redirects you to the login form, and stores the resulting tokens on its side.
 
   Secrets come from env (`.env` or compose secret); do not hard-code.
+
+### Auto-fixer
+
+Optional, in the bot (`cmd/tgtorrentbot/autofix.go`, `internal/autofix`), on when `ANTHROPIC_API_KEY` is set. After the completion checker delivers a "Completed" notice, it submits the torrent (`Fixer.Submit`) and Claude inspects and fixes it with the media tools; the report is a reply to that notice. Torrents of audiobooks, movies, music, musicvideos and shows are handled, one at a time; `others` and torrents whose notice failed or had no chat label are not. Completions while the bot is down are missed, as their notices are.
+
+- The bot container mounts the downloads at `TGT_DOWNLOADPATH` (`/downloads`, the path Transmission sees) and runs as uid 1000 like the MCP server, so it can rewrite tags and rename folders
+- Claude calls the tools through an in-memory MCP session (`mediatools.Tools.Connect`), so every guard of the tools applies, restricted to `allowedTools` (no `remove_torrent`, no `abs_remove_item`). `scopeGuard` confines each call to the item: `path`/`source` inside its data, `destination` inside its category directory, `torrent_id` only its own; a rename of the item itself is followed
+- The prompt (`systemPrompt` in `internal/autofix/agent.go`) says to change nothing unless something is wrong (cp1251 tags, release-junk or transliterated folder names), since a write or move untracks the torrent and ends seeding
+- Manual Messages API loop on the beta endpoint: `claude-opus-5-5` (`TGT_AUTOFIX_MODEL`), effort `medium`, server-side refusal fallback `fallbacks: "default"`, cached system prompt, at most `maxTurns` (30) turns and `runTimeout` (10 min) per item
+- A run that changed something or failed is reported as a reply to the notice; a run with no changes only logs. At shutdown the run in progress is cancelled at the graceful deadline (`autofixDrain`)
 
 ### Telegram Mini Web App
 - Optional feature enabled by setting `WebAppURL` (`TGT_WEBAPP_URL` env var)
@@ -398,6 +413,7 @@ Key external packages:
 - `github.com/minya/logger` - Custom logging wrapper (uses zerolog)
 - `github.com/minya/goutils` - HTTP utilities (cookie jar, transport)
 - `github.com/modelcontextprotocol/go-sdk` - Official MCP SDK, used by `cmd/tgtorrentbot-mcp` (stdio transport, typed `AddTool` with JSON-schema-tagged input structs)
+- `github.com/anthropics/anthropic-sdk-go/v2` - Claude API client, used by the bot's auto-fixer
 - `github.com/bogem/id3v2/v2` - ID3v2 tag reader/writer for `.mp3` files (used by `read_tags`/`write_tags` MCP tools)
 - `golang.org/x/text/encoding/charmap` - `Windows1251` decoder used by `fix_encoding="cp1251"` in `write_tags`
 

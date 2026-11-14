@@ -55,7 +55,11 @@ func main() {
 	ctx := graceful.SignalContext()
 
 	api := telegram.NewAPI(settings.BotToken)
-	notify, checkerDone := CreateCompletedCheckRoutine(ctx, transmissionClient, api)
+	onCompleted, autofixDrain, err := startAutofix(ctx, settings, transmissionClient, api)
+	if err != nil {
+		logger.Fatal(err, "Failed to start the auto-fixer")
+	}
+	notify, checkerDone := CreateCompletedCheckRoutine(ctx, transmissionClient, api, onCompleted)
 	var fileIDLookup internal.FileIDLookup
 
 	env := environment.Env{
@@ -106,10 +110,10 @@ func main() {
 		}
 	}
 
-	startListen(ctx, 80, webhookSecret, handler, api, checkerDone)
+	startListen(ctx, 80, webhookSecret, handler, api, checkerDone, autofixDrain)
 }
 
-func startListen(ctx context.Context, port int, webhookSecret string, handler *UpdatesHandler, api *telegram.API, checkerDone <-chan struct{}) {
+func startListen(ctx context.Context, port int, webhookSecret string, handler *UpdatesHandler, api *telegram.API, checkerDone <-chan struct{}, autofixDrain func(context.Context)) {
 	logger.Info("Bot started")
 	webhook := newWebhookHandler(webhookSecret, handler.HandleUpdate)
 	http.Handle("/", webhook)
@@ -127,6 +131,9 @@ func startListen(ctx context.Context, port int, webhookSecret string, handler *U
 	// are told to send them again.
 	if err := graceful.Serve(ctx, srv, func(ctx context.Context) {
 		drain(ctx, webhook, checkerDone, &handler.inFlight, api)
+		// A fix in progress is cancelled at the deadline; its files are
+		// left as the last finished tool call left them.
+		autofixDrain(ctx)
 	}); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
