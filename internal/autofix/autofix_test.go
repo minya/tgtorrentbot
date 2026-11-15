@@ -522,3 +522,35 @@ func TestAutofixCancelledRunIsRestart(t *testing.T) {
 		t.Fatalf("err %v -> %q", err, stopReason(err))
 	}
 }
+
+// countingRunner counts runs.
+type countingRunner struct{ runs atomic.Int32 }
+
+func (r *countingRunner) Run(context.Context, *Item) (Result, error) {
+	r.runs.Add(1)
+	return Result{}, nil
+}
+
+// Once shutdown began, no queued item is run, even though the worker
+// could see both the queue and the shutdown; the items left are marked
+// skipped on their notices.
+func TestFixerStartsNoRunAfterShutdown(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		r := &countingRunner{}
+		n := &recordingNotifier{}
+		f := newFixer(r, nil, n)
+		f.queue <- &Item{Name: "queued"}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // shutdown before the worker looks
+		drain := f.Start(ctx)
+		drainCtx, cancelDrain := context.WithTimeout(context.Background(), time.Second)
+		drain(drainCtx)
+		cancelDrain()
+		if r.runs.Load() != 0 {
+			t.Fatalf("try %d: a run started after shutdown", i)
+		}
+		if len(n.marks) != 1 || n.marks[0] != StatusRestarted {
+			t.Fatalf("try %d: marks %q, want %q", i, n.marks, StatusRestarted)
+		}
+	}
+}

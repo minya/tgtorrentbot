@@ -38,6 +38,7 @@ const (
 	StatusFailed      = "Auto-fix: stopped, see the reply"
 	StatusNoData      = "Auto-fix: skipped, data not found"
 	StatusBusy        = "Auto-fix: skipped, too many downloads at once"
+	StatusRestarted   = "Auto-fix: skipped, bot restarted"
 	statusUndelivered = " (reply not delivered)"
 )
 
@@ -136,13 +137,25 @@ func (f *Fixer) mark(ctx context.Context, item *Item, status string) {
 func (f *Fixer) Start(ctx context.Context) (drain func(drainCtx context.Context)) {
 	runCtx, cancelRuns := context.WithCancel(context.WithoutCancel(ctx))
 	done := make(chan struct{})
+	// left holds an item taken from the queue after shutdown began; the
+	// worker writes it before closing done, the drain reads it after.
+	var left []*Item
 	go func() {
 		defer close(done)
 		for {
+			// No run starts once shutdown began, even when an item is
+			// queued too (select would pick either at random).
+			if ctx.Err() != nil {
+				return
+			}
 			select {
 			case <-ctx.Done():
 				return
 			case item := <-f.queue:
+				if ctx.Err() != nil {
+					left = append(left, item)
+					return
+				}
 				f.handle(runCtx, item)
 			}
 		}
@@ -159,9 +172,31 @@ func (f *Fixer) Start(ctx context.Context) (drain func(drainCtx context.Context)
 		}
 		select {
 		case <-done:
+			f.skipQueued(drainCtx, left)
 		case <-drainCtx.Done():
 			cancelRuns()
 			logger.Warn("[Autofix] shutdown deadline reached before the run in progress ended")
+		}
+	}
+}
+
+// skipQueued tells the chats of the items that were queued but never run
+// that their downloads were not checked, as far as the deadline allows,
+// and logs them.
+func (f *Fixer) skipQueued(drainCtx context.Context, left []*Item) {
+	for {
+		select {
+		case item := <-f.queue:
+			left = append(left, item)
+			continue
+		default:
+		}
+		break
+	}
+	for _, item := range left {
+		logger.Warn("[Autofix] not checked, the bot is stopping: %q", item.Name)
+		if drainCtx.Err() == nil {
+			f.mark(drainCtx, item, StatusRestarted)
 		}
 	}
 }
