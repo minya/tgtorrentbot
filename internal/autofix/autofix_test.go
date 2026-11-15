@@ -361,8 +361,9 @@ func TestAutofixSubmit(t *testing.T) {
 		item.Root != filepath.Join(root, "shows", "Proslushka.S01.2002") {
 		t.Fatalf("item %+v", item)
 	}
-	// others is not the fixer's: its notice is left alone.
-	if want := []string{StatusQueued, StatusNoData}; !slices.Equal(n.marks, want) {
+	// others is not the fixer's: its notice is left alone. The worker is
+	// idle, so the show is not marked "queued".
+	if want := []string{StatusNoData}; !slices.Equal(n.marks, want) {
 		t.Fatalf("marks %q, want %q", n.marks, want)
 	}
 }
@@ -377,7 +378,7 @@ func TestAutofixSubmitQueueFull(t *testing.T) {
 	if f.Submit(show, 1, 2, "Completed: x") {
 		t.Fatal("queued with a full queue")
 	}
-	if want := []string{StatusQueued, StatusBusy}; !slices.Equal(n.marks, want) {
+	if want := []string{StatusBusy}; !slices.Equal(n.marks, want) {
 		t.Fatalf("marks %q, want %q", n.marks, want)
 	}
 }
@@ -753,6 +754,32 @@ func TestFixerExpiredDrainTakesQueue(t *testing.T) {
 		cancelExpired()
 		if len(f.queue) != 0 || !f.isClosed() {
 			t.Fatalf("try %d: queue %d, closed %v", i, len(f.queue), f.isClosed())
+		}
+	}
+}
+
+// "queued" is shown only when the download waits behind a run in
+// progress or other queued downloads.
+func TestAutofixSubmitMarksQueuedOnlyWhenWaiting(t *testing.T) {
+	agent, _, _, _, root := newAutofixTest(t)
+	show := showTorrent(root)
+	show.Labels = []string{"1", "shows"}
+	for _, c := range []struct {
+		name    string
+		running bool
+		want    []string
+	}{
+		{"idle", false, nil},
+		{"busy", true, []string{StatusQueued}},
+	} {
+		n := &recordingNotifier{}
+		f := NewFixer(agent, n)
+		f.running.Store(c.running)
+		if !f.Submit(show, 1, 2, "Completed: x") {
+			t.Fatalf("%s: not queued", c.name)
+		}
+		if !slices.Equal(n.marks, c.want) {
+			t.Errorf("%s: marks %q, want %q", c.name, n.marks, c.want)
 		}
 	}
 }

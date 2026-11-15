@@ -79,6 +79,9 @@ type Fixer struct {
 	// whichever finishes first, the drain or the last completion check.
 	mu     sync.Mutex
 	closed bool
+	// running is set while the worker handles an item, so Submit shows
+	// "queued" only for a download that will actually wait.
+	running atomic.Bool
 }
 
 // dataPather finds a torrent's data on disk (*mediatools.Tools).
@@ -126,9 +129,13 @@ func (f *Fixer) Submit(t *transmission.Torrent, chatID, replyTo int64, notice st
 		f.skipStopping(item)
 		return false
 	}
-	// Marked before it is queued, so the worker's "checking" cannot be
-	// overwritten by "queued".
-	f.mark(context.Background(), item, StatusQueued)
+	// "queued" only when the download will wait behind another; with the
+	// worker idle, "checking…" follows at once and "queued" would be one
+	// more Telegram call nobody sees. Marked before it is queued, so the
+	// worker's "checking" cannot be overwritten by "queued".
+	if f.running.Load() || len(f.queue) > 0 {
+		f.mark(context.Background(), item, StatusQueued)
+	}
 	f.mu.Lock()
 	if f.closed {
 		f.mu.Unlock()
@@ -200,7 +207,9 @@ func (f *Fixer) Start(ctx context.Context) (drain func(drainCtx context.Context)
 					left = append(left, item)
 					return
 				}
+				f.running.Store(true)
 				f.handle(runCtx, item)
+				f.running.Store(false)
 			}
 		}
 	}()
