@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	mcplib "github.com/minya/tgtorrentbot/internal/media"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -46,6 +47,29 @@ type Tools struct {
 	jf     *mcplib.JellyfinClient
 	abs    *mcplib.AudiobookshelfClient
 	scan   *mcplib.FilesystemScanner
+	// stop holds the context set by SetStop (*context.Context).
+	stop atomic.Pointer[context.Context]
+}
+
+// SetStop makes the mutating tools (write_tags, move_media) stop at their
+// next safe point once ctx is done, as they do when their own request is
+// cancelled: move_media before it untracks the torrent, write_tags between
+// files, returning what it changed. A caller that must not lose a call's
+// result (the auto-fixer at shutdown) calls the tool with a context it
+// does not cancel and ends the work through ctx instead, so it still gets
+// the result.
+func (s *Tools) SetStop(ctx context.Context) { s.stop.Store(&ctx) }
+
+// stopped reports why a mutating tool should stop at its next safe point,
+// or nil to go on.
+func (s *Tools) stopped(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if stop := s.stop.Load(); stop != nil {
+		return (*stop).Err()
+	}
+	return nil
 }
 
 // New returns the tools over cfg. trans may be nil (Transmission not

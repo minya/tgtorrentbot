@@ -77,6 +77,11 @@ func (s *Tools) moveMedia(ctx context.Context, _ *mcp.CallToolRequest, in moveMe
 	// Drop the torrent before touching the files: once Transmission no longer
 	// tracks the path, the move is a plain rename and Transmission can't error
 	// or re-check when the files disappear from under it.
+	// The last point to stop: once the torrent is untracked, the rename
+	// follows at once, so the data is never left untracked and unmoved.
+	if err := s.stopped(ctx); err != nil {
+		return formatError("stopped (%v); nothing was moved", err), moveMediaOutput{}, nil
+	}
 	removed, note, err := s.untrackTorrent(in.TorrentID, src)
 	if err != nil {
 		return formatError("%v (nothing was moved)", err), moveMediaOutput{}, nil

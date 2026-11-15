@@ -397,3 +397,26 @@ func TestEveryCategoryDecided(t *testing.T) {
 		}
 	}
 }
+
+// When the run ends, a mutating call is not cut off: it stops at its
+// own safe point (move_media before untracking) and its result comes back,
+// instead of "tool call failed: context canceled" with the handler still
+// running.
+func TestAutofixStoppedRunWaitsForMutatingCall(t *testing.T) {
+	agent, item, _, fake, root := newAutofixTest(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	agent.tools.SetStop(ctx)
+	defer agent.tools.SetStop(context.Background())
+	text, isErr, change := agent.callTool(ctx, item, "move_media",
+		[]byte(`{"source":"shows/Proslushka.S01.2002","destination":"shows/The Wire (2002)","torrent_id":7}`))
+	if !isErr || !strings.Contains(text, "nothing was moved") || change != "" {
+		t.Fatalf("text %q isErr %v change %q", text, isErr, change)
+	}
+	if len(fake.removed) != 0 {
+		t.Fatal("torrent untracked")
+	}
+	if _, err := os.Stat(filepath.Join(root, "shows", "Proslushka.S01.2002")); err != nil {
+		t.Fatal("moved")
+	}
+}

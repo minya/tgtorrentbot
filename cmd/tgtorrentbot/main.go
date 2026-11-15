@@ -131,8 +131,9 @@ func startListen(ctx context.Context, port int, webhookSecret string, handler *U
 	// are told to send them again.
 	if err := graceful.Serve(ctx, srv, func(ctx context.Context) {
 		drain(ctx, webhook, checkerDone, &handler.inFlight, api)
-		// A fix in progress is cancelled at the deadline; its files are
-		// left as the last finished tool call left them.
+		// A fix in progress is stopped at the deadline: a tag rewrite
+		// after the file it is writing, a move before it untracks the
+		// torrent, and the report says what was changed.
 		autofixDrain(ctx)
 	}); err != nil {
 		logger.Error(err, "Server failed")

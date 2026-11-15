@@ -40,6 +40,9 @@ var allowedTools = []string{
 	"write_tags",
 }
 
+// mutatingTools change files; a call to one is never cut off midway.
+var mutatingTools = map[string]bool{"move_media": true, "write_tags": true}
+
 // Categories are the categories the fixer looks at, written with the
 // constants of internal/category so a renamed or removed one breaks the
 // build. Every other category must be in skippedCategories
@@ -218,6 +221,10 @@ func claudeTools(mcpTools []*mcp.Tool) ([]anthropic.BetaToolUnionParam, error) {
 func (a *Agent) Run(ctx context.Context, item *Item) (Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
+	// The mutating tools stop at a safe point when the run ends (timeout,
+	// shutdown); callTool waits for them to get there.
+	a.tools.SetStop(ctx)
+	defer a.tools.SetStop(context.Background())
 
 	var res Result
 	messages := []anthropic.BetaMessageParam{
@@ -259,6 +266,12 @@ func (a *Agent) Run(ctx context.Context, item *Item) (Result, error) {
 		for _, block := range resp.Content {
 			use, ok := block.AsAny().(anthropic.BetaToolUseBlock)
 			if !ok {
+				continue
+			}
+			if ctx.Err() != nil {
+				// No new call once the run is over; the next API call
+				// returns the error.
+				results = append(results, anthropic.NewBetaToolResultBlock(use.ID, "not run: the run was stopped", true))
 				continue
 			}
 			text, isErr, change := a.callTool(ctx, item, use.Name, []byte(use.JSON.Input.Raw()))
@@ -315,8 +328,21 @@ func (a *Agent) callTool(ctx context.Context, item *Item, name string, input []b
 		logger.Warn("[Autofix] %s refused for %q: %v", name, item.Name, err)
 		return "refused: " + err.Error(), true, ""
 	}
-	res, err := a.session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	callCtx := ctx
+	if mutatingTools[name] {
+		// Not cut off by the end of the run: the tool stops at its own
+		// safe point (SetStop) and returns what it changed, which is then
+		// reported. The bound is only a backstop.
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), runTimeout)
+		defer cancel()
+	}
+	res, err := a.session.CallTool(callCtx, &mcp.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
+		if mutatingTools[name] {
+			return fmt.Sprintf("tool call failed: %v", err), true,
+				fmt.Sprintf("outcome unknown: %s %s (the torrent may have been removed from Transmission)", name, string(input))
+		}
 		return fmt.Sprintf("tool call failed: %v", err), true, ""
 	}
 	var parts []string
@@ -338,8 +364,11 @@ func (a *Agent) callTool(ctx context.Context, item *Item, name string, input []b
 // in scope.
 func (a *Agent) recordChange(item *Item, name string, args map[string]any, res *mcp.CallToolResult) string {
 	var out struct {
-		Moved   bool `json:"moved"`
-		Changed int  `json:"changed"`
+		Moved   bool       `json:"moved"`
+		Changed int        `json:"changed"`
+		Files   []struct{} `json:"files"`
+		Total   int        `json:"total"`
+		Stopped bool       `json:"stopped"`
 	}
 	if raw, err := json.Marshal(res.StructuredContent); err == nil {
 		_ = json.Unmarshal(raw, &out)
@@ -363,6 +392,10 @@ func (a *Agent) recordChange(item *Item, name string, args map[string]any, res *
 			return ""
 		}
 		p, _ := args["path"].(string)
+		if out.Stopped {
+			return fmt.Sprintf("rewrote tags of %d file(s) in %s, then stopped after %d of %d files; the rest are unchanged",
+				out.Changed, p, len(out.Files), out.Total)
+		}
 		return fmt.Sprintf("rewrote tags of %d file(s) in %s", out.Changed, p)
 	}
 	return ""

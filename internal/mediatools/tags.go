@@ -65,6 +65,10 @@ type writeTagsOutput struct {
 	Changed int               `json:"changed"`
 	Failed  int               `json:"failed"`
 	Files   []writeTagsResult `json:"files"`
+	// Total is the number of files the call covered; Stopped is set when
+	// it stopped early (cancelled) after len(Files) of them.
+	Total   int  `json:"total"`
+	Stopped bool `json:"stopped,omitempty"`
 }
 
 var audioExtensions = map[string]bool{
@@ -173,13 +177,22 @@ func (s *Tools) writeTags(ctx context.Context, _ *mcp.CallToolRequest, in writeT
 	// verify downloads the pieces again, undoing the tags. Like move_media,
 	// refuse while a torrent tracks the files unless it is named, and untrack
 	// it first (files kept).
+	if err := s.stopped(ctx); err != nil {
+		return formatError("stopped (%v); no file was changed", err), writeTagsOutput{}, nil
+	}
 	removed, note, err := s.untrackTorrent(in.TorrentID, resolved)
 	if err != nil {
 		return formatError("%v (no file was changed)", err), writeTagsOutput{}, nil
 	}
 
-	out := writeTagsOutput{Files: make([]writeTagsResult, 0, len(files)), TorrentRemoved: removed, TorrentNote: note}
+	out := writeTagsOutput{Files: make([]writeTagsResult, 0, len(files)), TorrentRemoved: removed, TorrentNote: note, Total: len(files)}
 	for _, f := range files {
+		// Stop between files when asked: each file is saved whole, and
+		// the result says how far it got.
+		if err := s.stopped(ctx); err != nil {
+			out.Stopped = true
+			break
+		}
 		res := writeTagsResult{Path: displayPath(s.config.DownloadPath, f)}
 		changed, err := applyTags(f, decoder, in.Tags)
 		if err != nil {
@@ -193,13 +206,18 @@ func (s *Tools) writeTags(ctx context.Context, _ *mcp.CallToolRequest, in writeT
 		}
 		out.Files = append(out.Files, res)
 	}
-	out.Summary = fmt.Sprintf("%d of %d files failed to save, %d changed", out.Failed, len(files), out.Changed)
+	done := len(out.Files)
+	out.Summary = fmt.Sprintf("%d of %d files failed to save, %d changed", out.Failed, done, out.Changed)
 	if out.Failed == 0 {
-		out.Summary = fmt.Sprintf("all %d files saved, %d changed", len(files), out.Changed)
+		out.Summary = fmt.Sprintf("all %d files saved, %d changed", done, out.Changed)
+	}
+	if out.Stopped {
+		out.Summary = fmt.Sprintf("stopped after %d of %d files: ", done, len(files)) + out.Summary +
+			"; the other files were not touched"
 	}
 	return &mcp.CallToolResult{
 		// Every file failing is a failed call, not a result to summarise.
-		IsError: out.Failed == len(files),
+		IsError: done > 0 && out.Failed == done,
 		Content: []mcp.Content{&mcp.TextContent{Text: out.Summary + "\n" + mustJSON(out)}},
 	}, out, nil
 }
