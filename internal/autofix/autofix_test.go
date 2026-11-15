@@ -715,3 +715,44 @@ func TestPromptReportNamesWithoutPaths(t *testing.T) {
 		t.Fatal("no naming rule for the report")
 	}
 }
+
+// A download that completes once the drain has taken the queue is
+// marked skipped at once, not queued for a run that will never come.
+func TestFixerSubmitAfterShutdownIsSkipped(t *testing.T) {
+	agent, _, _, _, root := newAutofixTest(t)
+	n := &recordingNotifier{}
+	f := NewFixer(agent, n)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	drain := f.Start(ctx)
+	drainCtx, cancelDrain := context.WithTimeout(context.Background(), time.Second)
+	defer cancelDrain()
+	drain(drainCtx)
+
+	show := showTorrent(root)
+	show.Labels = []string{"1", "shows"}
+	if f.Submit(show, 1, 2, "Completed: x") {
+		t.Fatal("queued after the drain took the queue")
+	}
+	if want := []string{StatusRestarted}; !slices.Equal(n.marks, want) {
+		t.Fatalf("marks %q, want %q", n.marks, want)
+	}
+}
+
+// A drain that starts with its deadline already passed still takes
+// the queue over (it used to leave it untouched in half the cases).
+func TestFixerExpiredDrainTakesQueue(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		f := newFixer(&countingRunner{}, nil, nil)
+		f.queue <- &Item{Name: "queued"}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		drain := f.Start(ctx)
+		expired, cancelExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		drain(expired)
+		cancelExpired()
+		if len(f.queue) != 0 || !f.isClosed() {
+			t.Fatalf("try %d: queue %d, closed %v", i, len(f.queue), f.isClosed())
+		}
+	}
+}

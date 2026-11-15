@@ -130,15 +130,30 @@ func startListen(ctx context.Context, port int, webhookSecret string, handler *U
 	// acknowledged, so the chats of updates still running near the deadline
 	// are told to send them again.
 	if err := graceful.Serve(ctx, srv, func(ctx context.Context) {
-		drain(ctx, webhook, checkerDone, &handler.inFlight, api)
-		// A fix in progress is stopped at the deadline: a tag rewrite
-		// after the file it is writing, a move before it untracks the
-		// torrent, and the report says what was changed.
-		autofixDrain(ctx)
+		bothDrains(ctx, func(ctx context.Context) {
+			drain(ctx, webhook, checkerDone, &handler.inFlight, api)
+		}, autofixDrain)
 	}); err != nil {
 		logger.Error(err, "Server failed")
 		os.Exit(1)
 	}
+}
+
+// bothDrains runs the bot's drain and the auto-fixer's side by side under
+// the one deadline and waits for both. Run one after the other, a slow
+// update or completion check used up the fixer's reportBudget, so a fix
+// stopped at shutdown went unreported. The fixer's drain stops the
+// fix in progress reportBudget before the deadline (a tag rewrite after the
+// file it is writing, a move before it untracks the torrent), and the
+// report says what was changed.
+func bothDrains(ctx context.Context, botDrain, fixerDrain func(context.Context)) {
+	fixerDone := make(chan struct{})
+	go func() {
+		defer close(fixerDone)
+		fixerDrain(ctx)
+	}()
+	botDrain(ctx)
+	<-fixerDone
 }
 
 // drain waits for the webhook's updates and the completion checker until

@@ -77,3 +77,24 @@ func TestStartAutofixOnWithKey(t *testing.T) {
 	defer cancelDrain()
 	drain(drainCtx)
 }
+
+// The fixer's drain starts with the bot's, not after it, so a slow
+// update or completion check cannot use up the fixer's report budget.
+func TestBothDrainsSideBySide(t *testing.T) {
+	start := time.Now()
+	var fixerStarted time.Duration
+	fixerDrained := false
+	bothDrains(context.Background(),
+		func(context.Context) { time.Sleep(300 * time.Millisecond) },
+		func(context.Context) {
+			fixerStarted = time.Since(start)
+			time.Sleep(100 * time.Millisecond)
+			fixerDrained = true
+		})
+	if fixerStarted > 100*time.Millisecond {
+		t.Fatalf("fixer drain started after %v, behind the bot drain", fixerStarted)
+	}
+	if !fixerDrained {
+		t.Fatal("bothDrains returned before the fixer drain ended")
+	}
+}

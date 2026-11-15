@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf16"
@@ -72,6 +73,12 @@ type Fixer struct {
 	// sendBy, once the drain has started, is the shutdown deadline
 	// (*time.Time): no report or status edit runs past it.
 	sendBy atomic.Pointer[time.Time]
+	// mu guards closed and the hand-over of the queue at shutdown: once
+	// the drain has taken the items left in the queue (closed), Submit
+	// marks a download skipped instead of queueing it, so none is lost
+	// whichever finishes first, the drain or the last completion check.
+	mu     sync.Mutex
+	closed bool
 }
 
 // dataPather finds a torrent's data on disk (*mediatools.Tools).
@@ -115,18 +122,43 @@ func (f *Fixer) Submit(t *transmission.Torrent, chatID, replyTo int64, notice st
 		return false
 	}
 	item.Root = root
+	if f.isClosed() {
+		f.skipStopping(item)
+		return false
+	}
 	// Marked before it is queued, so the worker's "checking" cannot be
 	// overwritten by "queued".
 	f.mark(context.Background(), item, StatusQueued)
+	f.mu.Lock()
+	if f.closed {
+		f.mu.Unlock()
+		f.skipStopping(item)
+		return false
+	}
 	select {
 	case f.queue <- item:
+		f.mu.Unlock()
 		logger.Info("[Autofix] queued %q (%s)", t.Name, cat)
 		return true
 	default:
+		f.mu.Unlock()
 		logger.Warn("[Autofix] queue full; skipping %q", t.Name)
 		f.mark(context.Background(), item, StatusBusy)
 		return false
 	}
+}
+
+func (f *Fixer) isClosed() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.closed
+}
+
+// skipStopping logs and marks a download that completed while the bot is
+// stopping; its mark is bounded by the shutdown deadline (sendContext).
+func (f *Fixer) skipStopping(item *Item) {
+	logger.Warn("[Autofix] not checked, the bot is stopping: %q", item.Name)
+	f.mark(context.Background(), item, StatusRestarted)
 }
 
 // mark shows status under item's notice; a failure is only logged (by
@@ -187,7 +219,16 @@ func (f *Fixer) Start(ctx context.Context) (drain func(drainCtx context.Context)
 			f.skipQueued(drainCtx, left)
 		case <-drainCtx.Done():
 			cancelRuns()
-			logger.Warn("[Autofix] shutdown deadline reached before the run in progress ended")
+			// The worker may be idle too (select picks either at random
+			// when both are ready); the queue is still handed over and
+			// logged, so no download goes unrecorded.
+			select {
+			case <-done:
+				f.skipQueued(drainCtx, left)
+			default:
+				logger.Warn("[Autofix] shutdown deadline reached before the run in progress ended")
+				f.skipQueued(drainCtx, nil)
+			}
 		}
 	}
 }
@@ -196,6 +237,8 @@ func (f *Fixer) Start(ctx context.Context) (drain func(drainCtx context.Context)
 // that their downloads were not checked, as far as the deadline allows,
 // and logs them.
 func (f *Fixer) skipQueued(drainCtx context.Context, left []*Item) {
+	f.mu.Lock()
+	f.closed = true
 	for {
 		select {
 		case item := <-f.queue:
@@ -205,6 +248,7 @@ func (f *Fixer) skipQueued(drainCtx context.Context, left []*Item) {
 		}
 		break
 	}
+	f.mu.Unlock()
 	for _, item := range left {
 		logger.Warn("[Autofix] not checked, the bot is stopping: %q", item.Name)
 		if drainCtx.Err() == nil {
