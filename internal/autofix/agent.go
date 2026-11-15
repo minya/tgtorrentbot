@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -70,7 +71,7 @@ Inspect before you change anything. Most downloads are fine as they are; when no
 
 What to look for, by category:
 - audiobooks, music, musicvideos: call read_tags (recursive=true on a directory). When files report encoding_hint "cp1251", call write_tags with fix_encoding="cp1251" on the item. Only override individual tags when they are clearly wrong or missing (e.g. no track numbers on a multi-file audiobook where the file names give the order); do not rewrite tags that are merely stylistically different.
-- shows: Jellyfin matches shows by folder name. If the folder name is release junk (quality, codec, release group, dots for spaces) or a transliterated/Russian title, rename it with move_media to "Canonical English Title (Year)", e.g. "Proslushka.S01.2002.WEB-DL.1080p" -> "The Wire (2002)". Keep it in the same category directory. If you are not confident which show it is, leave it.
+- shows: Jellyfin matches shows by folder name. If the folder name is release junk (quality, codec, release group, dots for spaces) or a transliterated/Russian title, rename it with move_media to "Canonical English Title (Year)", e.g. "Proslushka.S01.2002.WEB-DL.1080p" -> "The Wire (2002)". Keep it in the same category directory. Before renaming, check with list_media(category="shows", query=...) whether the show already has a folder (an earlier season): if it does, move the whole download into it as "Season NN" instead, e.g. "ShowA - Season 02" -> "ShowA (2019)/Season 02". If you are not confident which show it is, leave it.
 - movies: the same for a movie folder or single movie file: "Title (Year)" (keep a single file's extension). If unsure, leave it.
 
 Changing the files stops seeding: write_tags and move_media on a torrent's data need its torrent_id, and they remove the torrent from Transmission (files kept). That is acceptable when a fix is needed, and a reason not to make cosmetic changes.
@@ -368,7 +369,7 @@ func (a *Agent) recordChange(item *Item, name string, args map[string]any, res *
 }
 
 // scopeGuard confines a call to item: paths must be the item or inside it,
-// a destination must stay in the item's category directory, and a
+// a destination must have one of the shapes destinationGuard allows, and a
 // torrent_id must be the item's.
 func (a *Agent) scopeGuard(item *Item, name string, args map[string]any) error {
 	if !slices.Contains(allowedTools, name) {
@@ -389,13 +390,8 @@ func (a *Agent) scopeGuard(item *Item, name string, args map[string]any) error {
 		}
 	}
 	if v, ok := args["destination"]; ok {
-		p, _ := v.(string)
-		abs, err := a.tools.ResolveDest(p)
-		if err != nil {
-			return fmt.Errorf("destination: %v", err)
-		}
-		if !mediatools.IsWithin(abs, a.tools.CategoryDir(item.Category)) {
-			return fmt.Errorf("destination %q must stay in %s/", p, item.Category)
+		if err := a.destinationGuard(item, args, v); err != nil {
+			return err
 		}
 	}
 	if v, ok := args["torrent_id"]; ok && v != nil {
@@ -405,6 +401,58 @@ func (a *Agent) scopeGuard(item *Item, name string, args map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// destinationGuard allows a move of the item only in three shapes, so a
+// run cannot put its files into another item's folder or pull a part of
+// the item out of it:
+//
+//  1. the item itself is renamed: the source is the item, and the
+//     destination is directly in its category directory (a single-file
+//     item may also go into a new folder there: movies/T (Y)/T (Y).mkv);
+//  2. the item is reorganised: source and destination are inside the item;
+//  3. the whole item (a folder) moves into an existing folder of its
+//     category as a new subfolder: shows/A - Season 02 -> shows/A (2019)/Season 02.
+//
+// move_media itself refuses an existing destination, so nothing is
+// overwritten or merged file by file.
+func (a *Agent) destinationGuard(item *Item, args map[string]any, v any) error {
+	p, _ := v.(string)
+	dst, err := a.tools.ResolveDest(p)
+	if err != nil {
+		return fmt.Errorf("destination: %v", err)
+	}
+	srcArg, _ := args["source"].(string)
+	src, err := a.tools.Resolve(srcArg)
+	if err != nil {
+		return fmt.Errorf("source: %v", err)
+	}
+	if src != item.Root {
+		// Shape 2. The source was already checked to be inside the item.
+		if !mediatools.IsWithin(dst, item.Root) {
+			return fmt.Errorf("destination %q: a part of the item may only move within the item (%s)", p, a.tools.Display(item.Root))
+		}
+		return nil
+	}
+	catDir := a.tools.CategoryDir(item.Category)
+	parent := filepath.Dir(dst)
+	if parent == catDir {
+		return nil // shape 1
+	}
+	if filepath.Dir(parent) == catDir {
+		info, err := os.Stat(item.Root)
+		isDir := err == nil && info.IsDir()
+		_, perr := os.Lstat(parent)
+		parentExists := perr == nil
+		switch {
+		case isDir && parentExists:
+			return nil // shape 3
+		case !isDir && !parentExists:
+			return nil // shape 1, a single file into its own new folder
+		}
+	}
+	return fmt.Errorf("destination %q: the item may only be renamed in %s/ (%s/New Name), or moved as a whole into an existing folder there (%s/Existing/New Name)",
+		p, item.Category, item.Category, item.Category)
 }
 
 // splitNeedsInput removes needsInputMarker (any case, with an optional

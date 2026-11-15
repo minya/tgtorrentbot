@@ -180,6 +180,14 @@ func TestAutofixScopeGuard(t *testing.T) {
 		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002", "destination": "shows/The Wire (2002)"}, true},
 		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002", "destination": "movies/The Wire (2002)"}, false},
 		{"move_media", map[string]any{"source": "shows/Other", "destination": "shows/X"}, false},
+		// The three allowed shapes, and the moves out of the item.
+		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002", "destination": "shows/Other/Season 01"}, true},
+		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002/ep.mkv", "destination": "shows/Proslushka.S01.2002/Season 01/ep.mkv"}, true},
+		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002/ep.mkv", "destination": "shows/Other/S01E99.mkv"}, false},
+		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002/ep.mkv", "destination": "shows/Other/ep.mkv"}, false},
+		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002/ep.mkv", "destination": "shows/ep.mkv"}, false},
+		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002", "destination": "shows/New/Season 01"}, false},
+		{"move_media", map[string]any{"source": "shows/Proslushka.S01.2002", "destination": "shows/Other/Season 01/Extra"}, false},
 		{"write_tags", map[string]any{"path": "shows/Proslushka.S01.2002", "torrent_id": float64(7)}, true},
 		{"write_tags", map[string]any{"path": "shows/Proslushka.S01.2002", "torrent_id": float64(8)}, false},
 		{"remove_torrent", map[string]any{"torrent_id": float64(7)}, false},
@@ -190,6 +198,32 @@ func TestAutofixScopeGuard(t *testing.T) {
 		err := agent.scopeGuard(item, c.tool, c.args)
 		if (err == nil) != c.ok {
 			t.Errorf("%s %v: err=%v, want ok=%v", c.tool, c.args, err, c.ok)
+		}
+	}
+}
+
+// A single-file item may be renamed into a new folder of its own, but
+// not put into another item's folder.
+func TestAutofixScopeGuardSingleFile(t *testing.T) {
+	agent, _, _, _, root := newAutofixTest(t)
+	movie := filepath.Join(root, "movies", "Film.2001.mkv")
+	for _, d := range []string{filepath.Dir(movie), filepath.Join(root, "movies", "Other (1999)")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(movie, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	item := &Item{TorrentID: 7, Category: "movies", Root: movie}
+	for dst, ok := range map[string]bool{
+		"movies/Film (2001).mkv":              true,
+		"movies/Film (2001)/Film (2001).mkv":  true,
+		"movies/Other (1999)/Film (2001).mkv": false,
+	} {
+		err := agent.scopeGuard(item, "move_media", map[string]any{"source": "movies/Film.2001.mkv", "destination": dst})
+		if (err == nil) != ok {
+			t.Errorf("%s: err=%v, want ok=%v", dst, err, ok)
 		}
 	}
 }
