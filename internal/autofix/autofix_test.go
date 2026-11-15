@@ -413,6 +413,29 @@ func TestEveryCategoryDecided(t *testing.T) {
 			t.Errorf("%s is not a category", c)
 		}
 	}
+	// Every handled category has exactly one rule in the prompt, and a
+	// skipped one has none.
+	rules := map[category.Category]int{}
+	for _, r := range categoryRules {
+		for _, c := range r.cats {
+			rules[c]++
+		}
+	}
+	for _, c := range Categories {
+		if rules[c] != 1 {
+			t.Errorf("category %s is handled but has %d rules in the prompt; give it exactly one in categoryRules", c, rules[c])
+		}
+	}
+	for _, c := range skippedCategories {
+		if rules[c] != 0 {
+			t.Errorf("category %s is skipped but has a rule in the prompt", c)
+		}
+	}
+	for _, r := range categoryRules {
+		if line := "- " + string(r.cats[0]); !strings.Contains(systemPrompt, line) {
+			t.Errorf("rule for %s not rendered into the prompt", r.cats[0])
+		}
+	}
 }
 
 // When the run ends, a mutating call is not cut off: it stops at its

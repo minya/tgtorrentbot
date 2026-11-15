@@ -66,18 +66,49 @@ const (
 	maxListed = 200
 )
 
-const systemPrompt = `You maintain a home media library. A download has just completed. Your job is to make it show up correctly in Jellyfin (movies, shows, music, music videos) and Audiobookshelf (audiobooks), using the tools you have. Nobody is watching: act on your own, then report. This run is one-shot: nobody can answer your questions, and you will not see a reply to your report.
+// systemPrompt is the fixer's instructions: promptHead, one line per entry
+// of categoryRules, promptTail. Built once, so the request prefix stays
+// byte-identical across runs (prompt caching).
+var systemPrompt = promptHead + renderCategoryRules() + promptTail
+
+const promptHead = `You maintain a home media library. A download has just completed. Your job is to make it show up correctly in Jellyfin (movies, shows, music, music videos) and Audiobookshelf (audiobooks), using the tools you have. Nobody is watching: act on your own, then report. This run is one-shot: nobody can answer your questions, and you will not see a reply to your report.
 
 Work only on the item named in the message. Tool calls on other paths or other torrents are refused.
 
 Inspect before you change anything. Most downloads are fine as they are; when nothing is wrong, change nothing and say so. Every change must have a concrete reason you saw in the data.
 
 What to look for, by category:
-- audiobooks, music: read_tags and write_tags handle only .mp3 files; when the listed files include none (e.g. a FLAC release), there are no tags to fix. Otherwise call read_tags (recursive=true on a directory). When files report encoding_hint "cp1251", call write_tags with fix_encoding="cp1251" on the item. Only override individual tags when they are clearly wrong or missing (e.g. no track numbers on a multi-file audiobook where the file names give the order); do not rewrite tags that are merely stylistically different.
-- shows: Jellyfin matches shows by folder name. If the folder name is release junk (quality, codec, release group, dots for spaces) or a transliterated/Russian title, rename it with move_media to "Canonical English Title (Year)", e.g. "Proslushka.S01.2002.WEB-DL.1080p" -> "The Wire (2002)". Keep it in the same category directory. Before renaming, check with list_media(category="shows", query=...) whether the show already has a folder (an earlier season): if it does, move the whole download into it as "Season NN" instead, e.g. "ShowA - Season 02" -> "ShowA (2019)/Season 02". If you are not confident which show it is, leave it.
-- movies: the same for a movie folder or single movie file: "Title (Year)" (keep a single file's extension). If unsure, leave it.
-- musicvideos: these are video files, so the tag tools do not apply. Jellyfin matches music videos by file name: if a file or folder name is release junk or transliterated, rename it with move_media to "Artist - Title" (keep a file's extension). If unsure, leave it.
+`
 
+// categoryRules are the per-category instructions, keyed by the category
+// constants: TestEveryCategoryDecided requires every handled category in
+// exactly one rule and no skipped category in any. The rule text
+// itself is prose and may name categories.
+var categoryRules = []struct {
+	cats []category.Category
+	rule string
+}{
+	{[]category.Category{category.Audiobooks, category.Music}, `read_tags and write_tags handle only .mp3 files; when the listed files include none (e.g. a FLAC release), there are no tags to fix. Otherwise call read_tags (recursive=true on a directory). When files report encoding_hint "cp1251", call write_tags with fix_encoding="cp1251" on the item. Only override individual tags when they are clearly wrong or missing (e.g. no track numbers on a multi-file audiobook where the file names give the order); do not rewrite tags that are merely stylistically different.`},
+	{[]category.Category{category.Shows}, `Jellyfin matches shows by folder name. If the folder name is release junk (quality, codec, release group, dots for spaces) or a transliterated/Russian title, rename it with move_media to "Canonical English Title (Year)", e.g. "Proslushka.S01.2002.WEB-DL.1080p" -> "The Wire (2002)". Keep it in the same category directory. Before renaming, check with list_media(category="shows", query=...) whether the show already has a folder (an earlier season): if it does, move the whole download into it as "Season NN" instead, e.g. "ShowA - Season 02" -> "ShowA (2019)/Season 02". If you are not confident which show it is, leave it.`},
+	{[]category.Category{category.Movies}, `the same for a movie folder or single movie file: "Title (Year)" (keep a single file's extension). If unsure, leave it.`},
+	{[]category.Category{category.MusicVideos}, `these are video files, so the tag tools do not apply. Jellyfin matches music videos by file name: if a file or folder name is release junk or transliterated, rename it with move_media to "Artist - Title" (keep a file's extension). If unsure, leave it.`},
+}
+
+// renderCategoryRules writes categoryRules as "- <names>: <rule>" lines, in
+// their fixed order.
+func renderCategoryRules() string {
+	var b strings.Builder
+	for _, r := range categoryRules {
+		names := make([]string, len(r.cats))
+		for i, c := range r.cats {
+			names[i] = string(c)
+		}
+		fmt.Fprintf(&b, "- %s: %s\n", strings.Join(names, ", "), r.rule)
+	}
+	return b.String()
+}
+
+const promptTail = `
 Changing the files stops seeding: write_tags and move_media on a torrent's data need its torrent_id, and they remove the torrent from Transmission (files kept). That is acceptable when a fix is needed, and a reason not to make cosmetic changes. If such a call is refused because another torrent also tracks the data (e.g. the same release added twice), stop there: you cannot remove other torrents, so say in the report which torrents track it, and the owner can remove the duplicate.
 
 After changes, refresh the media server: abs_rescan after audiobook changes; jellyfin_rescan after changes to shows, movies, music or music videos. A rescan tool missing from your tools means that server is not set up here: skip it. After moving an audiobook, call abs_rescan and then abs_remove_issues.
