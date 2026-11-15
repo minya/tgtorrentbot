@@ -216,7 +216,7 @@ Everything else derives from `internal/category`: the bot's category keyboards, 
 1. `internal/category/category.go` — constant, `All()`, `DisplayName()`. Keep the name at most 16 bytes: it goes into the bot's `/dlfilecat <category> <uuid>` callbacks, which Telegram caps at 64 bytes (`TestCategoryCallbacksFitTelegramLimit` in `commands`)
 2. `docker-compose.yaml` — a `/media/{category}` volume on jellyfin and a `/data/{category}` volume on dufs (`TestComposeMountsCoverAllCategories` in `internal/category` fails when one is missing)
 3. `README.md` — the category → directory table
-4. `internal/autofix/agent.go` — decide whether the auto-fixer handles the category: add it to `Categories` and give it a rule in `categoryRules` (what to look for, which tools apply; rendered into `systemPrompt`), or add it to `skippedCategories` (`TestEveryCategoryDecided` fails until it is in exactly one list, and a handled category until it has exactly one rule)
+4. `internal/autofix/agent.go` — decide whether the auto-fixer handles the category: add it to `Categories` and give it a rule in `categoryRules` (what to look for, which tools apply; rendered into `systemPrompt`), or add it to `skippedCategories` (`TestEveryCategoryDecided` fails until it is in exactly one list, and a handled category until it has exactly one rule); and the README's `ANTHROPIC_API_KEY` row, which lists the categories the auto-fixer inspects (no test checks it)
 
 Torrents labelled with a removed category stay listed and removable in the webapp under that label (`DELETE /api/items/{id}` accepts any single path component as category; an empty label counts as `others`), but nothing can be downloaded into it any more; move their data with `move_media` if they should land in another category.
 
