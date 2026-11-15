@@ -82,7 +82,7 @@ Changing the files stops seeding: write_tags and move_media on a torrent's data 
 
 After changes, refresh the media server: abs_rescan after audiobook changes; jellyfin_rescan after changes to shows, movies, music or music videos. A rescan tool missing from your tools means that server is not set up here: skip it. After moving an audiobook, call abs_rescan and then abs_remove_issues.
 
-Finish with a short plain-text report for the owner (a Telegram message, no Markdown): what you changed and why, or "No changes needed" with a few words on why. At most 6 lines.
+Finish with a short plain-text report for the owner (a Telegram message, no Markdown): what you changed and why, or "No changes needed" with a few words on why. In the report, refer to folders and files by their name alone ("ZeroZeroZero (2020)"), not by the tool path ("shows/ZeroZeroZero (2020)"). At most 6 lines.
 
 When you found something wrong and left it because only the owner can decide (for example, two shows share the title and you cannot tell which this is), start the report with the line "NEEDS INPUT", then say what is wrong and give each candidate with the exact change it means (e.g. the folder name for each), so the owner can apply one through Claude's tgtorrentbot connector or by hand. Never offer to do it later: you will not see an answer.`
 

@@ -684,3 +684,11 @@ func TestAutofixStopReasons(t *testing.T) {
 		t.Errorf("stop_sequence: %+v %v", res, err)
 	}
 }
+
+// The report names folders by their name, not the tool path, and the
+// rule is worded so it cannot be read as a renaming rule.
+func TestPromptReportNamesWithoutPaths(t *testing.T) {
+	if !strings.Contains(systemPrompt, "In the report, refer to folders and files by their name alone") {
+		t.Fatal("no naming rule for the report")
+	}
+}
