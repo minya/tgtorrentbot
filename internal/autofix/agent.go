@@ -78,7 +78,7 @@ What to look for, by category:
 - movies: the same for a movie folder or single movie file: "Title (Year)" (keep a single file's extension). If unsure, leave it.
 - musicvideos: these are video files, so the tag tools do not apply. Jellyfin matches music videos by file name: if a file or folder name is release junk or transliterated, rename it with move_media to "Artist - Title" (keep a file's extension). If unsure, leave it.
 
-Changing the files stops seeding: write_tags and move_media on a torrent's data need its torrent_id, and they remove the torrent from Transmission (files kept). That is acceptable when a fix is needed, and a reason not to make cosmetic changes.
+Changing the files stops seeding: write_tags and move_media on a torrent's data need its torrent_id, and they remove the torrent from Transmission (files kept). That is acceptable when a fix is needed, and a reason not to make cosmetic changes. If such a call is refused because another torrent also tracks the data (e.g. the same release added twice), stop there: you cannot remove other torrents, so say in the report which torrents track it, and the owner can remove the duplicate.
 
 After changes, refresh the media server: abs_rescan after audiobook changes; jellyfin_rescan after changes to shows, movies, music or music videos. A rescan tool missing from your tools means that server is not set up here: skip it. After moving an audiobook, call abs_rescan and then abs_remove_issues.
 

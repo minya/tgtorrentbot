@@ -631,3 +631,14 @@ func TestAutofixSubmitSkipsLabelMismatch(t *testing.T) {
 		t.Fatalf("marks %q, want %q", n.marks, want)
 	}
 }
+
+// The prompt says what to do when another torrent tracks the data,
+// since the tool errors point to remove_torrent, which the fixer lacks.
+func TestPromptHandlesDuplicateTorrents(t *testing.T) {
+	if slices.Contains(allowedTools, "remove_torrent") {
+		t.Fatal("remove_torrent is allowed")
+	}
+	if !strings.Contains(systemPrompt, "another torrent also tracks the data") {
+		t.Fatal("prompt has no rule for a duplicate torrent")
+	}
+}
