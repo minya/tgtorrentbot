@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/minya/tgtorrentbot/internal/category"
@@ -381,10 +383,19 @@ func TestAutofixSubmitQueueFull(t *testing.T) {
 }
 
 func TestAutofixReportTruncated(t *testing.T) {
-	long := strings.Repeat("я", 5000)
-	text := report(&Item{Name: "x"}, Result{Summary: long}, nil)
-	if len(text) > telegramLimit {
-		t.Fatalf("report is %d bytes", len(text))
+	units := func(s string) int { return len(utf16.Encode([]rune(s))) }
+	// A Cyrillic report over 4096 bytes but under 4096 characters
+	// is not cut.
+	fits := strings.Repeat("я", 3000)
+	if text := report(&Item{Name: "x"}, Result{Summary: fits}, nil); !strings.Contains(text, fits) {
+		t.Fatalf("a %d-character report was cut to %d characters", units(fits), units(text))
+	}
+	// One over the limit is cut to at most 4096 UTF-16 units, ending in "…".
+	for _, long := range []string{strings.Repeat("я", 5000), strings.Repeat("😀", 3000)} {
+		text := report(&Item{Name: "x"}, Result{Summary: long}, nil)
+		if units(text) > telegramLimit || !strings.HasSuffix(text, "…") || !utf8.ValidString(text) {
+			t.Fatalf("report is %d UTF-16 units, suffix ok %v, valid %v", units(text), strings.HasSuffix(text, "…"), utf8.ValidString(text))
+		}
 	}
 }
 

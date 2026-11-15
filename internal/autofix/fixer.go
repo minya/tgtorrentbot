@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf16"
 
 	"github.com/minya/logger"
 	"github.com/minya/tgtorrentbot/internal/mediatools"
@@ -262,8 +263,8 @@ func outcome(res Result, err error) string {
 	}
 }
 
-// telegramLimit is Telegram's maximum message length (characters; bytes
-// here, which is stricter).
+// telegramLimit is Telegram's maximum message length, counted in UTF-16
+// code units.
 const telegramLimit = 4096
 
 func report(item *Item, res Result, runErr error) string {
@@ -286,10 +287,7 @@ func report(item *Item, res Result, runErr error) string {
 		}
 	}
 	text := strings.TrimSpace(b.String())
-	if len(text) > telegramLimit {
-		text = strings.ToValidUTF8(text[:telegramLimit-len("…")], "") + "…"
-	}
-	return text
+	return truncateUTF16(text, telegramLimit)
 }
 
 // stopReason words a run's error for the owner: a cancelled run was
@@ -303,4 +301,25 @@ func stopReason(err error) string {
 	default:
 		return err.Error()
 	}
+}
+
+// truncateUTF16 cuts text to at most limit UTF-16 code units, as Telegram
+// counts a message's length, ending a cut text with "…". Counting bytes
+// would cut a Cyrillic report at half the limit.
+func truncateUTF16(text string, limit int) string {
+	units := 0
+	for _, r := range text {
+		units += utf16.RuneLen(r)
+	}
+	if units <= limit {
+		return text
+	}
+	units = 0
+	for i, r := range text {
+		if units+utf16.RuneLen(r) > limit-1 { // room for "…" (1 unit)
+			return text[:i] + "…"
+		}
+		units += utf16.RuneLen(r)
+	}
+	return text
 }
