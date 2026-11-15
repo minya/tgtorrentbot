@@ -18,6 +18,9 @@ import (
 func startAutofix(ctx context.Context, settings Settings, trans mediatools.TorrentClient, api *telegram.API) (completedFunc, func(context.Context), error) {
 	cfg := settings.Autofix
 	if cfg.AnthropicAPIKey == "" {
+		// Said out loud: in settings-file mode an exported
+		// ANTHROPIC_API_KEY is ignored, which is easy to miss.
+		logger.Info("[Autofix] disabled: no API key (ANTHROPIC_API_KEY in env mode, autofix.anthropicApiKey in the settings file)")
 		return nil, func(context.Context) {}, nil
 	}
 	dl, inc, err := mediatools.ResolveRoots(settings.DownloadPath, cfg.IncompletePath)

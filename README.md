@@ -102,6 +102,7 @@ The bot loads its settings from environment variables or a JSON file (`settings.
 | `TGT_INCOMPLETE_PATH` | No | Path to Transmission's incomplete downloads directory; defaults to `{downloadPath}/incomplete` |
 | `ANTHROPIC_API_KEY` | No | Bot only. Enables the auto-fixer: after the "Completed" notice, Claude inspects the download (audiobooks, movies, music, music videos, shows), fixes cp1251 tags and release-junk folder names, shows its status on the notice, and replies with what it changed or with the choice it left to you. Needs the downloads mounted at `TGT_DOWNLOADPATH`. Fixing a torrent's files stops it seeding |
 | `TGT_AUTOFIX_MODEL` | No | Bot only. Claude model for the auto-fixer (default `claude-opus-5-5`) |
+| `TGT_AUDIOBOOKSHELF_LIBRARY_ID` | No | Bot (auto-fixer) and MCP server. Default library for `abs_remove_issues` |
 | `TGT_WEBHOOK_SECRET` | No | Bot only. Webhook `secret_token`; defaults to a value derived from the bot token |
 | `PORT` | No | Webapp only. Listen port, default `8080` |
 
@@ -116,7 +117,7 @@ The MCP server needs only `TGT_DOWNLOADPATH`; Transmission, Jellyfin and Audiobo
 | `TGT_MCP_TOKEN` | No | When set, serve MCP over HTTP on `:8080` behind OAuth 2.1; it is the secret typed into the login form. Unset → stdio |
 | `TGT_MCP_PUBLIC_URL` | With `TGT_MCP_TOKEN` | Public HTTPS base URL, used as OAuth issuer and audience |
 | `TGT_MCP_JWT_SECRET` | With `TGT_MCP_TOKEN` | At least 32 random characters (`openssl rand -base64 48`) for token signing; rotate it to revoke every token |
-| `TGT_AUDIOBOOKSHELF_LIBRARY_ID` | No | Default library for `abs_remove_issues` |
+| `TGT_AUDIOBOOKSHELF_LIBRARY_ID` | No | Default library for `abs_remove_issues` (also read by the bot's auto-fixer, see above) |
 
 ### Settings File (`settings.json`)
 
