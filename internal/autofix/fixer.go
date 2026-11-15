@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/minya/logger"
+	"github.com/minya/tgtorrentbot/internal/mediatools"
 	"github.com/minya/tgtorrentbot/internal/torrentlabels"
 	"github.com/odwrtw/transmission"
 )
@@ -39,6 +40,7 @@ const (
 	StatusNoData      = "Auto-fix: skipped, data not found"
 	StatusBusy        = "Auto-fix: skipped, too many downloads at once"
 	StatusRestarted   = "Auto-fix: skipped, bot restarted"
+	StatusMismatch    = "Auto-fix: skipped, its folder is not in its category"
 	statusUndelivered = " (reply not delivered)"
 )
 
@@ -74,6 +76,7 @@ type Fixer struct {
 // dataPather finds a torrent's data on disk (*mediatools.Tools).
 type dataPather interface {
 	DataPath(t *transmission.Torrent) (string, bool)
+	CategoryDir(category string) string
 }
 
 // NewFixer returns a fixer over agent. notify may be nil.
@@ -100,6 +103,14 @@ func (f *Fixer) Submit(t *transmission.Torrent, chatID, replyTo int64, notice st
 	if !ok {
 		logger.Warn("[Autofix] data of %q not found under the download path; skipping", t.Name)
 		f.mark(context.Background(), item, StatusNoData)
+		return false
+	}
+	if !mediatools.IsWithin(root, f.tools.CategoryDir(item.Category)) {
+		// The label and the data disagree (relabelled or relocated by
+		// hand); a fix would settle that by moving the data to another
+		// category. Leave it to the owner.
+		logger.Warn("[Autofix] %q is labelled %s but its data is at %s; skipping", t.Name, cat, root)
+		f.mark(context.Background(), item, StatusMismatch)
 		return false
 	}
 	item.Root = root

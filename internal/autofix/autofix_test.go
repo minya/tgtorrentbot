@@ -613,3 +613,21 @@ func TestAutofixCachesConversation(t *testing.T) {
 		}
 	}
 }
+
+// A torrent whose label and data disagree is skipped and marked,
+// not queued for a fix that would move it to the label's category.
+func TestAutofixSubmitSkipsLabelMismatch(t *testing.T) {
+	agent, _, _, _, root := newAutofixTest(t)
+	if err := os.MkdirAll(filepath.Join(root, "others", "Proslushka.S01"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	n := &recordingNotifier{}
+	f := NewFixer(agent, n)
+	tr := &transmission.Torrent{ID: 8, Name: "Proslushka.S01", DownloadDir: filepath.Join(root, "others"), Labels: []string{"1", "shows", "1"}, PercentDone: 1}
+	if f.Submit(tr, 1, 2, "Completed: x") {
+		t.Fatal("queued a torrent labelled shows with its data in others/")
+	}
+	if want := []string{StatusMismatch}; !slices.Equal(n.marks, want) {
+		t.Fatalf("marks %q, want %q", n.marks, want)
+	}
+}
