@@ -80,7 +80,7 @@ What to look for, by category:
 
 Changing the files stops seeding: write_tags and move_media on a torrent's data need its torrent_id, and they remove the torrent from Transmission (files kept). That is acceptable when a fix is needed, and a reason not to make cosmetic changes.
 
-After changes, refresh the media server: abs_rescan after audiobook changes; jellyfin_rescan after changes to shows, movies, music or music videos. After moving an audiobook, call abs_rescan and then abs_remove_issues.
+After changes, refresh the media server: abs_rescan after audiobook changes; jellyfin_rescan after changes to shows, movies, music or music videos. A rescan tool missing from your tools means that server is not set up here: skip it. After moving an audiobook, call abs_rescan and then abs_remove_issues.
 
 Finish with a short plain-text report for the owner (a Telegram message, no Markdown): what you changed and why, or "No changes needed" with a few words on why. At most 6 lines.
 
@@ -125,7 +125,10 @@ type toolCaller interface {
 
 // Agent runs Claude over one item at a time.
 type Agent struct {
-	tools   *mediatools.Tools
+	tools *mediatools.Tools
+	// allowed are the allowedTools that can work here: a media server's
+	// tools are left out when it is not configured.
+	allowed []string
 	client  anthropic.Client
 	model   string
 	defs    []anthropic.BetaToolUnionParam
@@ -147,7 +150,8 @@ func NewAgent(ctx context.Context, tools *mediatools.Tools, apiKey, model string
 		session.Close()
 		return nil, fmt.Errorf("listing tools: %w", err)
 	}
-	defs, err := claudeTools(list.Tools)
+	allowed := usableTools(tools)
+	defs, err := claudeTools(list.Tools, allowed)
 	if err != nil {
 		session.Close()
 		return nil, err
@@ -156,6 +160,7 @@ func NewAgent(ctx context.Context, tools *mediatools.Tools, apiKey, model string
 		model = DefaultModel
 	}
 	return &Agent{
+		allowed: allowed,
 		tools:   tools,
 		client:  anthropic.NewClient(append([]option.RequestOption{option.WithAPIKey(apiKey)}, opts...)...),
 		model:   model,
@@ -170,16 +175,31 @@ func (a *Agent) Model() string { return a.model }
 // Close ends the tool session.
 func (a *Agent) Close() error { return a.session.Close() }
 
+// usableTools is allowedTools without the tools of a media server that is
+// not configured, which would only return an error.
+func usableTools(tools *mediatools.Tools) []string {
+	var out []string
+	for _, name := range allowedTools {
+		switch {
+		case name == "jellyfin_rescan" && !tools.HasJellyfin():
+		case strings.HasPrefix(name, "abs_") && !tools.HasAudiobookshelf():
+		default:
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // claudeTools converts the allowed MCP tools to Claude tool definitions,
 // with the descriptions and schemas the tools publish, sorted by name so
 // the request prefix stays byte-identical across runs (prompt caching).
-func claudeTools(mcpTools []*mcp.Tool) ([]anthropic.BetaToolUnionParam, error) {
+func claudeTools(mcpTools []*mcp.Tool, allowed []string) ([]anthropic.BetaToolUnionParam, error) {
 	byName := map[string]*mcp.Tool{}
 	for _, t := range mcpTools {
 		byName[t.Name] = t
 	}
 	var out []anthropic.BetaToolUnionParam
-	for _, name := range allowedTools {
+	for _, name := range allowed {
 		t, ok := byName[name]
 		if !ok {
 			return nil, fmt.Errorf("no %s tool", name)
@@ -406,7 +426,7 @@ func (a *Agent) recordChange(item *Item, name string, args map[string]any, res *
 // a destination must have one of the shapes destinationGuard allows, and a
 // torrent_id must be the item's.
 func (a *Agent) scopeGuard(item *Item, name string, args map[string]any) error {
-	if !slices.Contains(allowedTools, name) {
+	if !slices.Contains(a.allowed, name) {
 		return fmt.Errorf("tool %s is not available here", name)
 	}
 	for _, key := range []string{"path", "source"} {

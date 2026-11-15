@@ -100,7 +100,9 @@ func newAutofixTest(t *testing.T, replies ...string) (*Agent, *Item, *fakeClaude
 		t.Fatal(err)
 	}
 	fake := &fakeTorrents{torrents: []*transmission.Torrent{showTorrent(root)}}
-	tools := mediatools.New(mediatools.Config{DownloadPath: root, IncompletePath: filepath.Join(root, "incomplete")}, fake)
+	// Jellyfin is configured (never called), Audiobookshelf is not.
+	tools := mediatools.New(mediatools.Config{DownloadPath: root, IncompletePath: filepath.Join(root, "incomplete"),
+		JellyfinURL: "http://127.0.0.1:1", JellyfinAPIKey: "k"}, fake)
 
 	claude := &fakeClaude{replies: replies}
 	api := httptest.NewServer(claude)
@@ -152,8 +154,9 @@ func TestAutofixRenamesShow(t *testing.T) {
 	for _, tool := range first["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != strings.Join(allowedTools, ",") {
-		t.Fatalf("tools %v, want %v", names, allowedTools)
+	// No abs_* tools without Audiobookshelf.
+	if want := "jellyfin_rescan,list_media,move_media,read_tags,write_tags"; strings.Join(names, ",") != want {
+		t.Fatalf("tools %v, want %v", names, want)
 	}
 	if !strings.Contains(fmt.Sprint(first["messages"]), "torrent_id: 7") {
 		t.Fatal("first message does not describe the item")
@@ -195,6 +198,7 @@ func TestAutofixScopeGuard(t *testing.T) {
 		{"remove_torrent", map[string]any{"torrent_id": float64(7)}, false},
 		{"abs_remove_item", map[string]any{"item_id": "li_1"}, false},
 		{"jellyfin_rescan", map[string]any{}, true},
+		{"abs_rescan", map[string]any{}, false}, // Audiobookshelf not configured
 	}
 	for _, c := range cases {
 		err := agent.scopeGuard(item, c.tool, c.args)
@@ -568,5 +572,22 @@ func TestPromptKeepsMusicVideosOffTagTools(t *testing.T) {
 	}
 	if !strings.Contains(systemPrompt, "- musicvideos:") {
 		t.Error("no rule for music videos")
+	}
+}
+
+// A media server's tools are offered only when it is configured.
+func TestUsableTools(t *testing.T) {
+	for _, c := range []struct {
+		cfg  mediatools.Config
+		want string
+	}{
+		{mediatools.Config{}, "list_media,move_media,read_tags,write_tags"},
+		{mediatools.Config{JellyfinURL: "u", JellyfinAPIKey: "k", AudiobookshelfURL: "u", AudiobookshelfAPIKey: "k"},
+			strings.Join(allowedTools, ",")},
+		{mediatools.Config{JellyfinURL: "u"}, "list_media,move_media,read_tags,write_tags"},
+	} {
+		if got := strings.Join(usableTools(mediatools.New(c.cfg, nil)), ","); got != c.want {
+			t.Errorf("%+v: %s, want %s", c.cfg, got, c.want)
+		}
 	}
 }

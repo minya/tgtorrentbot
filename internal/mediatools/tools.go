@@ -90,6 +90,16 @@ func New(cfg Config, trans TorrentClient) *Tools {
 // Config returns the configuration the tools were built with.
 func (s *Tools) Config() Config { return s.config }
 
+// HasJellyfin and HasAudiobookshelf report whether that media server is
+// configured, so its tools can work.
+func (s *Tools) HasJellyfin() bool {
+	return s.config.JellyfinURL != "" && s.config.JellyfinAPIKey != ""
+}
+
+func (s *Tools) HasAudiobookshelf() bool {
+	return s.config.AudiobookshelfURL != "" && s.config.AudiobookshelfAPIKey != ""
+}
+
 // HasTransmission reports whether a Transmission client is configured.
 func (s *Tools) HasTransmission() bool { return s.trans != nil }
 
@@ -173,8 +183,8 @@ func (s *Tools) Register(mcpServer *mcp.Server) {
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "abs_rescan",
 		Description: "Trigger an Audiobookshelf library rescan so it re-ingests " +
-			"files whose tags were just changed. No-op if Audiobookshelf isn't " +
-			"configured. Call this after write_tags on audiobook files.",
+			"files whose tags were just changed. Returns an error if Audiobookshelf " +
+			"isn't configured. Call this after write_tags on audiobook files.",
 	}, s.absRescan)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
@@ -236,8 +246,8 @@ func (s *Tools) Register(mcpServer *mcp.Server) {
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "jellyfin_rescan",
 		Description: "Trigger a Jellyfin library refresh so it re-scans and " +
-			"re-identifies items whose folders were just renamed. No-op if Jellyfin " +
-			"isn't configured. Call this after move_media on shows/movies.",
+			"re-identifies items whose folders were just renamed. Returns an error if " +
+			"Jellyfin isn't configured. Call this after move_media on shows/movies.",
 	}, s.jellyfinRescan)
 }
 
