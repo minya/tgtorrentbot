@@ -281,13 +281,21 @@ func (a *Agent) Run(ctx context.Context, item *Item) (Result, error) {
 
 		switch resp.StopReason {
 		case anthropic.BetaStopReasonToolUse:
+		case anthropic.BetaStopReasonPauseTurn:
+			// The server paused a long turn: send the conversation back
+			// as it is (the assistant turn is appended) to let it go on.
+			continue
+		case anthropic.BetaStopReasonEndTurn, anthropic.BetaStopReasonStopSequence:
+			res.Summary, res.NeedsInput = splitNeedsInput(strings.TrimSpace(replyText(resp)))
+			return res, nil
 		case anthropic.BetaStopReasonRefusal:
 			return res, fmt.Errorf("Claude declined: %s", resp.StopDetails.Explanation)
 		case anthropic.BetaStopReasonMaxTokens:
 			return res, errors.New("Claude's reply hit max_tokens")
 		default:
-			res.Summary, res.NeedsInput = splitNeedsInput(strings.TrimSpace(replyText(resp)))
-			return res, nil
+			// model_context_window_exceeded, compaction, or anything new:
+			// the run did not finish, so it must not pass for "no changes".
+			return res, fmt.Errorf("Claude stopped with %q before finishing", resp.StopReason)
 		}
 
 		var results []anthropic.BetaContentBlockParamUnion

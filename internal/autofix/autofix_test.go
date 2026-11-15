@@ -642,3 +642,34 @@ func TestPromptHandlesDuplicateTorrents(t *testing.T) {
 		t.Fatal("prompt has no rule for a duplicate torrent")
 	}
 }
+
+func stopReply(reason string) string {
+	return fmt.Sprintf(`{"id":"msg","type":"message","role":"assistant","model":"m",
+		"content":[{"type":"text","text":"partial"}],
+		"stop_reason":%q,"usage":{"input_tokens":1,"output_tokens":1}}`, reason)
+}
+
+// Only end_turn and stop_sequence finish a run; pause_turn continues
+// it, and any other stop reason is an error, never "no changes".
+func TestAutofixStopReasons(t *testing.T) {
+	agent, item, claude, _, _ := newAutofixTest(t, stopReply("pause_turn"), textReply("No changes needed."))
+	res, err := agent.Run(context.Background(), item)
+	if err != nil || res.Summary != "No changes needed." || len(claude.requests) != 2 {
+		t.Fatalf("pause_turn: res %+v err %v requests %d", res, err, len(claude.requests))
+	}
+	// The paused assistant turn is sent back as the last message.
+	msgs := claude.requests[1]["messages"].([]any)
+	if last := msgs[len(msgs)-1].(map[string]any); last["role"] != "assistant" {
+		t.Fatalf("last message after pause_turn: %v", last)
+	}
+	for _, reason := range []string{"model_context_window_exceeded", "compaction", "something_new"} {
+		agent, item, _, _, _ := newAutofixTest(t, stopReply(reason))
+		if _, err := agent.Run(context.Background(), item); err == nil || !strings.Contains(err.Error(), reason) {
+			t.Errorf("%s: err %v", reason, err)
+		}
+	}
+	agent, item, _, _, _ = newAutofixTest(t, stopReply("stop_sequence"))
+	if res, err := agent.Run(context.Background(), item); err != nil || res.Summary != "partial" {
+		t.Errorf("stop_sequence: %+v %v", res, err)
+	}
+}
