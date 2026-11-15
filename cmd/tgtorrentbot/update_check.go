@@ -107,13 +107,14 @@ func updateCheckRoutine(
 
 		category := getTorrentCategory(torrent)
 		ctx, cancel := context.WithTimeout(context.Background(), notifyTimeout)
+		notice := fmt.Sprintf("Completed: %v [%s]", torrent.Name, category)
 		messageID, err := commands.SendMessageGetID(ctx, api, telegram.SendMessageParams{
 			ChatID: chatID,
-			Text:   fmt.Sprintf("Completed: %v [%s]", torrent.Name, category),
+			Text:   notice,
 		})
 		cancel()
 		if err == nil && onCompleted != nil {
-			onCompleted(torrent, chatID, messageID)
+			onCompleted(torrent, chatID, messageID, notice)
 		}
 		if err != nil && transientSendError(err) {
 			// Record the torrent as still incomplete, so the next check
@@ -128,9 +129,9 @@ func updateCheckRoutine(
 	return torrents, nil
 }
 
-// completedFunc receives a torrent whose completion notice messageID was
-// delivered to chatID.
-type completedFunc func(torrent *transmission.Torrent, chatID, messageID int64)
+// completedFunc receives a torrent whose completion notice messageID, with
+// text notice, was delivered to chatID.
+type completedFunc func(torrent *transmission.Torrent, chatID, messageID int64, notice string)
 
 // notifyTimeout bounds one completion notification, its flood-control
 // retry included.

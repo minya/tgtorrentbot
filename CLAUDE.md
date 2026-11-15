@@ -150,7 +150,7 @@ This repo uses a `cmd/` layout for multiple binaries:
 - Sends Telegram notification when torrent completes: PercentDone goes below 1 → 1 between checks, or a torrent not seen before is complete with Transmission `doneDate` at or after the previous poll (catches restarts, webapp adds and torrents that complete between two polls)
 - Completions that happen while the bot is down are not notified (the first check counts from process start)
 - A notification that fails transiently (network, timeout, 429, 5xx) is retried on the next check: the torrent is kept as incomplete in the checker's state. A 400/403 (bad chat, bot blocked) is logged and not retried
-- Sends the completion notification, then hands the torrent and the notice's message id to the auto-fixer when it is on (`onCompleted`; only after a delivered notice)
+- Sends the completion notification, then hands the torrent with the notice's message id and text to the auto-fixer when it is on (`onCompleted`; only after a delivered notice), which edits its status into the notice
 - Uses chatID stored in torrent labels to notify correct user
 
 ### Command Pattern
@@ -353,7 +353,8 @@ Optional, in the bot (`cmd/tgtorrentbot/autofix.go`, `internal/autofix`), on whe
 - Claude calls the tools through an in-memory MCP session (`mediatools.Tools.Connect`), so every guard of the tools applies, restricted to `allowedTools` (no `remove_torrent`, no `abs_remove_item`). `scopeGuard` confines each call to the item: `path`/`source` inside its data, `destination` inside its category directory, `torrent_id` only its own; a rename of the item itself is followed
 - The prompt (`systemPrompt` in `internal/autofix/agent.go`) says to change nothing unless something is wrong (cp1251 tags, release-junk or transliterated folder names), since a write or move untracks the torrent and ends seeding
 - Manual Messages API loop on the beta endpoint: `claude-opus-5-5` (`TGT_AUTOFIX_MODEL`), effort `medium`, server-side refusal fallback `fallbacks: "default"`, cached system prompt, at most `maxTurns` (30) turns and `runTimeout` (10 min) per item
-- A run that changed something or failed is reported as a reply to the notice; a run with no changes only logs. At shutdown the run in progress is cancelled at the graceful deadline (`autofixDrain`)
+- Every download the fixer takes gets its status edited into the notice, on a line below its text (`Notifier.Mark`, `Status*` in `internal/autofix/fixer.go`): queued, checking, then "checked, no changes needed", "fixed", "needs your decision", "stopped", or "skipped" when its data is not found or the queue is full. `others` downloads are left unmarked
+- A run that changed something, failed, or left a problem for the owner is also reported as a reply to the notice. The run is one-shot (nothing reads replies), so when Claude cannot decide (two shows share a title) the prompt has it start the report with `NEEDS INPUT` and list the candidates with the change each means, for the owner to apply through the MCP connector or by hand (`Result.NeedsInput`, `splitNeedsInput`). At shutdown the run in progress is cancelled at the graceful deadline (`autofixDrain`)
 
 ### Telegram Mini Web App
 - Optional feature enabled by setting `WebAppURL` (`TGT_WEBAPP_URL` env var)

@@ -37,16 +37,34 @@ func startAutofix(ctx context.Context, settings Settings, trans mediatools.Torre
 	if err != nil {
 		return nil, nil, err
 	}
-	fixer := autofix.NewFixer(agent, func(ctx context.Context, item *autofix.Item, text string) error {
-		params := telegram.SendMessageParams{ChatID: item.ChatID, Text: text}
-		if item.ReplyTo != 0 {
-			params.ReplyParameters = &telegram.ReplyParameters{MessageID: item.ReplyTo, AllowSendingWithoutReply: true}
-		}
-		return commands.SendMessage(ctx, api, params)
-	})
+	fixer := autofix.NewFixer(agent, telegramNotifier{api})
 	drain := fixer.Start(ctx)
 	logger.Info("[Autofix] enabled, model %s, downloads at %s", agent.Model(), dl)
-	return func(t *transmission.Torrent, chatID, messageID int64) {
-		fixer.Submit(t, chatID, messageID)
+	return func(t *transmission.Torrent, chatID, messageID int64, notice string) {
+		fixer.Submit(t, chatID, messageID, notice)
 	}, drain, nil
+}
+
+// telegramNotifier replies to an item's "Completed" notice and edits the
+// fixer's status into it.
+type telegramNotifier struct{ api *telegram.API }
+
+func (n telegramNotifier) Reply(ctx context.Context, item *autofix.Item, text string) error {
+	params := telegram.SendMessageParams{ChatID: item.ChatID, Text: text}
+	if item.ReplyTo != 0 {
+		params.ReplyParameters = &telegram.ReplyParameters{MessageID: item.ReplyTo, AllowSendingWithoutReply: true}
+	}
+	return commands.SendMessage(ctx, n.api, params)
+}
+
+// Mark rewrites the notice as its text plus status on a line of its own.
+func (n telegramNotifier) Mark(ctx context.Context, item *autofix.Item, status string) error {
+	if item.ReplyTo == 0 || item.Notice == "" {
+		return nil
+	}
+	return commands.EditMessageText(ctx, n.api, telegram.EditMessageTextParams{
+		ChatID:    item.ChatID,
+		MessageID: item.ReplyTo,
+		Text:      item.Notice + "\n" + status,
+	})
 }

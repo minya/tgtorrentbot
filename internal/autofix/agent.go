@@ -50,7 +50,7 @@ const (
 	maxListed = 200
 )
 
-const systemPrompt = `You maintain a home media library. A download has just completed. Your job is to make it show up correctly in Jellyfin (movies, shows, music, music videos) and Audiobookshelf (audiobooks), using the tools you have. Nobody is watching: act on your own, then report.
+const systemPrompt = `You maintain a home media library. A download has just completed. Your job is to make it show up correctly in Jellyfin (movies, shows, music, music videos) and Audiobookshelf (audiobooks), using the tools you have. Nobody is watching: act on your own, then report. This run is one-shot: nobody can answer your questions, and you will not see a reply to your report.
 
 Work only on the item named in the message. Tool calls on other paths or other torrents are refused.
 
@@ -65,7 +65,12 @@ Changing the files stops seeding: write_tags and move_media on a torrent's data 
 
 After changes, refresh the media server: abs_rescan after audiobook changes; jellyfin_rescan after changes to shows, movies, music or music videos. After moving an audiobook, call abs_rescan and then abs_remove_issues.
 
-Finish with a short plain-text report for the owner (a Telegram message, no Markdown): what you changed and why, or "No changes needed" with a few words on why. At most 6 lines.`
+Finish with a short plain-text report for the owner (a Telegram message, no Markdown): what you changed and why, or "No changes needed" with a few words on why. At most 6 lines.
+
+When you found something wrong and left it because only the owner can decide (for example, two shows share the title and you cannot tell which this is), start the report with the line "NEEDS INPUT", then say what is wrong and give each candidate with the exact change it means (e.g. the folder name for each), so the owner can apply one through Claude's tgtorrentbot connector or by hand. Never offer to do it later: you will not see an answer.`
+
+// needsInputMarker starts a report on a problem left for the owner.
+const needsInputMarker = "NEEDS INPUT"
 
 // Item is the completed torrent a run works on.
 type Item struct {
@@ -76,6 +81,9 @@ type Item struct {
 	// the download and its "Completed" message (0: no reply).
 	ChatID  int64
 	ReplyTo int64
+	// Notice is the text of the "Completed" message, which the fixer's
+	// status is appended to.
+	Notice string
 	// Root is the resolved path of the item's data; updated when Claude
 	// renames the item itself.
 	Root string
@@ -84,6 +92,10 @@ type Item struct {
 // Result is what a run did.
 type Result struct {
 	Summary string
+	// NeedsInput is set when Claude left a problem for the owner to
+	// decide (its report started with needsInputMarker, removed from
+	// Summary).
+	NeedsInput bool
 	// Changes lists the tool calls that changed something on disk.
 	Changes []string
 	Turns   int
@@ -226,7 +238,7 @@ func (a *Agent) Run(ctx context.Context, item *Item) (Result, error) {
 		case anthropic.BetaStopReasonMaxTokens:
 			return res, errors.New("Claude's reply hit max_tokens")
 		default:
-			res.Summary = strings.TrimSpace(replyText(resp))
+			res.Summary, res.NeedsInput = splitNeedsInput(strings.TrimSpace(replyText(resp)))
 			return res, nil
 		}
 
@@ -381,4 +393,14 @@ func (a *Agent) scopeGuard(item *Item, name string, args map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// splitNeedsInput removes needsInputMarker (any case, with an optional
+// colon) from the start of summary and reports whether it was there.
+func splitNeedsInput(summary string) (string, bool) {
+	if len(summary) < len(needsInputMarker) || !strings.EqualFold(summary[:len(needsInputMarker)], needsInputMarker) {
+		return summary, false
+	}
+	rest := strings.TrimLeft(summary[len(needsInputMarker):], ": \t")
+	return strings.TrimSpace(rest), true
 }

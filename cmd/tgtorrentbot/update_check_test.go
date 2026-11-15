@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -227,10 +228,13 @@ func TestCompletionHandedToFixerAfterNotice(t *testing.T) {
 	var calls atomic.Int32
 	tc, api := fakeTransmission(t, ft), flakyTelegram(t, 502, 1, &calls)
 	start := time.Now().Unix()
-	type got struct{ chat, msg int64 }
+	type got struct {
+		chat, msg int64
+		notice    string
+	}
 	var handed []got
-	onCompleted := func(tr *transmission.Torrent, chatID, messageID int64) {
-		handed = append(handed, got{chatID, messageID})
+	onCompleted := func(tr *transmission.Torrent, chatID, messageID int64, notice string) {
+		handed = append(handed, got{chatID, messageID, notice})
 	}
 
 	st, _ := updateCheckRoutine(tc, api, nil, start, onCompleted)
@@ -238,7 +242,7 @@ func TestCompletionHandedToFixerAfterNotice(t *testing.T) {
 	st, _ = updateCheckRoutine(tc, api, st, start+60, onCompleted) // send fails
 	_, _ = updateCheckRoutine(tc, api, st, start+120, onCompleted) // delivered
 
-	if len(handed) != 1 || handed[0].chat != 42 || handed[0].msg == 0 {
+	if len(handed) != 1 || handed[0].chat != 42 || handed[0].msg == 0 || !strings.HasPrefix(handed[0].notice, "Completed: ") {
 		t.Fatalf("handed %+v, want one completion for chat 42 with its message id", handed)
 	}
 }

@@ -3,12 +3,14 @@ package autofix
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -230,55 +232,110 @@ func TestAutofixRefusal(t *testing.T) {
 	}
 }
 
-func TestAutofixReportsOnlyChanges(t *testing.T) {
+// recordingNotifier records replies and status marks.
+type recordingNotifier struct {
+	replies  []string
+	marks    []string
+	replyErr error
+}
+
+func (n *recordingNotifier) Reply(_ context.Context, _ *Item, text string) error {
+	n.replies = append(n.replies, text)
+	return n.replyErr
+}
+
+func (n *recordingNotifier) Mark(_ context.Context, _ *Item, status string) error {
+	n.marks = append(n.marks, status)
+	return nil
+}
+
+// Every run marks the notice with its outcome; only a change, a
+// problem left for the owner or a failure also gets a reply.
+func TestAutofixOutcomeReportedOnNotice(t *testing.T) {
 	for _, c := range []struct {
-		name    string
-		replies []string
-		want    bool
+		name      string
+		replies   []string
+		replyErr  error
+		wantReply string // prefix; "" for no reply
+		wantMark  string
 	}{
-		{"no changes", []string{textReply("No changes needed.")}, false},
+		{"no changes", []string{textReply("No changes needed.")}, nil, "", StatusClean},
 		{"rename", []string{
 			toolUseReply("move_media", map[string]any{"source": "shows/Proslushka.S01.2002", "destination": "shows/The Wire (2002)", "torrent_id": 7}),
 			textReply("Renamed."),
-		}, true},
-		{"failure", []string{refusalReply}, true},
+		}, nil, "Auto-fix: Proslushka.S01.2002", StatusFixed},
+		{"needs input", []string{textReply("NEEDS INPUT\nTwo shows are called Dark Matter: rename to \"Dark Matter (2015)\" or \"Dark Matter (2024)\".")},
+			nil, "Auto-fix needs your decision: Proslushka.S01.2002\n\nTwo shows", StatusNeedsInput},
+		{"failure", []string{refusalReply}, nil, "Auto-fix: Proslushka.S01.2002\nStopped:", StatusFailed},
+		{"reply lost", []string{refusalReply}, errors.New("telegram down"), "Auto-fix: Proslushka.S01.2002", StatusFailed + statusUndelivered},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			agent, item, _, _, _ := newAutofixTest(t, c.replies...)
-			item.ChatID = 42
-			var sent []string
-			f := NewFixer(agent, func(_ context.Context, it *Item, text string) error {
-				if it.ChatID != 42 {
-					t.Errorf("chat %d", it.ChatID)
-				}
-				sent = append(sent, text)
-				return nil
-			})
-			f.handle(context.Background(), item)
-			if (len(sent) == 1) != c.want {
-				t.Fatalf("sent %q, want a report: %v", sent, c.want)
+			n := &recordingNotifier{replyErr: c.replyErr}
+			NewFixer(agent, n).handle(context.Background(), item)
+			if c.wantReply == "" && len(n.replies) != 0 {
+				t.Fatalf("replied %q, want none", n.replies)
 			}
-			if c.want && !strings.HasPrefix(sent[0], "Auto-fix: Proslushka.S01.2002") {
-				t.Fatalf("report %q", sent[0])
+			if c.wantReply != "" && (len(n.replies) != 1 || !strings.HasPrefix(n.replies[0], c.wantReply)) {
+				t.Fatalf("replied %q, want one starting %q", n.replies, c.wantReply)
+			}
+			if want := []string{StatusChecking, c.wantMark}; !slices.Equal(n.marks, want) {
+				t.Fatalf("marks %q, want %q", n.marks, want)
 			}
 		})
 	}
 }
 
+func TestSplitNeedsInput(t *testing.T) {
+	for in, want := range map[string]struct {
+		summary string
+		needs   bool
+	}{
+		"NEEDS INPUT\nPick one.": {"Pick one.", true},
+		"Needs input: pick one.": {"pick one.", true},
+		"No changes needed.":     {"No changes needed.", false},
+		"NEEDS":                  {"NEEDS", false},
+	} {
+		if s, n := splitNeedsInput(in); s != want.summary || n != want.needs {
+			t.Errorf("splitNeedsInput(%q) = %q, %v; want %q, %v", in, s, n, want.summary, want.needs)
+		}
+	}
+}
+
 func TestAutofixSubmit(t *testing.T) {
 	agent, _, _, _, root := newAutofixTest(t)
-	f := NewFixer(agent, nil)
+	n := &recordingNotifier{}
+	f := NewFixer(agent, n)
 	show := showTorrent(root)
 	show.Labels = []string{"123", "shows", "123"}
 	other := &transmission.Torrent{ID: 9, Name: "Other", DownloadDir: filepath.Join(root, "shows"), Labels: []string{"1", "others"}}
 	missing := &transmission.Torrent{ID: 10, Name: "Gone", DownloadDir: filepath.Join(root, "shows"), Labels: []string{"1", "shows"}}
-	if !f.Submit(show, 123, 55) || f.Submit(other, 1, 0) || f.Submit(missing, 1, 0) {
+	if !f.Submit(show, 123, 55, "Completed: x") || f.Submit(other, 1, 0, "") || f.Submit(missing, 1, 0, "") {
 		t.Fatal("want only the show queued")
 	}
 	item := <-f.queue
-	if item.TorrentID != 7 || item.ChatID != 123 || item.ReplyTo != 55 || item.Category != "shows" ||
+	if item.TorrentID != 7 || item.ChatID != 123 || item.ReplyTo != 55 || item.Category != "shows" || item.Notice != "Completed: x" ||
 		item.Root != filepath.Join(root, "shows", "Proslushka.S01.2002") {
 		t.Fatalf("item %+v", item)
+	}
+	// others is not the fixer's: its notice is left alone.
+	if want := []string{StatusQueued, StatusNoData}; !slices.Equal(n.marks, want) {
+		t.Fatalf("marks %q, want %q", n.marks, want)
+	}
+}
+
+func TestAutofixSubmitQueueFull(t *testing.T) {
+	agent, _, _, _, root := newAutofixTest(t)
+	n := &recordingNotifier{}
+	f := NewFixer(agent, n)
+	f.queue = make(chan *Item) // no room
+	show := showTorrent(root)
+	show.Labels = []string{"1", "shows"}
+	if f.Submit(show, 1, 2, "Completed: x") {
+		t.Fatal("queued with a full queue")
+	}
+	if want := []string{StatusQueued, StatusBusy}; !slices.Equal(n.marks, want) {
+		t.Fatalf("marks %q, want %q", n.marks, want)
 	}
 }
 

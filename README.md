@@ -100,7 +100,7 @@ The bot loads its settings from environment variables or a JSON file (`settings.
 | `TGT_AUDIOBOOKSHELF_URL` | No | Audiobookshelf server URL (e.g., `http://tgt-audiobookshelf:80`); webapp, MCP server and auto-fixer work without it |
 | `TGT_AUDIOBOOKSHELF_API_KEY` | No | Audiobookshelf API token (Settings → Users → user → API Token) |
 | `TGT_INCOMPLETE_PATH` | No | Path to Transmission's incomplete downloads directory; defaults to `{downloadPath}/incomplete` |
-| `ANTHROPIC_API_KEY` | No | Bot only. Enables the auto-fixer: after the "Completed" notice, Claude inspects the download (audiobooks, movies, music, music videos, shows), fixes cp1251 tags and release-junk folder names, and replies with what it changed. Needs the downloads mounted at `TGT_DOWNLOADPATH`. Fixing a torrent's files stops it seeding |
+| `ANTHROPIC_API_KEY` | No | Bot only. Enables the auto-fixer: after the "Completed" notice, Claude inspects the download (audiobooks, movies, music, music videos, shows), fixes cp1251 tags and release-junk folder names, shows its status on the notice, and replies with what it changed or with the choice it left to you. Needs the downloads mounted at `TGT_DOWNLOADPATH`. Fixing a torrent's files stops it seeding |
 | `TGT_AUTOFIX_MODEL` | No | Bot only. Claude model for the auto-fixer (default `claude-opus-5-5`) |
 | `TGT_WEBHOOK_SECRET` | No | Bot only. Webhook `secret_token`; defaults to a value derived from the bot token |
 | `PORT` | No | Webapp only. Listen port, default `8080` |
