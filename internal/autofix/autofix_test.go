@@ -114,7 +114,7 @@ func newAutofixTest(t *testing.T, replies ...string) (*Agent, *Item, *fakeClaude
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { agent.Close() })
+	t.Cleanup(func() { agent.close() })
 	item := &Item{TorrentID: 7, Name: "Proslushka.S01.2002", Category: "shows", Root: src}
 	return agent, item, claude, fake, root
 }

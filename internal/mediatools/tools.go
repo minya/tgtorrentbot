@@ -87,9 +87,6 @@ func New(cfg Config, trans TorrentClient) *Tools {
 	}
 }
 
-// Config returns the configuration the tools were built with.
-func (s *Tools) Config() Config { return s.config }
-
 // HasJellyfin and HasAudiobookshelf report whether that media server is
 // configured, so its tools can work.
 func (s *Tools) HasJellyfin() bool {
@@ -99,9 +96,6 @@ func (s *Tools) HasJellyfin() bool {
 func (s *Tools) HasAudiobookshelf() bool {
 	return s.config.AudiobookshelfURL != "" && s.config.AudiobookshelfAPIKey != ""
 }
-
-// HasTransmission reports whether a Transmission client is configured.
-func (s *Tools) HasTransmission() bool { return s.trans != nil }
 
 // Connect serves the tools on a new in-memory MCP server and returns a
 // client session to it, for callers in this process (the bot's

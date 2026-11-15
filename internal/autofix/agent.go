@@ -172,8 +172,9 @@ func NewAgent(ctx context.Context, tools *mediatools.Tools, apiKey, model string
 // Model is the Claude model the agent uses.
 func (a *Agent) Model() string { return a.model }
 
-// Close ends the tool session.
-func (a *Agent) Close() error { return a.session.Close() }
+// close ends the tool session. The bot keeps it for the process's life;
+// tests close it.
+func (a *Agent) close() error { return a.session.Close() }
 
 // usableTools is allowedTools without the tools of a media server that is
 // not configured, which would only return an error.

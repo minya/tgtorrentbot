@@ -1,6 +1,6 @@
 // Package completion detects torrents that finished downloading between two
-// polls of Transmission. The bot's completion notifier and the MCP server's
-// auto-fixer both use it.
+// polls of Transmission, for the bot's completion checker, which notifies
+// the chat and hands the torrent to the auto-fixer.
 package completion
 
 import "github.com/odwrtw/transmission"
@@ -28,13 +28,4 @@ func NewlyCompleted(previous, current transmission.TorrentMap, since int64) []*t
 		}
 	}
 	return done
-}
-
-// Map indexes torrents by info hash, the form NewlyCompleted takes.
-func Map(torrents []*transmission.Torrent) transmission.TorrentMap {
-	m := make(transmission.TorrentMap, len(torrents))
-	for _, t := range torrents {
-		m[t.HashString] = t
-	}
-	return m
 }
