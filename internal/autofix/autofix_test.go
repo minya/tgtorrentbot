@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
+	"github.com/minya/tgtorrentbot/internal/category"
 	"github.com/minya/tgtorrentbot/internal/mediatools"
 	"github.com/odwrtw/transmission"
 )
@@ -344,5 +345,21 @@ func TestAutofixReportTruncated(t *testing.T) {
 	text := report(&Item{Name: "x"}, Result{Summary: long}, nil)
 	if len(text) > telegramLimit {
 		t.Fatalf("report is %d bytes", len(text))
+	}
+}
+
+// Every category is either handled or deliberately skipped, so a new
+// category in internal/category forces a decision here.
+func TestEveryCategoryDecided(t *testing.T) {
+	for _, c := range category.All() {
+		handled, skipped := slices.Contains(Categories, c), slices.Contains(skippedCategories, c)
+		if handled == skipped {
+			t.Errorf("category %s: handled %v, skipped %v; put it in exactly one of Categories and skippedCategories", c, handled, skipped)
+		}
+	}
+	for _, c := range append(slices.Clone(Categories), skippedCategories...) {
+		if !category.IsValid(string(c)) {
+			t.Errorf("%s is not a category", c)
+		}
 	}
 }

@@ -75,12 +75,12 @@ func newFixer(agent runner, tools dataPather, notify Notifier) *Fixer {
 // skipped: a category the fixer does not handle (the notice is left as it
 // is), or data not found or a full queue (the notice says so).
 func (f *Fixer) Submit(t *transmission.Torrent, chatID, replyTo int64, notice string) bool {
-	cat := string(torrentlabels.Category(t.Labels))
+	cat := torrentlabels.Category(t.Labels)
 	if !slices.Contains(Categories, cat) {
 		logger.Debug("[Autofix] skipping %q: category %s", t.Name, cat)
 		return false
 	}
-	item := &Item{TorrentID: t.ID, Name: t.Name, Category: cat, ChatID: chatID, ReplyTo: replyTo, Notice: notice}
+	item := &Item{TorrentID: t.ID, Name: t.Name, Category: string(cat), ChatID: chatID, ReplyTo: replyTo, Notice: notice}
 	root, ok := f.tools.DataPath(t)
 	if !ok {
 		logger.Warn("[Autofix] data of %q not found under the download path; skipping", t.Name)

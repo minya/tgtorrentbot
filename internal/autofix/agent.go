@@ -19,6 +19,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/minya/logger"
+	"github.com/minya/tgtorrentbot/internal/category"
 	"github.com/minya/tgtorrentbot/internal/mediatools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -38,9 +39,20 @@ var allowedTools = []string{
 	"write_tags",
 }
 
-// Categories are the categories the fixer looks at; "others" holds
-// anything and is left alone.
-var Categories = []string{"audiobooks", "movies", "music", "musicvideos", "shows"}
+// Categories are the categories the fixer looks at, written with the
+// constants of internal/category so a renamed or removed one breaks the
+// build. Every other category must be in skippedCategories
+// (TestEveryCategoryDecided), so a new one forces a decision.
+var Categories = []category.Category{
+	category.Audiobooks,
+	category.Movies,
+	category.Music,
+	category.MusicVideos,
+	category.Shows,
+}
+
+// skippedCategories are left alone: "others" holds anything.
+var skippedCategories = []category.Category{category.Others}
 
 const (
 	maxTurns   = 30
