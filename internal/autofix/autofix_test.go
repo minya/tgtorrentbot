@@ -13,7 +13,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/minya/tgtorrentbot/internal/category"
@@ -418,5 +420,105 @@ func TestAutofixStoppedRunWaitsForMutatingCall(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "shows", "Proslushka.S01.2002")); err != nil {
 		t.Fatal("moved")
+	}
+}
+
+// blockingRunner runs until its context ends; started is closed when a run
+// begins.
+type blockingRunner struct {
+	started   chan struct{}
+	cancelled atomic.Int64 // unix nanos when the run saw its ctx end
+}
+
+func (r *blockingRunner) Run(ctx context.Context, _ *Item) (Result, error) {
+	close(r.started)
+	<-ctx.Done()
+	r.cancelled.Store(time.Now().UnixNano())
+	return Result{}, ctx.Err()
+}
+
+// slowNotifier takes up to delay per call, giving up when ctx ends.
+type slowNotifier struct {
+	delay   time.Duration
+	mu      sync.Mutex
+	replies []string
+	marks   []string
+}
+
+func (n *slowNotifier) wait(ctx context.Context) error {
+	select {
+	case <-time.After(n.delay):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (n *slowNotifier) Reply(ctx context.Context, _ *Item, text string) error {
+	n.mu.Lock()
+	n.replies = append(n.replies, text)
+	n.mu.Unlock()
+	return n.wait(ctx)
+}
+
+func (n *slowNotifier) Mark(ctx context.Context, _ *Item, status string) error {
+	n.mu.Lock()
+	n.marks = append(n.marks, status)
+	n.mu.Unlock()
+	return nil
+}
+
+// The drain stops the run reportBudget before its deadline, so the
+// report goes out, and returns by the deadline even when Telegram is slow.
+func TestFixerDrainKeepsDeadline(t *testing.T) {
+	r := &blockingRunner{started: make(chan struct{})}
+	n := &slowNotifier{delay: 3 * time.Second}
+	f := newFixer(r, nil, n)
+	f.reportBudget = 300 * time.Millisecond
+	ctx, stop := context.WithCancel(context.Background())
+	drain := f.Start(ctx)
+	f.queue <- &Item{Name: "a"}
+	<-r.started
+
+	stop() // SIGTERM
+	start := time.Now()
+	deadline := start.Add(time.Second)
+	drainCtx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+	drain(drainCtx)
+	took := time.Since(start)
+
+	if took > 1100*time.Millisecond {
+		t.Fatalf("drain took %v, past its 1 s deadline", took)
+	}
+	cancelledAt := time.Unix(0, r.cancelled.Load())
+	if early := deadline.Sub(cancelledAt); early < 250*time.Millisecond {
+		t.Fatalf("run stopped %v before the deadline, want about reportBudget (300ms)", early)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if len(n.replies) != 1 || !strings.Contains(n.replies[0], "Stopped: interrupted by a restart of the bot") {
+		t.Fatalf("replies %q", n.replies)
+	}
+}
+
+// A run cut short by its own time limit says so, not "deadline exceeded".
+func TestStopReason(t *testing.T) {
+	if got := stopReason(fmt.Errorf("Claude API: %w", context.Canceled)); got != "interrupted by a restart of the bot" {
+		t.Errorf("canceled: %q", got)
+	}
+	if got := stopReason(fmt.Errorf("Claude API: %w", context.DeadlineExceeded)); !strings.HasPrefix(got, "took longer than") {
+		t.Errorf("deadline: %q", got)
+	}
+}
+
+// The agent's error for a cancelled run is recognised as a restart.
+func TestAutofixCancelledRunIsRestart(t *testing.T) {
+	agent, item, _, _, _ := newAutofixTest(t, textReply("x"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := agent.Run(ctx, item)
+	if err == nil || stopReason(err) != "interrupted by a restart of the bot" {
+		t.Fatalf("err %v -> %q", err, stopReason(err))
 	}
 }
