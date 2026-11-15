@@ -241,7 +241,8 @@ func (f *Fixer) handle(ctx context.Context, item *Item) {
 	if status != StatusClean && f.notify != nil {
 		sendCtx, cancel := f.sendContext(ctx, replyTimeout)
 		if err := f.notify.Reply(sendCtx, item, report(item, res, err)); err != nil {
-			logger.Error(err, "[Autofix] report for %q not delivered", item.Name)
+			// The notifier (commands.SendMessage) has logged the error.
+			logger.Warn("[Autofix] report for %q not delivered", item.Name)
 			status += statusUndelivered
 		}
 		cancel()
