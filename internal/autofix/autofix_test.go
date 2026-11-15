@@ -554,3 +554,19 @@ func TestFixerStartsNoRunAfterShutdown(t *testing.T) {
 		}
 	}
 }
+
+// Music videos are not sent to the .mp3-only tag tools, and the tag
+// rule states that limit.
+func TestPromptKeepsMusicVideosOffTagTools(t *testing.T) {
+	for _, line := range strings.Split(systemPrompt, "\n") {
+		if strings.Contains(line, "musicvideos") && strings.Contains(line, "call read_tags") {
+			t.Errorf("prompt line sends music videos to read_tags: %q", line)
+		}
+		if strings.HasPrefix(line, "- audiobooks, music:") && !strings.Contains(line, "only .mp3") {
+			t.Errorf("tag rule does not state the .mp3 limit: %q", line)
+		}
+	}
+	if !strings.Contains(systemPrompt, "- musicvideos:") {
+		t.Error("no rule for music videos")
+	}
+}
