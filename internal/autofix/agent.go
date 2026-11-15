@@ -259,8 +259,13 @@ func (a *Agent) Run(ctx context.Context, item *Item) (Result, error) {
 				Text:         systemPrompt,
 				CacheControl: anthropic.NewBetaCacheControlEphemeralParam(),
 			}},
-			Tools:        a.defs,
-			Messages:     messages,
+			Tools:    a.defs,
+			Messages: messages,
+			// Automatic caching: the breakpoint moves to the end of the
+			// conversation on every turn, so earlier turns (large tag
+			// listings included) are re-read from the cache, not re-billed
+			// in full.
+			CacheControl: anthropic.NewBetaCacheControlEphemeralParam(),
 			OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortMedium},
 			// A safety-classifier decline is re-served by another model in
 			// the same call instead of ending the run.
@@ -271,6 +276,8 @@ func (a *Agent) Run(ctx context.Context, item *Item) (Result, error) {
 			return res, fmt.Errorf("Claude API: %w", err)
 		}
 		messages = append(messages, resp.ToParam())
+		logger.Info("[Autofix] turn %d: input %d, cache read %d, cache write %d, output %d tokens", res.Turns,
+			resp.Usage.InputTokens, resp.Usage.CacheReadInputTokens, resp.Usage.CacheCreationInputTokens, resp.Usage.OutputTokens)
 
 		switch resp.StopReason {
 		case anthropic.BetaStopReasonToolUse:

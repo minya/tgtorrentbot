@@ -591,3 +591,25 @@ func TestUsableTools(t *testing.T) {
 		}
 	}
 }
+
+// Every request carries the top-level cache_control (automatic
+// caching of the conversation) besides the system prompt's breakpoint.
+func TestAutofixCachesConversation(t *testing.T) {
+	agent, item, claude, _, _ := newAutofixTest(t,
+		toolUseReply("read_tags", map[string]any{"path": "shows/Proslushka.S01.2002"}),
+		textReply("No changes needed."),
+	)
+	if _, err := agent.Run(context.Background(), item); err != nil {
+		t.Fatal(err)
+	}
+	for i, req := range claude.requests {
+		cc, _ := req["cache_control"].(map[string]any)
+		if cc["type"] != "ephemeral" {
+			t.Errorf("request %d: top-level cache_control %v", i, req["cache_control"])
+		}
+		sys := req["system"].([]any)[0].(map[string]any)
+		if sys["cache_control"] == nil {
+			t.Errorf("request %d: system breakpoint dropped", i)
+		}
+	}
+}
