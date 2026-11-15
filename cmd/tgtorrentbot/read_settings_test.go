@@ -12,6 +12,8 @@ func clearTGTEnv(t *testing.T) {
 	for _, k := range requiredEnvVars {
 		t.Setenv(k, "")
 	}
+	// A developer's exported key must not leak into a test.
+	t.Setenv("ANTHROPIC_API_KEY", "")
 }
 
 func writeSettings(t *testing.T, body string) string {
@@ -92,5 +94,77 @@ func TestSettingsFileRejectsUnresolvedOptionalReferences(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "must be 1-256") {
 		t.Errorf("an op:// webhookSecret is reported as a bad charset too: %v", err)
+	}
+}
+
+// autofixEnv are the auto-fixer's variables with a distinct value each.
+var autofixEnv = map[string]string{
+	"ANTHROPIC_API_KEY":             "env-key",
+	"TGT_AUTOFIX_MODEL":             "env-model",
+	"TGT_INCOMPLETE_PATH":           "/env/incomplete",
+	"TGT_JELLYFIN_URL":              "http://env-jf",
+	"TGT_JELLYFIN_API_KEY":          "env-jf-key",
+	"TGT_AUDIOBOOKSHELF_URL":        "http://env-abs",
+	"TGT_AUDIOBOOKSHELF_API_KEY":    "env-abs-key",
+	"TGT_AUDIOBOOKSHELF_LIBRARY_ID": "env-lib",
+}
+
+// The auto-fixer's variables do not switch the bot to env mode, and
+// in file mode the file's autofix keys are used, not the environment.
+func TestAutofixSettingsFromFileIgnoreEnv(t *testing.T) {
+	clearTGTEnv(t)
+	for k, v := range autofixEnv {
+		t.Setenv(k, v)
+	}
+	body := strings.Replace(fullSettingsJSON, `"allowedUsers": [1]`,
+		`"allowedUsers": [1], "autofix": {"anthropicApiKey": "file-key", "jellyfinURL": "http://file-jf"}`, 1)
+	s, err := ReadSettings(writeSettings(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := AutofixSettings{AnthropicAPIKey: "file-key", JellyfinURL: "http://file-jf"}
+	if s.Autofix != want || s.BotToken != "tok" {
+		t.Fatalf("autofix %+v (bot token %q), want %+v from the file", s.Autofix, s.BotToken, want)
+	}
+}
+
+// Env mode fills every auto-fixer setting from its variable.
+func TestAutofixSettingsFromEnv(t *testing.T) {
+	clearTGTEnv(t)
+	for k, v := range map[string]string{
+		"TGT_BOTTOKEN": "tok", "TGT_WEBHOOKURL": "https://h/hook", "TGT_DOWNLOADPATH": "/d",
+		"TGT_RPC_ADDR": "http://t", "TGT_RPC_USER": "u", "TGT_RPC_PASSWORD": "p",
+		"TGT_RUTRACKER_USERNAME": "ru", "TGT_RUTRACKER_PASSWORD": "rp", "TGT_ALLOWED_USERS": "1",
+	} {
+		t.Setenv(k, v)
+	}
+	for k, v := range autofixEnv {
+		t.Setenv(k, v)
+	}
+	s, err := ReadSettings(filepath.Join(t.TempDir(), "absent.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := AutofixSettings{
+		AnthropicAPIKey: "env-key", Model: "env-model", IncompletePath: "/env/incomplete",
+		JellyfinURL: "http://env-jf", JellyfinAPIKey: "env-jf-key",
+		AudiobookshelfURL: "http://env-abs", AudiobookshelfAPIKey: "env-abs-key", AudiobookshelfLibraryID: "env-lib",
+	}
+	if s.Autofix != want {
+		t.Fatalf("autofix %+v, want %+v", s.Autofix, want)
+	}
+}
+
+// An unresolved 1Password reference in an autofix key is refused.
+func TestAutofixSettingsRejectUnresolvedReferences(t *testing.T) {
+	clearTGTEnv(t)
+	for _, key := range []string{"anthropicApiKey", "model", "incompletePath", "jellyfinURL", "jellyfinApiKey",
+		"audiobookshelfURL", "audiobookshelfApiKey", "audiobookshelfLibraryId"} {
+		body := strings.Replace(fullSettingsJSON, `"allowedUsers": [1]`,
+			`"allowedUsers": [1], "autofix": {"`+key+`": "op://Private/tgt/x"}`, 1)
+		_, err := ReadSettings(writeSettings(t, body))
+		if err == nil || !strings.Contains(err.Error(), "autofix."+key) {
+			t.Errorf("%s: err %v", key, err)
+		}
 	}
 }

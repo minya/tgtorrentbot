@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/minya/telegram"
 	"github.com/minya/tgtorrentbot/internal/autofix"
@@ -50,4 +51,29 @@ func TestTelegramNotifier(t *testing.T) {
 	if rp, _ := calls[1].body["reply_parameters"].(map[string]any); rp["message_id"] != float64(7) {
 		t.Fatalf("reply %+v", calls[1].body)
 	}
+}
+
+// Without an API key the fixer is off: no hook, and a drain that
+// returns at once.
+func TestStartAutofixOffWithoutKey(t *testing.T) {
+	hook, drain, err := startAutofix(context.Background(), Settings{DownloadPath: t.TempDir()}, nil, nil)
+	if err != nil || hook != nil || drain == nil {
+		t.Fatalf("hook %v, drain nil %v, err %v", hook != nil, drain == nil, err)
+	}
+	drain(context.Background())
+}
+
+// With a key, startAutofix builds the fixer over the download path
+// and returns the checker's hook.
+func TestStartAutofixOnWithKey(t *testing.T) {
+	settings := Settings{DownloadPath: t.TempDir(), Autofix: AutofixSettings{AnthropicAPIKey: "k"}}
+	ctx, cancel := context.WithCancel(context.Background())
+	hook, drain, err := startAutofix(ctx, settings, nil, nil)
+	if err != nil || hook == nil {
+		t.Fatalf("hook %v, err %v", hook != nil, err)
+	}
+	cancel()
+	drainCtx, cancelDrain := context.WithTimeout(context.Background(), time.Second)
+	defer cancelDrain()
+	drain(drainCtx)
 }
