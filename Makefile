@@ -10,15 +10,15 @@ binaries:
 
 bot-image:
 	@echo "Building bot image..."
-	@docker-buildx build --tag $(BOT_IMAGE_NAME) -f Dockerfile.bot .
+	@docker-buildx build --tag $(BOT_IMAGE_NAME) --target bot .
 
 webapp-image:
 	@echo "Building webapp image..."
-	@docker-buildx build --tag $(WEBAPP_IMAGE_NAME) -f Dockerfile.webapp .
+	@docker-buildx build --tag $(WEBAPP_IMAGE_NAME) --target webapp .
 
 mcp-image:
 	@echo "Building mcp image..."
-	@docker-buildx build --tag $(MCP_IMAGE_NAME) -f Dockerfile.mcp .
+	@docker-buildx build --tag $(MCP_IMAGE_NAME) --target mcp .
 
 images: bot-image webapp-image mcp-image
 

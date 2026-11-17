@@ -22,9 +22,9 @@ make bot-image       # builds only the bot image (tgtorrentbot_img)
 make webapp-image    # builds only the webapp image (tgtorrentbot-webapp_img)
 make mcp-image       # builds only the mcp image (tgtorrentbot-mcp_img)
 # or directly:
-docker-buildx build --tag tgtorrentbot_img -f Dockerfile.bot .
-docker-buildx build --tag tgtorrentbot-webapp_img -f Dockerfile.webapp .
-docker-buildx build --tag tgtorrentbot-mcp_img -f Dockerfile.mcp .
+docker-buildx build --tag tgtorrentbot_img --target bot .
+docker-buildx build --tag tgtorrentbot-webapp_img --target webapp .
+docker-buildx build --tag tgtorrentbot-mcp_img --target mcp .
 ```
 
 ### Run locally
@@ -110,9 +110,7 @@ This repo uses a `cmd/` layout for multiple binaries:
   - `internal/autofix/` — the auto-fixer: `Agent` (Claude loop over the tools, `scopeGuard`, the system prompt) and `Fixer` (queue, one run at a time, report). See Auto-fixer
   - `internal/completion/` — `NewlyCompleted`, the completion detection of the bot's checker
   - `internal/media/` — Shared media package: `FilesystemScanner`, `JellyfinClient`, `AudiobookshelfClient`, `MergeItems`, `TorrentInfo`, `UnifiedItem`, `FsItem`, `JellyfinItem`, `AudiobookshelfItem`. Used by both the webapp and MCP binaries. `FetchLibraries(ctx, jf, abs)` fetches both optional sources concurrently; the caller's ctx deadline bounds and cancels them (webapp `/api/items` 8 s, MCP `list_media` 15 s).
-- `Dockerfile.bot` — Docker build for the bot
-- `Dockerfile.webapp` — Docker build for the web app (static assets are embedded, no separate COPY step)
-- `Dockerfile.mcp` — Docker build for the MCP server
+- `Dockerfile` — Docker build of all three images, one target each (`bot`, `webapp`, `mcp`; a build without `--target` fails; the webapp's static assets are embedded, no separate COPY step). The Go module and build caches are BuildKit cache mounts shared by the targets, so a rebuild recompiles only the changed packages
 - `docker-compose.yaml` — the deployment. Third-party images are pinned to releases (`internal/deploycheck` fails on an untagged or `:latest` one): `./restart` recreates every container, so a floating tag would pull unreviewed upgrades and database migrations. Upgrade by changing the tag deliberately
 
 ## Architecture
@@ -363,7 +361,7 @@ Optional, in the bot (`cmd/tgtorrentbot/autofix.go`, `internal/autofix`), on whe
 - Optional feature enabled by setting `WebAppURL` (`TGT_WEBAPP_URL` env var)
 - On startup, `cmd/tgtorrentbot/main.go` configures the Telegram chat menu button to open the web app
 - The web app binary lives in `cmd/tgtorrentbot-webapp/`; its static assets (`static/index.html`) are embedded at build time via `//go:embed static` — no separate static file COPY step needed
-- The web app is a separate service (`tgtorrentbot-webapp`) defined in `docker-compose.yaml`, built with `Dockerfile.webapp`
+- The web app is a separate service (`tgtorrentbot-webapp`) defined in `docker-compose.yaml`, built from the `webapp` target of `Dockerfile`
 - Uses the same Rutracker/Transmission credentials
 - The web app button also appears in the `/list` command keyboard
 - API endpoints (registered in `cmd/tgtorrentbot-webapp/main.go`). The HTTP ones require the `X-Telegram-Init-Data` header with valid Telegram HMAC from a user in `TGT_ALLOWED_USERS` (`makeHandler`); a wrong method gets 405:
