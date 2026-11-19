@@ -121,6 +121,7 @@
             font-size: 24px;
             cursor: pointer;
             padding: 4px 8px;
+            border-radius: 4px;
             -webkit-tap-highlight-color: transparent;
         }
         .category-view-title {
@@ -243,6 +244,8 @@
             min-width: 180px;
             z-index: 100;
             overflow: hidden;
+            /* Keeps the items, and their focus ring, clear of the rounded corners. */
+            padding: 4px;
         }
         .popup-menu.open {
             display: block;
@@ -258,6 +261,7 @@
             text-align: left;
             cursor: pointer;
             white-space: nowrap;
+            border-radius: 4px;
         }
         .popup-menu-item:hover {
             background: var(--tg-theme-secondary-bg-color, #f5f5f5);
