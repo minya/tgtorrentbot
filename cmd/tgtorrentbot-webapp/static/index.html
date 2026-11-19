@@ -598,8 +598,8 @@
     <!-- Main screen -->
     <div id="main-screen" class="main-screen">
         <div id="load-error" class="load-error" role="alert">
-            <span>Failed to load items</span>
-            <button onclick="loadMainScreen()">Retry</button>
+            <span id="load-error-text">Failed to load items</span>
+            <button id="load-error-retry" onclick="loadMainScreen()">Retry</button>
         </div>
 
         <!-- Active downloads section -->
@@ -674,6 +674,29 @@
         if (tg.setHeaderColor) {
             tg.setHeaderColor('bg_color');
         }
+
+        // --- Outside Telegram (a debug-link in a normal browser) ---
+        // Telegram clients always pass a platform; a debug-link passes none.
+        // Outside Telegram tg.showAlert/showConfirm throw (WebAppMethodUnsupported)
+        // or never call back, so the browser's own dialogs stand in.
+        const inTelegram = tg.platform !== 'unknown';
+        function uiAlert(message) {
+            if (inTelegram) {
+                tg.showAlert(message);
+            } else {
+                window.alert(message);
+            }
+        }
+        function uiConfirm(message, callback) {
+            if (inTelegram) {
+                tg.showConfirm(message, callback);
+            } else {
+                callback(window.confirm(message));
+            }
+        }
+        // Without init data every API call is refused: say how to get in
+        // instead of failing and retrying.
+        const hasInitData = !!tg.initData;
 
         // --- Android performance class ---
         (function() {
@@ -787,14 +810,39 @@
         let itemsLoaded = false;
 
         // --- Main screen ---
+        // Set once the server refused the init data (401): it expires 24 h
+        // after auth_date, and a tab keeps it in sessionStorage, so a reload or
+        // a retry sends the same refused data. Stops polling and the WebSocket.
+        let loginRefused = false;
+
+        function showLoginNeeded(message) {
+            loginRefused = true;
+            setCountsLoading(false);
+            document.getElementById('load-error-text').textContent = message;
+            document.getElementById('load-error-retry').hidden = true;
+            document.getElementById('load-error').classList.add('visible');
+            if (ws) ws.close();
+        }
+
         async function loadMainScreen() {
             const loadError = document.getElementById('load-error');
+            if (!hasInitData) {
+                showLoginNeeded('Open this app from Telegram, or in a browser with a link from tgtorrentbot-webapp debug-link.');
+                return;
+            }
+            if (loginRefused) return;
             if (!itemsLoaded) {
                 loadError.classList.remove('visible');
                 setCountsLoading(true);
             }
             try {
                 const response = await doFetch('/api/items');
+                if (response.status === 401) {
+                    showLoginNeeded(inTelegram
+                        ? 'The login expired or was refused. Close the app and open it again.'
+                        : 'The login expired or was refused. Open a new link from tgtorrentbot-webapp debug-link.');
+                    return;
+                }
                 if (!response.ok) {
                     throw new Error('HTTP ' + response.status);
                 }
@@ -1132,6 +1180,7 @@
         let wsConnected = false;
 
         function connectWebSocket() {
+            if (!hasInitData || loginRefused) return;
             if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
                 return;
             }
@@ -1341,7 +1390,7 @@
             const downloadUrl = searchResult.getAttribute('data-download-url');
 
             if (!downloadUrl) {
-                tg.showAlert('Error: Download URL is missing');
+                uiAlert('Error: Download URL is missing');
                 return;
             }
             showCategoryModal(downloadUrl);
@@ -1349,7 +1398,7 @@
 
         function showCategoryModal(downloadUrl) {
             if (!downloadUrl) {
-                tg.showAlert('Error: Download URL is empty');
+                uiAlert('Error: Download URL is empty');
                 return;
             }
             pendingDownloadUrl = downloadUrl;
@@ -1375,7 +1424,7 @@
 
         async function downloadWithCategory(category, btn) {
             if (!pendingDownloadUrl) {
-                tg.showAlert('No download URL selected');
+                uiAlert('No download URL selected');
                 return;
             }
 
@@ -1401,7 +1450,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    tg.showAlert('Torrent added successfully!');
+                    uiAlert('Torrent added successfully!');
                     hideSearchOverlay();
                     // Refresh current view
                     if (currentView === 'main') {
@@ -1410,10 +1459,10 @@
                         refreshCategoryView(currentCategory);
                     }
                 } else {
-                    tg.showAlert(data.error || 'Failed to add torrent');
+                    uiAlert(data.error || 'Failed to add torrent');
                 }
             } catch (err) {
-                tg.showAlert('Failed to add torrent: ' + err.message);
+                uiAlert('Failed to add torrent: ' + err.message);
             } finally {
                 restoreButtons();
                 hideCategoryModal();
@@ -1595,7 +1644,7 @@
         async function removeItemTorrent(itemId, torrentId, btn) {
             const rowKey = rowKeyOf(btn);
             closeAllPopupMenus();
-            tg.showConfirm('Remove torrent? Files will be kept.', async function(confirmed) {
+            uiConfirm('Remove torrent? Files will be kept.', async function(confirmed) {
                 if (!confirmed) return;
                 setItemBusy(rowKey, btn, true);
                 try {
@@ -1606,11 +1655,11 @@
                     } else {
                         const data = await response.json().catch(() => ({}));
                         setItemBusy(rowKey, btn, false);
-                        tg.showAlert(data.error || 'Failed to remove torrent');
+                        uiAlert(data.error || 'Failed to remove torrent');
                     }
                 } catch (err) {
                     setItemBusy(rowKey, btn, false);
-                    tg.showAlert('Failed to remove torrent');
+                    uiAlert('Failed to remove torrent');
                 }
             });
         }
@@ -1618,7 +1667,7 @@
         async function removeItemData(itemId, btn) {
             const rowKey = rowKeyOf(btn);
             closeAllPopupMenus();
-            tg.showConfirm('Delete all files? This cannot be undone.', async function(confirmed) {
+            uiConfirm('Delete all files? This cannot be undone.', async function(confirmed) {
                 if (!confirmed) return;
                 setItemBusy(rowKey, btn, true);
                 try {
@@ -1628,11 +1677,11 @@
                     } else {
                         const data = await response.json().catch(() => ({}));
                         setItemBusy(rowKey, btn, false);
-                        tg.showAlert(data.error || 'Failed to remove data');
+                        uiAlert(data.error || 'Failed to remove data');
                     }
                 } catch (err) {
                     setItemBusy(rowKey, btn, false);
-                    tg.showAlert('Failed to remove data');
+                    uiAlert('Failed to remove data');
                 }
             });
         }

@@ -194,6 +194,14 @@ func parseAllowedUsers(s string) ([]int64, error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "debug-link" {
+		if err := runDebugLink(os.Args[2:], os.Getenv, time.Now(), os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "debug-link:", err)
+			os.Exit(2)
+		}
+		return
+	}
+
 	logLevel := "info"
 	if val, exists := os.LookupEnv("TGT_LOGLEVEL"); exists {
 		logLevel = val
