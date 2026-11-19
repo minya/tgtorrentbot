@@ -589,6 +589,20 @@
             outline: 2px solid var(--tg-theme-button-color, #3390ec);
             outline-offset: 2px;
         }
+        /* These boxes clip at their padding edge (overflow), so a ring at the
+           content edge (2px + 2px offset) would be cut off. Give it room and
+           take the room back from the margins, so the content does not move. */
+        .main-screen, .category-view, .category-torrent-list {
+            padding-left: 4px;
+            padding-right: 4px;
+            padding-top: 4px;
+            margin-left: -4px;
+            margin-right: -4px;
+            margin-top: -4px;
+        }
+        .search-results {
+            padding-top: 4px;
+        }
         .popup-menu-item:focus-visible {
             outline-offset: -2px;
         }
