@@ -272,7 +272,8 @@ func applyTags(path string, decoder *encoding.Decoder, overrides map[string]stri
 // stale temp of that name left trailing garbage in the mp3, and a symlink of
 // that name made the save write outside TGT_DOWNLOADPATH. Here the temp name
 // is random and created exclusively (os.CreateTemp), the data is fsynced
-// before the rename, and the original file mode is kept.
+// before the rename, and the original file mode is kept. UTF-16 frames are
+// written by correctUTF16Frames, not by the library, which adds a stray byte.
 func saveTag(tag *id3v2.Tag, path string) (err error) {
 	orig, err := os.Open(path)
 	if err != nil {
@@ -303,6 +304,7 @@ func saveTag(tag *id3v2.Tag, path string) (err error) {
 		}
 	}()
 
+	correctUTF16Frames(tag)
 	if _, err = tag.WriteTo(tmp); err != nil {
 		return err
 	}
@@ -356,11 +358,21 @@ func id3TagSize(f *os.File) (int64, error) {
 // openSupportedTag opens the ID3 tag at path after checkID3Layout, so a tag
 // the library would misread is refused instead of read as empty or garbled
 // values, or saved back with frames lost.
+// Described frames using UTF-16 are decoded again by rereadDescribedFrames,
+// since the library misreads correctly written ones.
 func openSupportedTag(path string) (*id3v2.Tag, error) {
 	if err := checkID3Layout(path); err != nil {
 		return nil, err
 	}
-	return id3v2.Open(path, id3v2.Options{Parse: true})
+	tag, err := id3v2.Open(path, id3v2.Options{Parse: true})
+	if err != nil {
+		return nil, err
+	}
+	if err := rereadDescribedFrames(tag, path); err != nil {
+		tag.Close()
+		return nil, err
+	}
+	return tag, nil
 }
 
 // checkID3Layout refuses ID3v2 tags that use features github.com/bogem/id3v2
