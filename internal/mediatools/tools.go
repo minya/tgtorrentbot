@@ -170,8 +170,9 @@ func (s *Tools) Register(mcpServer *mcp.Server) {
 			"write is refused, and a torrent still downloading is refused too.\n" +
 			"Writes are restricted to the configured download path. After writing " +
 			"audiobooks, call abs_rescan so Audiobookshelf picks up the change; after " +
-			"writing music or musicvideos, call jellyfin_rescan (abs_rescan does not " +
-			"refresh Jellyfin).",
+			"writing music or musicvideos, call jellyfin_rescan with the same path, so " +
+			"Jellyfin replaces the tags it stored (a scan without path keeps a track's " +
+			"artists and album artists; abs_rescan does not refresh Jellyfin).",
 	}, s.writeTags)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
@@ -239,9 +240,15 @@ func (s *Tools) Register(mcpServer *mcp.Server) {
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "jellyfin_rescan",
-		Description: "Trigger a Jellyfin library refresh so it re-scans and " +
-			"re-identifies items whose folders were just renamed. Returns an error if " +
-			"Jellyfin isn't configured. Call this after move_media on shows/movies.",
+		Description: "Refresh Jellyfin. Without path: a library scan, which finds new, " +
+			"removed and renamed folders and re-identifies them; call it after move_media. " +
+			"It reads changed files again but keeps the artists and album artists a track " +
+			"already has, so it does not apply a tag change of those. With path (after " +
+			"write_tags on music or musicvideos, the same path): Jellyfin reads the metadata " +
+			"of the albums and music videos at, inside or around it again and replaces what " +
+			"it stored, including manual edits made in Jellyfin; when Jellyfin has no item " +
+			"there yet, a library scan is started instead. Returns an error if Jellyfin " +
+			"isn't configured or a request fails.",
 	}, s.jellyfinRescan)
 }
 
